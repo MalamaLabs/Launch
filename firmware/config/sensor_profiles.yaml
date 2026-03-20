@@ -1,0 +1,37 @@
+BME680:
+  temperature:
+    min: -40
+    max: 85
+    unit: "C"
+  humidity:
+    min: 0
+    max: 100
+    unit: "%"
+  pressure:
+    min: 300
+    max: 1100
+    unit: "hPa"
+  gas:
+    min: 0
+    max: 500
+    unit: "kOhm"
+
+SOIL_MOISTURE:
+  moisture:
+    min: 0
+    max: 100
+    unit: "%"
+  temperature:
+    min: -10
+    max: 60
+    unit: "C"
+
+CO2_SCD40:
+  co2:
+    min: 0
+    max: 5000
+    unit: "ppm"
+  temperature:
+    min: -10
+    max: 60
+    unit: "C"

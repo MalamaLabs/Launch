@@ -1,0 +1,6 @@
+batch_interval_minutes: 60
+anchor_interval_hours: 4
+min_readings_per_batch: 10
+ipfs_pin_timeout_seconds: 30
+cardano_confirmation_blocks: 3
+kafka_consumer_group: malama-pipeline

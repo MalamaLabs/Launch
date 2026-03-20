@@ -1,0 +1,17 @@
+{
+  "name": "malama-labs-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cryptographic environmental data network",
+  "workspaces": [
+    "apps/web",
+    "contracts/evm"
+  ],
+  "scripts": {
+    "test:all": "npm run test --workspaces --if-present",
+    "lint:all": "npm run lint --workspaces --if-present",
+    "build:all": "npm run build --workspaces --if-present"
+  },
+  "author": "Mālama Labs",
+  "license": "UNLICENSED"
+}

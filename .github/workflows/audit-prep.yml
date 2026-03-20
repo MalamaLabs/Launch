@@ -1,0 +1,75 @@
+name: Audit Preparation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-artifacts:
+    name: Generate Audit Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: contracts/evm/package-lock.json
+
+      - name: Install EVM Dependencies
+        working-directory: contracts/evm
+        run: npm ci
+
+      - name: Compile Solidity & Export ABIs
+        working-directory: contracts/evm
+        run: |
+          npx hardhat compile
+          mkdir -p ../../audit-artifacts/abis
+          cp -r artifacts/contracts/* ../../audit-artifacts/abis/
+          npx hardhat coverage
+          cp coverage/coverage-final.json ../../audit-artifacts/solidity-coverage.json
+
+      - name: Cache Aiken
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/aiken
+          key: ${{ runner.os }}-aiken-v1.0.26
+
+      - name: Install Aiken
+        run: |
+          if [ ! -f ~/.local/bin/aiken ]; then
+            curl -sL https://install.aiken-lang.org | bash
+          fi
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Generate Aiken Blueprint
+        working-directory: contracts/cardano
+        run: |
+          aiken build
+          mkdir -p ../../audit-artifacts
+          cp plutus.json ../../audit-artifacts/aiken-blueprint.json
+
+      - name: Collect Invariants Checklist
+        run: |
+          mkdir -p audit-artifacts
+          if [ -f docs/audit/invariants.md ]; then
+            cp docs/audit/invariants.md audit-artifacts/invariants-checklist.md
+          else
+            echo "Invariants checklist not found." > audit-artifacts/invariants-checklist.md
+          fi
+
+      - name: Create Release and Upload Artifacts
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: audit-prep-${{ github.run_id }}
+          name: "Audit Prep Package ID: ${{ github.run_id }}"
+          draft: true
+          files: |
+            audit-artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
