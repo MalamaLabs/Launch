@@ -1,17 +1,18 @@
 import type { Metadata } from 'next'
-import GenesisMint from '@/components/GenesisMint'
+import GenesisMint from '@/components/GenesisMintDynamic'
 
 export const metadata: Metadata = {
   title: 'Genesis 300 Deployment | Mālama Labs',
   description: 'Join the foundational cryptographic validators mapping carbon truths sequentially resolving native dual-chain constraints.',
 }
 
-export default function PresalePage({
+export default async function PresalePage({
   searchParams,
 }: {
-  searchParams: { hex?: string }
+  searchParams: Promise<{ hex?: string }>
 }) {
-  const hexId = searchParams.hex || null
+  const { hex: hexId } = await searchParams
+  const resolvedHexId = hexId || null
 
   return (
     <div className="w-full min-h-[calc(100vh-4rem)] pt-16 pb-32 px-4 relative overflow-x-hidden flex items-center">
@@ -35,7 +36,7 @@ export default function PresalePage({
         <PresaleStats />
 
         <div className="w-full mt-10">
-          <GenesisMint hexId={hexId} />
+          <GenesisMint hexId={resolvedHexId} />
         </div>
       </div>
     </div>

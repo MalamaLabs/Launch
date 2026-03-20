@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
-export async function GET(req: Request, { params }: { params: { did: string } }) {
-  const { did } = params
+export async function GET(req: Request, { params }: { params: Promise<{ did: string }> }) {
+  const { did } = await params
   
   if (!did) {
     return NextResponse.json({ error: 'DID is required' }, { status: 400 })

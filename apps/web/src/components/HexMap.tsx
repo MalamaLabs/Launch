@@ -6,27 +6,49 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import HexPanel from './HexPanel'
 import { Navigation } from 'lucide-react'
 
-mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoibWFsYW1hbGFicyIsImEiOiJjbHZ...mock-token'
+mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
 
 export default function HexMap() {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
   const [selectedHex, setSelectedHex] = useState<any | null>(null)
+  const [error, setError] = useState<string | null>(null)
   
   useEffect(() => {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+    
+    if (!token) {
+      console.error('HexMap: MISSING NEXT_PUBLIC_MAPBOX_TOKEN')
+      setError('Missing Mapbox Token')
+      return
+    }
+
+    mapboxgl.accessToken = token
+    
     if (map.current || !mapContainer.current) return
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
-      center: [-112.5, 43.5], 
-      zoom: 6,
-      projection: 'globe' as any 
-    })
+    try {
+      console.log('HexMap: Initializing Mapbox GL JS Map on container:', !!mapContainer.current)
+      
+      const m = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/dark-v11',
+        center: [-112.5, 43.5], 
+        zoom: 6,
+        attributionControl: false
+      })
+
+      map.current = m
+    } catch (err: any) {
+      console.error('CRITICAL: Mapbox Map failed to initialize:', err)
+      setError(err.message || 'Mapbox failed to initialize')
+      return
+    }
 
     const m = map.current
-
+    if (!m) return // Should never happen after the above check    
     m.on('style.load', () => {
+      console.log('HexMap: Style Loaded! Map is now rendering.')
       m.setFog({
         color: 'rgb(10, 22, 40)',
         'high-color': 'rgb(17, 24, 39)',
@@ -34,6 +56,13 @@ export default function HexMap() {
         'space-color': 'rgb(5, 10, 20)',
         'star-intensity': 0.8
       })
+    })
+
+    m.on('error', (e) => {
+      console.error('HexMap: Map Error:', e.error?.message || e.error || 'Unknown Error')
+      if (e.error?.message?.includes('token')) {
+        setError('Mapbox Access Token Invalid or Inactive')
+      }
     })
 
     m.on('load', async () => {
@@ -174,22 +203,72 @@ export default function HexMap() {
     }
   }
 
+  const regions = [
+    { name: 'Core Alpha (Idaho)', center: [-112.5, 43.5], zoom: 6 },
+    { name: 'Nexus Prime (NYC)', center: [-74.0060, 40.7128], zoom: 10 },
+    { name: 'Thames Node (London)', center: [-0.1278, 51.5074], zoom: 10 },
+    { name: 'Neo-Sovereign (Tokyo)', center: [139.6503, 35.6762], zoom: 10 }
+  ]
+
   return (
-    <div className="relative w-full h-full overflow-hidden">
-      <div ref={mapContainer} className="absolute inset-0" />
+    <div className="relative w-full h-full min-h-[500px] overflow-hidden">
+      <div 
+        ref={mapContainer} 
+        className="absolute inset-0 z-1 w-full h-full" 
+        style={{ minHeight: '500px' }}
+      />
       
-      <div className="absolute top-8 left-8 z-10 pointer-events-none">
-        <h1 className="text-4xl font-black text-white drop-shadow-2xl">Opportunity Map</h1>
-        <p className="text-malama-teal font-bold uppercase tracking-widest mt-1 drop-shadow-lg text-sm">H3 Resolution 5 DePIN Topology</p>
+      {error && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 text-center">
+          <div className="max-w-md">
+            <h2 className="text-2xl font-black text-red-500 mb-4 uppercase tracking-tighter">Topology Error</h2>
+            <p className="text-gray-400 font-mono text-sm leading-relaxed mb-8">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-8 py-3 bg-white text-black font-black uppercase tracking-widest rounded-full hover:bg-malama-teal transition-colors"
+            >
+              Restart Array
+            </button>
+          </div>
+        </div>
+      )}
+      
+      <div className="absolute top-24 left-8 z-10 pointer-events-none max-w-sm">
+        <div className="flex items-center space-x-3 mb-2">
+          <div className="w-3 h-3 bg-malama-teal rounded-full animate-pulse shadow-[0_0_10px_rgba(68,187,164,0.5)]" />
+          <h1 className="text-xl font-black text-white uppercase tracking-tighter">Neural Topology</h1>
+        </div>
+        <p className="text-gray-400 text-xs font-mono uppercase tracking-[0.2em] leading-relaxed">
+          Global Opportunity Matrix <span className="text-malama-teal">Active</span>
+        </p>
       </div>
 
-      <button 
-        onClick={flyToLocation}
-        className="absolute bottom-12 left-8 z-10 bg-malama-deep/90 hover:bg-white backdrop-blur-md border border-gray-700 text-white hover:text-malama-deep p-4 rounded-full shadow-2xl transition-all group duration-300 pointer-events-auto"
-        title="Fly to my location"
-      >
-        <Navigation className="w-7 h-7 transition-colors fill-current" />
-      </button>
+      <div className="absolute bottom-8 left-8 z-10 flex flex-col space-y-3">
+        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Jump to Region</p>
+        <div className="flex flex-wrap gap-2 max-w-xl">
+          {regions.map((r) => (
+            <button
+              key={r.name}
+              onClick={() => {
+                map.current?.flyTo({ center: r.center as [number, number], zoom: r.zoom, duration: 3000 })
+              }}
+              className="px-4 py-2 bg-malama-deep/80 backdrop-blur-md border border-gray-800 rounded-xl text-xs font-bold text-gray-300 hover:border-malama-teal hover:text-white transition-all shadow-xl"
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      <div className="absolute top-24 right-8 z-10">
+        <button 
+          onClick={flyToLocation}
+          className="bg-malama-deep/90 hover:bg-white backdrop-blur-md border border-gray-700 text-white hover:text-malama-deep p-4 rounded-full shadow-2xl transition-all group duration-300 pointer-events-auto"
+          title="Fly to my location"
+        >
+          <Navigation className="w-7 h-7 transition-colors fill-current" />
+        </button>
+      </div>
 
       <style jsx global>{`
         .malama-popup .mapboxgl-popup-content {

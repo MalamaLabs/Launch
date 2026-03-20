@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import HexMap from '@/components/HexMap'
+import HexMap from '@/components/HexMapDynamic'
 
 export const metadata: Metadata = {
   title: 'Opportunity Map | Mālama Labs',
@@ -8,8 +8,10 @@ export const metadata: Metadata = {
 
 export default function MapPage() {
   return (
-    <div className="w-full flex-grow relative h-[calc(100vh-4rem)]">
-      <HexMap />
-    </div>
+    <main className="flex flex-col h-[calc(100vh-4rem)] bg-malama-deep overflow-hidden">
+      <div className="flex-grow relative w-full h-full">
+        <HexMap />
+      </div>
+    </main>
   )
 }

@@ -11,18 +11,18 @@
   "dependencies": {
     "@meshsdk/react": "^1.1.0",
     "@tanstack/react-query": "^5.0.0",
+    "clsx": "^2.1.0",
     "framer-motion": "^11.0.0",
     "h3-js": "^4.1.0",
     "lucide-react": "^0.360.0",
     "mapbox-gl": "^3.2.0",
-    "next": "14.2.0",
+    "next": "^16.2.0",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^2.12.0",
+    "tailwind-merge": "^2.2.0",
     "viem": "^2.9.0",
-    "wagmi": "^2.5.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.0"
+    "wagmi": "^2.5.0"
   },
   "devDependencies": {
     "@types/node": "^20",

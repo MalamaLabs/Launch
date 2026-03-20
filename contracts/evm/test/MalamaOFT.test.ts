@@ -17,11 +17,12 @@ describe("MalamaOFT", function () {
     [admin, rDistributor, oracle, user] = await ethers.getSigners();
 
     const EMockFactory = await ethers.getContractFactory("LZEndpointMock");
-    endpointMock = await EMockFactory.deploy();
-    await endpointMock.waitForDeployment();
+    const deployedEndpoint = await EMockFactory.deploy();
+    await deployedEndpoint.waitForDeployment();
+    endpointMock = deployedEndpoint as unknown as LZEndpointMock;
 
     const OFTFactory = await ethers.getContractFactory("MalamaOFT");
-    oft = await OFTFactory.deploy(await endpointMock.getAddress(), admin.address);
+    oft = (await OFTFactory.deploy(deployedEndpoint.target, admin.address)) as unknown as MalamaOFT;
     await oft.waitForDeployment();
 
     await oft.setRewardDistributor(rDistributor.address);
@@ -98,7 +99,8 @@ describe("MalamaOFT", function () {
     // OFT functionality verified automatically by extending native LZ OFT abstract contract.
     // If we call send without configuring peers, it reverts with PeerNotFound, 
     // but the token logic strictly abides by standard V2 rules.
-    const hasSendMethod = oft.interface.hasFunction("send(tuple,tuple,address)");
-    expect(hasSendMethod).to.be.true;
+    // ethers v6: use getFunction() to verify a function exists; returns null if not found
+    const sendFn = oft.interface.getFunction("send");
+    expect(sendFn).to.not.be.null;
   });
 });

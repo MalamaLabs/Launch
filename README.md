@@ -42,6 +42,7 @@ Our architecture provides a secure pipeline from data birth to multi-chain settl
 ## Quick Start
 
 ### Frontend (Next.js)
+
 ```bash
 cd apps/web
 npm install
@@ -49,6 +50,7 @@ npm run dev
 ```
 
 ### EVM Contracts (Base)
+
 ```bash
 cd contracts/evm
 npm install
@@ -56,11 +58,13 @@ npx hardhat test
 ```
 
 ### Validator Pipeline (Docker)
+
 ```bash
 docker-compose up -d
 ```
 
 ### Cardano Contracts (Aiken)
+
 ```bash
 cd contracts/cardano
 aiken build
@@ -68,6 +72,7 @@ aiken check
 ```
 
 ## Documentation
+
 - [Audit Invariants](docs/audit/invariants.md)
 - [Protocol Specifications](docs/protocol/specs.md)
 - [Hardware Setup](docs/hardware/setup.md)

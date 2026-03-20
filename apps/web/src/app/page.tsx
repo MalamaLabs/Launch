@@ -54,7 +54,18 @@ export default function Home() {
             A high-assurance DePIN validating carbon truths across ATECC608A hardware, AI anomaly engines, and decentralized settlement markets securely.
           </motion.p>
           
-          <MetricsTicker />
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mt-12 w-full">
+            <Link href="/presale" className="px-10 py-5 bg-malama-teal text-malama-deep font-black text-xl rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(68,187,164,0.4)] w-full sm:w-auto">
+              Secure Validator
+            </Link>
+            <Link href="/map" className="px-10 py-5 bg-transparent border-2 border-malama-teal/40 text-malama-teal font-black text-xl rounded-full hover:bg-malama-teal/10 transition-all w-full sm:w-auto">
+              View Map
+            </Link>
+          </div>
+          
+          <div className="mt-16 w-full">
+            <MetricsTicker />
+          </div>
         </div>
       </section>
 
@@ -96,10 +107,10 @@ export default function Home() {
             <CountdownBox value="45" label="Mins" />
           </div>
 
-          <button className="group relative inline-flex items-center justify-center px-10 py-5 font-bold text-white transition-all duration-300 ease-in-out bg-malama-deep border border-gray-700 rounded-full hover:bg-gray-800 hover:scale-105 hover:shadow-[0_0_40px_rgba(68,187,164,0.3)]">
+          <Link href="/presale" className="group relative inline-flex items-center justify-center px-10 py-5 font-bold text-white transition-all duration-300 ease-in-out bg-malama-deep border border-gray-700 rounded-full hover:bg-gray-800 hover:scale-105 hover:shadow-[0_0_40px_rgba(68,187,164,0.3)]">
             <span className="absolute inset-0 w-full h-full rounded-full border border-malama-teal/40 opacity-0 group-hover:opacity-100 group-hover:scale-110 transition-all duration-300"></span>
             <span className="relative z-10 text-lg tracking-wide uppercase font-black bg-clip-text text-transparent bg-gradient-to-r from-malama-teal to-blue-300">Secure Validator NFT</span>
-          </button>
+          </Link>
         </div>
       </section>
 
@@ -122,7 +133,7 @@ export default function Home() {
           <Link href="#" className="hover:text-malama-teal transition-colors font-medium">Twitter</Link>
           <Link href="#" className="hover:text-malama-amber transition-colors font-medium">GitHub</Link>
           <Link href="#" className="hover:text-malama-teal transition-colors font-medium">Documentation</Link>
-          <Link href="#" className="hover:text-malama-amber transition-colors font-medium">Network Explorer</Link>
+          <Link href="/map" className="hover:text-malama-amber transition-colors font-medium">Network Explorer</Link>
         </div>
         <p className="text-sm">© 2026 Mālama Labs. Environmental Intelligence Core. All rights reserved.</p>
       </footer>

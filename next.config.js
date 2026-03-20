@@ -1,14 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@meshsdk/react', '@meshsdk/core-cst', '@cardano-sdk/crypto', 'libsodium-wrappers-sumo', 'libsodium-sumo'],
   turbopack: {
     resolveAlias: {
       'mapbox-gl': 'mapbox-gl',
-      './libsodium-sumo.mjs': '../../node_modules/libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs',
     },
   },
   allowedDevOrigins: ['192.168.1.126'],
+  serverExternalPackages: [
+    '@meshsdk/react',
+    '@meshsdk/core',
+    '@meshsdk/core-cst',
+    '@meshsdk/wallet',
+    '@cardano-sdk/crypto',
+    'libsodium-wrappers-sumo',
+    'libsodium-wrappers',
+  ],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'ipfs.io' },
@@ -18,13 +25,6 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-  },
-  webpack: (config) => {
-    config.experiments = {
-      asyncWebAssembly: true,
-      layers: true,
-    };
-    return config;
   },
 };
 

@@ -18,7 +18,7 @@ describe("SensorDIDRegistry", function () {
   beforeEach(async function () {
     [admin, aiValidator, randomUser] = await ethers.getSigners();
     const Factory = await ethers.getContractFactory("SensorDIDRegistry");
-    registry = await Factory.deploy(admin.address, aiValidator.address);
+    registry = (await Factory.deploy(admin.address, aiValidator.address)) as unknown as SensorDIDRegistry;
     await registry.waitForDeployment();
   });
 
