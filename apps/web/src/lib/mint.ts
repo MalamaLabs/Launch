@@ -1,4 +1,4 @@
-import { AppWallet, ForgeScript, Transaction, AssetMetadata, BlockfrostProvider, IInitiator } from '@meshsdk/core';
+import { MeshWallet, ForgeScript, Transaction, AssetMetadata, BlockfrostProvider, IInitiator } from '@meshsdk/core';
 
 export async function forgeHexNFT(receiverCardanoAddress: string, hexId: string): Promise<string> {
   const blockfrostKey = process.env.BLOCKFROST_API_KEY;
@@ -14,7 +14,7 @@ export async function forgeHexNFT(receiverCardanoAddress: string, hexId: string)
   try {
     const blockchainProvider = new BlockfrostProvider(blockfrostKey);
     
-    const wallet = new AppWallet({
+    const wallet = new MeshWallet({
       networkId: 0, // 0 for testnet/preprod, 1 for mainnet
       fetcher: blockchainProvider,
       submitter: blockchainProvider,
@@ -24,7 +24,7 @@ export async function forgeHexNFT(receiverCardanoAddress: string, hexId: string)
       }
     });
 
-    const usedAddress = wallet.getPaymentAddress();
+    const usedAddress = await wallet.getChangeAddress();
     console.log("💰 Treasury Wallet Authenticated. Address:", usedAddress);
     
     const forgingScript = ForgeScript.withOneSignature(usedAddress);
@@ -43,7 +43,7 @@ export async function forgeHexNFT(receiverCardanoAddress: string, hexId: string)
 
     const assetName = `Hex${hexId}`; // Name of the native token
 
-    const tx = new Transaction({ initiator: wallet as unknown as IInitiator })
+    const tx = new Transaction({ initiator: wallet })
       .mintAsset(forgingScript, {
         assetName: assetName,
         assetQuantity: '1',
