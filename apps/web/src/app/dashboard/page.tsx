@@ -188,7 +188,13 @@ export default function Dashboard() {
                       
                       <div className="text-right">
                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Active Data Markets</p>
-                         <p className="text-2xl font-black text-malama-amber">{activePredictionMarkets}</p>
+                         <p className="text-2xl font-black text-malama-amber mb-2">{activePredictionMarkets}</p>
+                         <Link 
+                           href={`/map?hex=${hex}`}
+                           className="inline-flex items-center text-xs font-bold text-malama-teal hover:text-white transition-colors bg-malama-teal/10 px-3 py-1.5 rounded-lg border border-malama-teal/20 hover:border-malama-teal"
+                         >
+                           <MapPin className="w-3 h-3 mr-1" /> View Map
+                         </Link>
                       </div>
                     </div>
                   </div>
