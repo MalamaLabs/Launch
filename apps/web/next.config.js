@@ -24,6 +24,10 @@ const nextConfig = {
       asyncWebAssembly: true,
       layers: true,
     };
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      './libsodium-sumo.mjs': require('path').resolve(__dirname, '../../node_modules/libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs'),
+    };
     return config;
   },
 };
