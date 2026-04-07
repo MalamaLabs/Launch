@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useWallet } from '@meshsdk/react'
+import { useAccount, useConnect } from 'wagmi'
 import { ShieldCheck, Cpu, MapPin, CheckCircle2, Box, Radio, AlertCircle, TrendingUp, Lock } from 'lucide-react'
 import Link from 'next/link'
 
-// Helper to decode Cardano hex-encoded asset names
-function hexToAscii(hexStr: string) {
+// Helper to decode Cardano hex-encoded asset names safely
+function hexToAscii(hexStr: string | undefined) {
+  if (!hexStr || typeof hexStr !== 'string') return '';
   let str = '';
   for (let i = 0; i < hexStr.length; i += 2) {
     str += String.fromCharCode(parseInt(hexStr.substr(i, 2), 16));
@@ -15,7 +17,16 @@ function hexToAscii(hexStr: string) {
 }
 
 export default function Dashboard() {
-  const { connected, wallet, connect, connecting } = useWallet()
+  // Cardano Mesh Context
+  const { connected: isCardanoConnected, wallet: cardanoWallet, connect: connectCardano, connecting: isCardanoConnecting } = useWallet()
+  
+  // Base EVM Wagmi Context
+  const { isConnected: isEvmConnected } = useAccount()
+  const { connectors, connect: connectEvm, isPending: isEvmConnecting } = useConnect()
+
+  // Unified Omnichain State
+  const isAuthenticated = isCardanoConnected || isEvmConnected
+
   const [hexes, setHexes] = useState<string[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
 
@@ -24,33 +35,41 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function resolveAssets() {
-      if (connected && wallet) {
+      if (isCardanoConnected && cardanoWallet) {
         setLoadingAssets(true)
         try {
-          const assets = await wallet.getAssets()
+          const assets = await cardanoWallet.getAssets()
           const foundHexes: string[] = []
           
           for (const asset of assets) {
-            // Asset names are often strictly hex encoded on Cardano in CIP-25/68
-            const decodedName = hexToAscii(asset.assetName)
-            if (decodedName.startsWith("Hex")) {
-              // Extract the raw hex territory ID from the name (e.g. Hex85289493f...)
-              const rawTty = decodedName.replace("Hex", "")
-              foundHexes.push(rawTty)
+            // Safe guard against undefined lengths causing hydration crashes
+            if (asset && asset.assetName && typeof asset.assetName === 'string') {
+               const decodedName = hexToAscii(asset.assetName)
+               if (decodedName.startsWith("Hex")) {
+                 const rawTty = decodedName.replace("Hex", "")
+                 foundHexes.push(rawTty)
+               }
             }
           }
           setHexes(foundHexes)
         } catch (e) {
-          console.error("Failed to fetch assets", e)
+          console.error("Failed to fetch Cardano assets", e)
         } finally {
           setLoadingAssets(false)
         }
+      } else if (isEvmConnected) {
+        setLoadingAssets(true)
+        // Note: For now, EVM NFTs are physically resolving via mock until ERC-721 Oracle mirrors are fired
+        setTimeout(() => {
+           setHexes(["EVM-Mock-Tty"]); // Placeholder until ERC-721 contract reads are injected into UI
+           setLoadingAssets(false);
+        }, 1200)
       } else {
         setHexes([])
       }
     }
     resolveAssets()
-  }, [connected, wallet])
+  }, [isCardanoConnected, cardanoWallet, isEvmConnected])
 
   return (
     <div className="min-h-screen bg-black text-gray-200 p-6 md:p-12 font-sans selection:bg-malama-teal selection:text-black relative">
@@ -59,52 +78,76 @@ export default function Dashboard() {
       <header className="max-w-6xl mx-auto flex items-center justify-between border-b border-gray-800 pb-8 mb-10">
         <div>
           <h1 className="text-3xl font-black text-white tracking-tighter">Node Command Center</h1>
-          <p className="text-malama-teal font-mono mt-1 text-sm">{loadingAssets ? 'Scanning Node Blockchain...' : `${hexes.length} Genesis Licenses Active`}</p>
+          <p className="text-malama-teal font-mono mt-1 text-sm">{loadingAssets ? 'Scanning Omnichain Ledger...' : `${hexes.length} Genesis Licenses Active`}</p>
         </div>
         
         <div className="flex space-x-4 items-center">
-          {connected ? (
+          {isAuthenticated ? (
             <div className="flex items-center space-x-3">
               <div className="text-right hidden sm:block">
                 <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Network Status</p>
-                <p className="text-white font-bold text-lg">{currentStatus}</p>
+                <div className="flex items-center space-x-2">
+                   {isEvmConnected && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>}
+                   {isCardanoConnected && <span className="w-2 h-2 rounded-full bg-malama-teal animate-pulse"></span>}
+                   <p className="text-white font-bold text-lg">{currentStatus}</p>
+                </div>
               </div>
               <div className="w-12 h-12 bg-malama-deep border border-malama-teal/30 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(68,187,164,0.2)]">
                 <Cpu className="text-malama-teal w-6 h-6" />
               </div>
             </div>
           ) : (
-            <button 
-              onClick={() => connect('lace')}
-              disabled={connecting}
-              className="px-6 py-3 bg-malama-teal text-malama-deep rounded-xl font-bold hover:scale-105 transition-all shadow-[0_0_20px_rgba(68,187,164,0.3)] disabled:opacity-50"
-            >
-              {connecting ? "Connecting..." : "Connect Lace Wallet"}
-            </button>
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => connectCardano('lace')}
+                disabled={isCardanoConnecting || isEvmConnecting}
+                className="px-4 py-2 bg-malama-teal/20 border border-malama-teal/50 text-malama-teal rounded-lg font-bold hover:bg-malama-teal hover:text-black transition-colors"
+               >
+                Access Lace
+               </button>
+               <button 
+                onClick={() => connectEvm({ connector: connectors[0] })}
+                disabled={isCardanoConnecting || isEvmConnecting}
+                className="px-4 py-2 bg-blue-500/20 border border-blue-500/50 text-blue-400 rounded-lg font-bold hover:bg-blue-500 hover:text-white transition-colors"
+               >
+                Access EVM
+               </button>
+            </div>
           )}
         </div>
       </header>
 
       {/* Authentication Gateway */}
-      {!connected && (
+      {!isAuthenticated && (
         <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-black/60 pt-32">
           <div className="bg-malama-card border border-gray-800 p-10 rounded-3xl text-center max-w-md shadow-2xl">
             <ShieldCheck className="w-20 h-20 text-malama-teal mx-auto mb-6 drop-shadow-[0_0_20px_rgba(68,187,164,0.3)]" />
-            <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Secure Sign-In Required</h2>
-            <p className="text-gray-400 mb-8 leading-relaxed">Connect your Cardano wallet to instantly map your physical Operator nodes and active Prediction Market yields.</p>
-            <button 
-              onClick={() => connect('lace')}
-              disabled={connecting}
-              className="w-full py-4 bg-white text-black rounded-xl font-black hover:bg-gray-200 transition-colors shadow-xl"
-            >
-              {connecting ? "Establishing Connection..." : "Authenticate with Lace"}
-            </button>
+            <h2 className="text-2xl font-black text-white mb-2 tracking-tight">DePIN Sign-In Required</h2>
+            <p className="text-gray-400 mb-8 leading-relaxed">Secure your identity via Web3. The Omnichain Oracle supports active routing across Cardano and Base.</p>
+            
+            <div className="space-y-3">
+              <button 
+                onClick={() => connectCardano('lace')}
+                disabled={isCardanoConnecting || isEvmConnecting}
+                className="w-full py-4 bg-malama-teal/10 border-2 border-malama-teal/50 text-malama-teal rounded-xl font-black hover:bg-malama-teal hover:text-black transition-colors shadow-xl"
+              >
+                {isCardanoConnecting ? "Verifying Keys..." : "Authenticate via Cardano (Lace)"}
+              </button>
+              
+              <button 
+                onClick={() => connectEvm({ connector: connectors[0] })}
+                disabled={isCardanoConnecting || isEvmConnecting}
+                className="w-full py-4 bg-blue-500/10 border-2 border-blue-500/50 text-blue-400 rounded-xl font-black hover:bg-blue-500 hover:text-white transition-colors shadow-xl"
+              >
+                {isEvmConnecting ? "Verifying Keys..." : "Authenticate via Base EVM"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Main Dashboard UI (Blurs when disconnected) */}
-      <div className={`max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 transition-opacity duration-500 ${!connected ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 transition-opacity duration-500 ${!isAuthenticated ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
         
         {/* Left Column: Progress & Status */}
         <div className="lg:col-span-2 space-y-8">
@@ -169,7 +212,7 @@ export default function Dashboard() {
                <div className="p-10 border border-dashed border-gray-700 rounded-2xl flex flex-col items-center justify-center text-center bg-gray-900/30">
                  <Lock className="w-10 h-10 text-gray-600 mb-4" />
                  <p className="text-xl font-bold text-gray-400 mb-2">No Genesis Licenses Discovered</p>
-                 <p className="text-gray-500 max-w-sm mb-6">Your connected wallet currently holds exactly 0 verified Node Operator Licenses on the Cardano network.</p>
+                 <p className="text-gray-500 max-w-sm mb-6">Your connected wallet currently holds exactly 0 verified Node Operator Licenses.</p>
                </div>
              ) : (
                <div className="space-y-4">
@@ -180,7 +223,7 @@ export default function Dashboard() {
                     <div className="flex justify-between items-start relative z-10">
                       <div>
                         <div className="flex items-center space-x-2">
-                           <span className="bg-malama-teal/20 text-malama-teal text-[10px] font-bold px-2 py-1 rounded">GENESIS TIER</span>
+                           <span className={`text-[10px] font-bold px-2 py-1 rounded ${isEvmConnected ? 'bg-blue-500/20 text-blue-400' : 'bg-malama-teal/20 text-malama-teal'}`}>GENESIS TIER</span>
                         </div>
                         <p className="font-mono text-2xl text-white font-bold mt-2">{hex}</p>
                         <p className="text-gray-500 text-sm mt-1">Target Physical Coordinate Base</p>
