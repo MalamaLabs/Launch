@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/Navbar'
+import SiteFooter from '@/components/SiteFooter'
 import { Providers } from '@/components/Providers'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="flex-grow">
             {children}
           </main>
+          <SiteFooter />
         </Providers>
       </body>
     </html>

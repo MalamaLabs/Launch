@@ -81,7 +81,7 @@ const phases: {
       'Pay entry cost and receive your NFT-HEX + 125K MLMA allocation on-chain.',
       'Hardware pre-order is queued. Ships in September 2026.',
     ],
-    cta: { label: 'Reserve Your Node Now', href: '/presale' },
+    cta: { label: 'Reserve with Crypto or Card', href: '/presale' },
   },
   {
     id: 'sep',
@@ -286,7 +286,7 @@ export default function TimelinePage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/presale"
               className="px-8 py-4 bg-emerald-500 text-white font-black rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-              Reserve Your Genesis Node
+              Reserve with Crypto or Card
             </Link>
             <Link href="/map"
               className="px-8 py-4 border border-emerald-500/40 text-emerald-400 font-black rounded-full hover:bg-emerald-500/10 transition-all">

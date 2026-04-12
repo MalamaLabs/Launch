@@ -61,7 +61,7 @@ export default function Home() {
             className="flex flex-col sm:flex-row gap-4 w-full justify-center">
             <a href="#reserve"
               className="px-8 py-4 bg-emerald-500 text-white font-black text-lg rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(16,185,129,0.4)]">
-              Reserve Your Genesis Node Now
+              Reserve with Crypto or Card
             </a>
             <a href="#economics"
               className="px-8 py-4 bg-transparent border-2 border-emerald-500/40 text-emerald-400 font-black text-lg rounded-full hover:bg-emerald-500/10 transition-all">
@@ -218,7 +218,7 @@ export default function Home() {
             { q: 'When do I receive my 125K MLMA tokens?', a: '25% (31,250 MLMA) vests when your hardware boots and you register. The remaining 75% (93,750 MLMA) vests linearly over 12 months at ~7,813 MLMA/month. After 12 months, all tokens are fully unlocked.' },
             { q: 'How quickly will I recover my $2,000 entry cost?', a: 'Low-demand zones: 6–12 weeks. Medium-demand zones: 1–4 weeks. High-demand zones: less than 1 week. All scenarios assume rewards accrue from early-mid October at $0.10–0.20/MLMA.' },
             { q: 'When do I start earning rewards?', a: 'Reserve by May 31, 2026. Hardware ships September. You deploy in late September / early October. First MLMA rewards accrue in early-mid October 2026.' },
-            { q: 'Why only 200 nodes?', a: 'Scarcity ensures geographic multiplier premium and prevents oversupply. Helium deployed 500K+ nodes and collapsed operator returns. We are demand-first: 200 nodes in key zones with pre-screened carbon projects. Genesis 200 ends when sold or June 2026. Phase 2 (2027+) expands at lower initial multipliers.' },
+            { q: 'Why only 200 nodes?', a: 'Scarcity ensures geographic multiplier premium and prevents oversupply. Helium deployed 500K+ nodes and collapsed operator returns. We are demand-first: 200 nodes in key zones with pre-screened carbon projects, Smart City Demand, AI Data Center locations or active Climate Prediction Markets which our Nodes can offer Settlement. Genesis 200 ends when sold or June 2026. Phase 2 (2027+) expands at lower initial multipliers.' },
             { q: 'How do geographic multipliers work?', a: 'Your hex (H3 Resolution 5, ~252.9 km²) determines your reward multiplier. Urban: 0.5×, suburban: 1.0×, rural: 1.5×, frontier: 2.0×, strategic: up to 3.0×. High-demand zones (Idaho ERW, LA forestry, NYC emissions, London Article 6.4) are allocated first.' },
             { q: 'What is the Indigenous Stewardship program?', a: 'If your hex overlaps Indigenous territory, stewards receive 10–25% of your node rewards (default 15%), settled monthly in MLMA or fiat. Mālama covers all conversion costs. Disputes resolved via prediction market + DAO governance.' },
           ].map(({ q, a }, i) => (
@@ -247,8 +247,11 @@ export default function Home() {
             className="text-4xl md:text-5xl font-extrabold text-white mb-4">
             Ready to Own Climate Infrastructure?
           </motion.h2>
+          <p className="text-gray-300 mb-4 leading-relaxed max-w-2xl mx-auto font-medium">
+            Connect your Lace, MetaMask, or other crypto wallet — or create a custodial wallet and pay with credit or debit card.
+          </p>
           <p className="text-gray-400 mb-12 leading-relaxed max-w-2xl mx-auto">
-            The flow is simple: connect your wallet, pick your hex territory on the live map, and complete your $2,000 reservation. Hardware ships September. Revenue starts October.
+            The flow is simple: connect your wallet (or check out with card), pick your hex territory on the live map, and complete your $2,000 reservation. Hardware ships September. Revenue starts October.
           </p>
 
           {/* 3-step funnel */}
@@ -257,7 +260,7 @@ export default function Home() {
               {
                 step: '01',
                 title: 'Connect Wallet',
-                desc: 'Link your Cardano (Lace/Nami) and EVM (MetaMask/Coinbase) wallets for dual-chain registration.',
+                desc: 'Link Cardano (Lace/Nami) and EVM (MetaMask/Coinbase) for dual-chain registration — or use card checkout and we’ll create a custodial wallet for your NFT.',
                 icon: '🔐',
                 href: '/presale',
                 cta: 'Connect Wallet →',
@@ -276,7 +279,7 @@ export default function Home() {
                 desc: 'Confirm your hex, approve $2,000 USDC on Base. Receive your NFT-HEX + 125K MLMA allocation instantly.',
                 icon: '⚡',
                 href: '/presale',
-                cta: 'Reserve Now →',
+                cta: 'Reserve with Crypto or Card →',
               },
             ].map(({ step, title, desc, icon, href, cta }, i) => (
               <motion.div key={step} variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={i * 0.1}
@@ -299,7 +302,7 @@ export default function Home() {
             className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/presale"
               className="px-10 py-5 bg-emerald-500 text-white font-black text-xl rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(16,185,129,0.4)]">
-              Reserve Your Genesis Node
+              Reserve with Crypto or Card
             </Link>
             <Link href="/map"
               className="px-10 py-5 bg-transparent border-2 border-emerald-500/40 text-emerald-400 font-black text-xl rounded-full hover:bg-emerald-500/10 transition-all">
@@ -308,75 +311,6 @@ export default function Home() {
           </motion.div>
         </div>
       </section>
-
-      {/* ── FOOTER ─────────────────────────────────────────────────── */}
-      <footer className="w-full py-16 border-t border-gray-800 bg-[#0A1628] px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-12">
-            {/* Brand */}
-            <div>
-              <p className="text-white font-black text-lg mb-3">Mālama<span className="text-emerald-400">Labs</span></p>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Environmental intelligence network. Cryptographic verified carbon on-chain.
-              </p>
-            </div>
-            {/* Navigation */}
-            <div>
-              <p className="text-white font-bold text-sm uppercase tracking-widest mb-4">Navigate</p>
-              <ul className="space-y-2 text-sm">
-                {[
-                  { href: '#economics', label: 'Economics' },
-                  { href: '#hardware', label: 'Hardware' },
-                  { href: '#timeline', label: 'Timeline' },
-                  { href: '#faq', label: 'FAQ' },
-                  { href: '#reserve', label: 'Reserve Node' },
-                  { href: '/map', label: 'Network Explorer' },
-                  { href: '/dashboard', label: 'Launch App' },
-                  { href: '/presale', label: 'Validator Pre-Sale' },
-                ].map(({ href, label }) => (
-                  <li key={href}>
-                    <Link href={href} className="text-gray-400 hover:text-emerald-400 transition-colors">{label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {/* Resources — interactive docs */}
-            <div>
-              <p className="text-white font-bold text-sm uppercase tracking-widest mb-4">Genesis 200 Docs</p>
-              <ul className="space-y-2 text-sm">
-                <li>
-                  <Link href="/docs" className="text-gray-400 hover:text-emerald-400 transition-colors font-semibold">
-                    Documentation hub →
-                  </Link>
-                </li>
-                {[
-                  { href: '/docs/tokenomics', label: 'MLMA Tokenomics Whitepaper' },
-                  { href: '/docs/pricing-roi', label: 'Pricing & ROI Summary' },
-                  { href: '/docs/phase-1-timeline', label: 'Phase 1 Timeline' },
-                  { href: '/docs/operators', label: 'Operator Documentation' },
-                ].map(({ href, label }) => (
-                  <li key={href}>
-                    <Link href={href} className="text-gray-400 hover:text-emerald-400 transition-colors">{label}</Link>
-                  </li>
-                ))}
-                <li>
-                  <a href="mailto:support@malamalabs.com" className="text-gray-400 hover:text-emerald-400 transition-colors">
-                    Email Support
-                  </a>
-                </li>
-                <li>
-                  <a href="https://discord.gg/PcKRRUcJ" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-emerald-400 transition-colors">
-                    Discord Community
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 pt-8 text-center text-gray-600 text-sm">
-            © 2026 Mālama Labs. Environmental Intelligence Core. All rights reserved.
-          </div>
-        </div>
-      </footer>
 
     </div>
   )

@@ -2,8 +2,9 @@ import type { Metadata } from 'next'
 import GenesisMint from '@/components/GenesisMintDynamic'
 
 export const metadata: Metadata = {
-  title: 'Reserve Genesis 200 Node | Mālama Labs',
-  description: 'Connect your wallet, pick your hex on the map, and reserve one of 200 Genesis validator nodes. $2,000 entry. 125K MLMA allocation. Oct 2026 revenue.',
+  title: 'Reserve with Crypto or Card | Genesis 200 | Mālama Labs',
+  description:
+    'Connect your wallet, pick your hex on the map, and reserve a Genesis validator node. $2,000 entry. 125K MLMA per node. 200 Genesis nodes (195 remaining). Oct 2026 revenue.',
 }
 
 export default async function PresalePage({
@@ -26,15 +27,26 @@ export default async function PresalePage({
         </div>
         
         <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-white tracking-tighter mb-8 drop-shadow-xl">
-          Reserve Your <br />
+          Reserve with <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
-            Genesis Node
+            Crypto or Card
           </span>
         </h1>
         
-        <p className="text-xl md:text-2xl text-gray-400 max-w-4xl mx-auto leading-relaxed mb-10">
-          Connect your wallet, pick your hex territory on the map, and complete your $2,000 reservation.
+        <p className="text-xl md:text-2xl text-gray-400 max-w-4xl mx-auto leading-relaxed mb-6">
+          Connect Lace, MetaMask, or another wallet — or pay by card and we’ll mint to a custodial wallet. Pick your hex on the map and complete your $2,000 reservation.
           125K MLMA allocation vests at first boot. Revenue starts October 2026.
+        </p>
+        <p className="text-sm text-gray-500 mb-10">
+          <a
+            href="/legal"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-400/90 hover:text-emerald-400 underline underline-offset-2 font-semibold"
+          >
+            Terms, Privacy, Hex Node Agreement, and Token Risk Disclosure
+          </a>{' '}
+          apply to this purchase — you will confirm each at checkout.
         </p>
 
         <PresaleStats />
@@ -71,31 +83,44 @@ export default async function PresalePage({
 }
 
 async function PresaleStats() {
-  let remaining = 127
   let total = 200
+  let remaining = 195
+  let reserved = 5
   try {
     const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const res = await fetch(`${base}/api/presale`, { cache: 'no-store' })
     const data = await res.json()
-    remaining = data.remaining ?? 127
     total = data.total ?? 200
+    remaining = data.remaining ?? 195
+    reserved =
+      typeof data.reserved === 'number'
+        ? data.reserved
+        : total - remaining
   } catch {}
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 border border-gray-800 bg-[#0A1628]/80 backdrop-blur-md shadow-2xl rounded-3xl p-8 md:px-12 md:py-8 gap-8 md:gap-12 items-center">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border border-gray-800 bg-[#0A1628]/80 backdrop-blur-md shadow-2xl rounded-3xl p-8 md:px-10 md:py-8 gap-8 md:gap-10 items-center">
       <div className="flex flex-col items-center">
-        <span className="text-5xl md:text-6xl font-mono font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]">{remaining}</span>
-        <span className="text-xs tracking-[0.2em] text-gray-500 uppercase font-black mt-2">Remaining</span>
+        <span className="text-5xl md:text-6xl font-mono font-black text-white">{total}</span>
+        <span className="text-xs tracking-[0.15em] text-gray-500 uppercase font-black mt-2 text-center leading-snug max-w-[9rem]">
+          Genesis Nodes Available
+        </span>
       </div>
       <div className="flex flex-col items-center">
-        <span className="text-5xl md:text-6xl font-mono font-black text-white">{total - remaining}</span>
+        <span className="text-5xl md:text-6xl font-mono font-black text-white">{reserved}</span>
         <span className="text-xs tracking-[0.2em] text-gray-500 uppercase font-black mt-2">Reserved</span>
+      </div>
+      <div className="flex flex-col items-center">
+        <span className="text-5xl md:text-6xl font-mono font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]">
+          {remaining}
+        </span>
+        <span className="text-xs tracking-[0.2em] text-gray-500 uppercase font-black mt-2">Remaining</span>
       </div>
       <div className="flex flex-col items-center">
         <span className="text-5xl md:text-6xl font-mono font-black text-white">$2K</span>
         <span className="text-xs tracking-[0.2em] text-gray-500 uppercase font-black mt-2">Entry Price</span>
       </div>
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center col-span-2 justify-self-center sm:col-span-1 max-sm:w-full max-sm:max-w-[12rem]">
         <span className="text-4xl md:text-5xl font-mono font-black text-emerald-400">125K</span>
         <span className="text-xs tracking-[0.2em] text-gray-500 uppercase font-black mt-2">MLMA / Node</span>
       </div>
