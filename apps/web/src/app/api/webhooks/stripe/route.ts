@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { fulfillCardPurchase } from '@/lib/fulfill-card-purchase'
-import { isStripeSessionProcessed } from '@/lib/custodial-store'
+import { isStripeSessionProcessed, unlockHexForMagicCheckout } from '@/lib/custodial-store'
+import { getCardCustodyMode } from '@/lib/card-custody'
 import { getStripeSecretKey } from '@/lib/stripe-server'
 
 export const runtime = 'nodejs'
@@ -25,6 +26,15 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error('[stripe webhook] signature', e)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  }
+
+  if (event.type === 'checkout.session.expired') {
+    const expired = event.data.object as Stripe.Checkout.Session
+    const hexId = expired.metadata?.hexId
+    if (getCardCustodyMode() === 'magic' && hexId && expired.id) {
+      unlockHexForMagicCheckout(hexId, expired.id)
+    }
+    return NextResponse.json({ received: true })
   }
 
   if (event.type !== 'checkout.session.completed') {

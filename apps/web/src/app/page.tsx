@@ -448,39 +448,39 @@ export default function Home() {
             Ready to Own Climate Infrastructure?
           </motion.h2>
           <p className="mx-auto mb-4 max-w-2xl font-medium leading-relaxed text-malama-ink">
-            Connect your Lace, MetaMask, or other crypto wallet — or create a custodial wallet and pay with credit or
-            debit card.
+            Three steps: pick your territory, connect how you want to pay, then lock in your Genesis license.
           </p>
           <p className="mx-auto mb-12 max-w-2xl leading-relaxed text-malama-ink-dim">
-            The flow is simple: connect your wallet (or check out with card), pick your hex territory on the live map,
-            and complete your $2,000 reservation. Hardware ships September. Revenue starts October.
+            Choose a hex from the 200 Genesis Hex Node licenses available for early supporters. Connect an EVM or
+            Cardano wallet — or use a custodial wallet with email. Reserve with crypto or fiat (credit/debit card).
+            Hardware ships September. Revenue starts October.
           </p>
 
           <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-3">
             {[
               {
                 step: '01',
-                title: 'Connect Wallet',
-                desc: 'Link Cardano (Lace/Nami) and EVM (MetaMask/Coinbase) for dual-chain registration — or use card checkout and we’ll create a custodial wallet for your NFT.',
-                icon: '🔐',
-                href: '/presale',
-                cta: 'Connect Wallet →',
+                title: 'Choose a Hex',
+                desc: 'Pick one of the 200 Genesis Hex Node licenses available for early supporters. Browse the live map and claim your territory before it’s gone.',
+                icon: '🗺️',
+                href: '/map',
+                cta: 'Browse the map →',
               },
               {
                 step: '02',
-                title: 'Pick Your Hex',
-                desc: 'Browse the live network map. Choose one of the 200 available hexes across Idaho, LA, NYC, London, Tokyo + more.',
-                icon: '🗺️',
-                href: '/map',
-                cta: 'Open Explorer →',
+                title: 'Connect your wallet',
+                desc: 'Use an EVM wallet (e.g. MetaMask) or a Cardano wallet (e.g. Lace). Or choose a custodial wallet: enter your email and we’ll mint to a secure wallet you control via transfer link.',
+                icon: '🔐',
+                href: '/presale',
+                cta: 'Go to checkout →',
               },
               {
                 step: '03',
-                title: 'Reserve for $2,000',
-                desc: 'Confirm your hex, approve $2,000 USDC on Base. Receive your NFT-HEX + 125K MLMA allocation instantly.',
-                icon: '⚡',
+                title: 'Reserve your hex',
+                desc: 'Pay the $2,000 entry with crypto (e.g. USDC on Base) or fiat via credit/debit card. Your NFT-HEX and 125K MLMA allocation follow on-chain.',
+                icon: '💳',
                 href: '/presale',
-                cta: 'Reserve with Crypto or Card →',
+                cta: 'Reserve with crypto or card →',
               },
             ].map(({ step, title, desc, icon, href, cta }, i) => (
               <motion.div

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { fulfillCardPurchase } from '@/lib/fulfill-card-purchase'
-import { getSessionStatus, isStripeSessionProcessed } from '@/lib/custodial-store'
+import { reconcilePaidCheckoutSession } from '@/lib/checkout-reconcile'
+import { getSessionStatus } from '@/lib/custodial-store'
 import { getStripeSecretKey } from '@/lib/stripe-server'
 
 /**
@@ -20,10 +20,6 @@ export async function POST(req: Request) {
 
     if (getSessionStatus(sessionId)?.state === 'complete') {
       return NextResponse.json({ ok: true, source: 'already_complete' })
-    }
-
-    if (isStripeSessionProcessed(sessionId)) {
-      return NextResponse.json({ ok: true, source: 'already_processed' })
     }
 
     const secret = getStripeSecretKey()
@@ -45,14 +41,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Checkout session missing metadata' }, { status: 400 })
     }
 
-    await fulfillCardPurchase({
-      stripeSessionId: sessionId,
-      hexId,
-      email,
-      transferToken,
-    })
+    await reconcilePaidCheckoutSession(sessionId)
 
-    return NextResponse.json({ ok: true, source: 'fulfilled' })
+    return NextResponse.json({ ok: true, source: 'reconciled' })
   } catch (e) {
     console.error('[sync-session]', e)
     return NextResponse.json(

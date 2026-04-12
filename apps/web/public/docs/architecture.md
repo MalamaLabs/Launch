@@ -147,3 +147,4 @@ BOUNDARY 4: Chain → Settlement
 - **Throughput**: ~10,000 sensor readings/second globally.
 - **Latency**: End-to-end (sensor to IPFS inclusion) averages ~1 hour.
 - **Cost**: Cardano multi-asset batching achieves `< 0.001 ADA` per anchor transaction.
+

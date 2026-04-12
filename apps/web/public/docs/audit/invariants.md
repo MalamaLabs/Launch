@@ -49,3 +49,4 @@
 - **INV-030**: Reward Role. Only distributor securely safely actively mints tokens autonomously structurally. Test: `test_reward_role`
 - **INV-031**: BME Oracle Role. Only Oracles securely executes exact programmatic deflation natively. Test: `test_bme_oracle`
 - **INV-032**: Initial Supply. 1B token native mint correctly bound exclusively toward specific deployer. Test: `test_initial_supply`
+

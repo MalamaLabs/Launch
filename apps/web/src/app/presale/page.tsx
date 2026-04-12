@@ -34,8 +34,9 @@ export default async function PresalePage({
         </h1>
         
         <p className="text-xl md:text-2xl text-gray-400 max-w-4xl mx-auto leading-relaxed mb-6">
-          Connect Lace, MetaMask, or another wallet — or pay by card and we’ll mint to a custodial wallet. Pick your hex on the map and complete your $2,000 reservation.
-          125K MLMA allocation vests at first boot. Revenue starts October 2026.
+          Choose a hex from the 200 Genesis licenses for early supporters, connect an EVM or Cardano wallet (or custodial
+          with email), then reserve with crypto or fiat via credit/debit card. $2,000 entry. 125K MLMA vests at first boot.
+          Revenue starts October 2026.
         </p>
         <p className="text-sm text-gray-500 mb-10">
           <a
@@ -51,27 +52,22 @@ export default async function PresalePage({
 
         <PresaleStats />
 
-        {/* Step indicators */}
-        <div className="flex items-center gap-2 md:gap-4 mt-12 mb-8 flex-wrap justify-center text-sm text-gray-500">
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-malama-accent text-white font-black text-xs flex items-center justify-center">1</span>
-            <span className="font-semibold text-gray-300">Connect Wallet</span>
-          </div>
-          <span className="text-gray-700 hidden md:block">→</span>
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-malama-accent/30 text-malama-accent font-black text-xs flex items-center justify-center border border-malama-accent/50">2</span>
-            <span>Pick Hex on Map</span>
-          </div>
-          <span className="text-gray-700 hidden md:block">→</span>
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-malama-accent/30 text-malama-accent font-black text-xs flex items-center justify-center border border-malama-accent/50">3</span>
-            <span>Review & Pay $2,000</span>
-          </div>
-          <span className="text-gray-700 hidden md:block">→</span>
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-malama-accent/30 text-malama-accent font-black text-xs flex items-center justify-center border border-malama-accent/50">4</span>
-            <span>Node Reserved ✓</span>
-          </div>
+        {/* Step indicators — matches checkout wizard */}
+        <div className="mt-12 mb-8 grid max-w-4xl grid-cols-2 gap-3 text-sm text-gray-500 sm:grid-cols-3 lg:grid-cols-5 lg:gap-2">
+          {[
+            { n: '1', label: 'Locate HEX' },
+            { n: '2', label: 'Crypto or card' },
+            { n: '3', label: 'Review' },
+            { n: '4', label: 'Pay' },
+            { n: '5', label: 'Reserved ✓' },
+          ].map((s) => (
+            <div key={s.n} className="flex items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-malama-accent/50 bg-malama-accent/20 font-black text-xs text-malama-accent">
+                {s.n}
+              </span>
+              <span className="leading-tight text-gray-400">{s.label}</span>
+            </div>
+          ))}
         </div>
 
         <div className="w-full mt-4">
