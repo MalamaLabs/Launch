@@ -26,7 +26,7 @@ type ApiResponse = {
 }
 
 const STATUS_STYLES: Record<GenesisHexListItem['status'], string> = {
-  available: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  available: 'bg-malama-accent/20 text-malama-accent border-malama-accent/30',
   reserved: 'bg-gray-600/40 text-gray-300 border-gray-600/50',
 }
 
@@ -276,7 +276,7 @@ export default function GenesisHexList({ className = '' }: { className?: string 
                         {row.status === 'available' ? (
                           <Link
                             href={`/presale?hex=${encodeURIComponent(row.hexId)}`}
-                            className="text-emerald-400 hover:text-emerald-300 text-[11px] font-black uppercase"
+                            className="text-malama-accent hover:text-malama-accent-dim text-[11px] font-black uppercase"
                             onClick={(e) => e.stopPropagation()}
                           >
                             Reserve
@@ -335,7 +335,7 @@ export default function GenesisHexList({ className = '' }: { className?: string 
                   {row.status === 'available' && (
                     <Link
                       href={`/presale?hex=${encodeURIComponent(row.hexId)}`}
-                      className="block w-full py-2 text-center rounded-lg bg-emerald-600 text-white text-xs font-black uppercase"
+                      className="block w-full py-2 text-center rounded-lg bg-malama-accent-dim text-white text-xs font-black uppercase"
                     >
                       Reserve
                     </Link>

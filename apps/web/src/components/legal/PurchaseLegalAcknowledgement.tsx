@@ -53,7 +53,7 @@ export function PurchaseLegalAcknowledgement({ value, onChange }: Props) {
                 type="checkbox"
                 checked={checked}
                 onChange={() => toggle(d.slug)}
-                className="mt-1 rounded border-gray-600 bg-gray-900 text-emerald-500 focus:ring-emerald-500"
+                className="mt-1 rounded border-gray-600 bg-gray-900 text-malama-accent focus:ring-malama-accent"
               />
               <label htmlFor={id} className="text-sm text-gray-300 leading-snug cursor-pointer">
                 I have read and agree to the{' '}
@@ -61,7 +61,7 @@ export function PurchaseLegalAcknowledgement({ value, onChange }: Props) {
                   href={`/legal/${d.slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-2"
+                  className="text-malama-accent hover:text-malama-accent-dim font-semibold underline underline-offset-2"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {d.shortLabel}
@@ -86,7 +86,7 @@ function LegalInlineLinks() {
             href={`/legal/${d.slug}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-emerald-400/90 hover:text-emerald-400 underline underline-offset-2"
+            className="text-malama-accent/90 hover:text-malama-accent underline underline-offset-2"
           >
             {d.shortLabel}
           </a>

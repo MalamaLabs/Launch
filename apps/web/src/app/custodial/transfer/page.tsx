@@ -56,7 +56,7 @@ function TransferInner() {
           Missing claim or token. Open the transfer link from your purchase confirmation email or card-complete
           page.
         </p>
-        <Link href="/presale" className="mt-6 text-emerald-400 font-bold">
+        <Link href="/presale" className="mt-6 text-malama-accent font-bold">
           Presale
         </Link>
       </div>
@@ -66,7 +66,7 @@ function TransferInner() {
   if (txHash) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center px-4 py-16 max-w-md mx-auto text-center">
-        <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-6" />
+        <CheckCircle2 className="w-16 h-16 text-malama-accent mb-6" />
         <h1 className="text-2xl font-black text-white mb-2">Transfer submitted</h1>
         <p className="text-gray-400 text-sm mb-6">
           Your Genesis NFT was sent to the wallet you specified.
@@ -76,7 +76,7 @@ function TransferInner() {
             href={explorerUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-emerald-400 font-bold hover:underline break-all"
+            className="text-malama-accent font-bold hover:underline break-all"
           >
             View on BaseScan
           </a>
@@ -104,7 +104,7 @@ function TransferInner() {
         value={destination}
         onChange={(e) => setDestination(e.target.value)}
         placeholder="0x…"
-        className="w-full rounded-xl border border-gray-800 bg-black/40 px-4 py-3 font-mono text-sm text-white placeholder:text-gray-600 focus:border-emerald-500 focus:outline-none mb-4"
+        className="w-full rounded-xl border border-gray-800 bg-black/40 px-4 py-3 font-mono text-sm text-white placeholder:text-gray-600 focus:border-malama-accent focus:outline-none mb-4"
         autoComplete="off"
         spellCheck={false}
       />
@@ -120,7 +120,7 @@ function TransferInner() {
         type="button"
         onClick={() => void submit()}
         disabled={loading}
-        className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 text-black font-black text-lg hover:scale-[1.01] transition-transform disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-malama-accent text-black font-black text-lg hover:scale-[1.01] transition-transform disabled:opacity-50"
       >
         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
         Send NFT
@@ -131,7 +131,7 @@ function TransferInner() {
         replace this flow with email OTP or a signed-in account.
       </p>
 
-      <Link href="/presale" className="mt-8 text-sm text-gray-500 hover:text-emerald-400">
+      <Link href="/presale" className="mt-8 text-sm text-gray-500 hover:text-malama-accent">
         ← Presale
       </Link>
     </div>
@@ -143,7 +143,7 @@ export default function CustodialTransferPage() {
     <Suspense
       fallback={
         <div className="min-h-[40vh] flex items-center justify-center">
-          <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
+          <Loader2 className="w-10 h-10 text-malama-accent animate-spin" />
         </div>
       }
     >

@@ -41,11 +41,11 @@ export default async function LegalPage({ params }: { params: Promise<{ slug: st
   return (
     <div className="min-h-screen bg-[#0A1628] py-12 px-4 pb-24">
       <div className="max-w-3xl mx-auto">
-        <Link href="/legal" className="text-sm text-emerald-400 hover:text-emerald-300 mb-8 inline-block font-semibold">
+        <Link href="/legal" className="text-sm text-malama-accent hover:text-malama-accent-dim mb-8 inline-block font-semibold">
           ← All legal documents
         </Link>
         <header className="mb-10 border-b border-gray-800 pb-8">
-          <p className="text-xs font-black uppercase tracking-widest text-emerald-400/90 mb-2">Mālama Labs Inc.</p>
+          <p className="text-xs font-black uppercase tracking-widest text-malama-accent/90 mb-2">Mālama Labs Inc.</p>
           <h1 className="text-4xl font-black text-white tracking-tight">{doc.title}</h1>
         </header>
         <article className="text-gray-300 text-sm md:text-[15px] leading-relaxed">

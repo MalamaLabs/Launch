@@ -300,7 +300,7 @@ export default function HexMap() {
       
       <div className="absolute top-24 left-8 z-10 pointer-events-none max-w-sm">
         <div className="flex items-center space-x-3 mb-2">
-          <div className="w-3 h-3 bg-malama-teal rounded-full animate-pulse shadow-[0_0_10px_rgba(68,187,164,0.5)]" />
+          <div className="w-3 h-3 bg-malama-teal rounded-full animate-pulse shadow-[0_0_10px_rgba(196,240,97,0.5)]" />
           <h1 className="text-xl font-black text-white uppercase tracking-tighter">Neural Topology</h1>
         </div>
         <p className="text-gray-400 text-xs font-mono uppercase tracking-[0.2em] leading-relaxed">

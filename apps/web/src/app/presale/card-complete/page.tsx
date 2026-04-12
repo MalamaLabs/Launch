@@ -72,7 +72,7 @@ function CardCompleteInner() {
   if (status.state === 'loading' || status.state === 'processing') {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center px-4 py-24 text-center">
-        <Loader2 className="w-12 h-12 text-emerald-400 animate-spin mb-6" />
+        <Loader2 className="w-12 h-12 text-malama-accent animate-spin mb-6" />
         <h1 className="text-2xl font-black text-white mb-2">Finalizing your purchase</h1>
         <p className="text-gray-400 max-w-md">
           {status.state === 'processing'
@@ -89,7 +89,7 @@ function CardCompleteInner() {
         <AlertCircle className="w-12 h-12 text-red-400 mb-6" />
         <h1 className="text-2xl font-black text-white mb-2">Could not complete</h1>
         <p className="text-gray-400 max-w-md mb-8">{status.message}</p>
-        <Link href="/presale" className="text-emerald-400 font-bold hover:underline">
+        <Link href="/presale" className="text-malama-accent font-bold hover:underline">
           ← Back to presale
         </Link>
       </div>
@@ -105,8 +105,8 @@ function CardCompleteInner() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center px-4 py-16 max-w-lg mx-auto text-center">
-      <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-6" />
-      <p className="text-emerald-400 font-black uppercase tracking-widest text-sm mb-2">Paid with card</p>
+      <CheckCircle2 className="w-16 h-16 text-malama-accent mb-6" />
+      <p className="text-malama-accent font-black uppercase tracking-widest text-sm mb-2">Paid with card</p>
       <h1 className="text-4xl font-black text-white mb-2">{claimId}</h1>
       <p className="text-gray-400 text-sm mb-8">
         Your NFT was minted on Base to a custodial wallet created for this purchase. Save the transfer link
@@ -123,7 +123,7 @@ function CardCompleteInner() {
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Transfer NFT (save this link)</p>
             <a
               href={transferUrl}
-              className="text-sm text-emerald-400 font-bold break-all hover:underline"
+              className="text-sm text-malama-accent font-bold break-all hover:underline"
             >
               {transferUrl}
             </a>
@@ -158,7 +158,7 @@ function CardCompleteInner() {
         )}
       </div>
 
-      <Link href="/" className="mt-10 text-emerald-500 font-bold hover:underline">
+      <Link href="/" className="mt-10 text-malama-accent font-bold hover:underline">
         Return home →
       </Link>
     </div>
@@ -170,7 +170,7 @@ export default function CardCompletePage() {
     <Suspense
       fallback={
         <div className="min-h-[40vh] flex items-center justify-center">
-          <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
+          <Loader2 className="w-10 h-10 text-malama-accent animate-spin" />
         </div>
       }
     >

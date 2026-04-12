@@ -62,7 +62,7 @@ export default function GenesisHexDetail({
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Genesis hex node</p>
           <p className="mt-1 break-all font-mono text-sm font-black text-white">{item.hexId}</p>
-          <p className="mt-1 text-xs font-semibold text-emerald-400">{item.regionLabel}</p>
+          <p className="mt-1 text-xs font-semibold text-malama-accent">{item.regionLabel}</p>
         </div>
         {variant === 'drawer' && (
           <button
@@ -195,7 +195,7 @@ export default function GenesisHexDetail({
           {canReserve ? (
             <Link
               href={`/presale?hex=${encodeURIComponent(item.hexId)}`}
-              className="block w-full rounded-2xl bg-emerald-500 py-4 text-center text-lg font-black text-white shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-transform hover:scale-[1.02]"
+              className="block w-full rounded-2xl bg-malama-accent py-4 text-center text-lg font-black text-white shadow-[0_0_30px_rgba(196,240,97,0.3)] transition-transform hover:scale-[1.02]"
             >
               Reserve this hex — {formatGenesisListingUsd(GENESIS_ENTRY_USD)}
             </Link>

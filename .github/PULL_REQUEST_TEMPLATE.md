@@ -1,7 +1,5 @@
 ## Description
 
-
-
 ## Checklist
 
 Please verify the following before submitting your PR:
@@ -12,4 +10,3 @@ Please verify the following before submitting your PR:
 - **Docs Updated**: The `README.md` and relevant documentation inside `docs/` have been updated to reflect these changes.
 
 ## Additional Context
-
