@@ -248,27 +248,27 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               
               <div className="bg-malama-deep rounded-2xl border border-gray-800 overflow-hidden text-lg shadow-inner">
                 <div className="p-8 border-b border-gray-800 flex justify-between items-center text-gray-300">
-                  <span className="font-semibold">Genesis Node Hardware Extractor Kit</span>
-                  <span className="font-mono text-white font-bold">$1,200 USDC</span>
-                </div>
-                <div className="p-8 border-b border-gray-800 flex justify-between items-center text-gray-300">
-                  <span className="font-semibold">Genesis Ecosystem NFT Vault (Rights)</span>
-                  <span className="font-mono text-white font-bold">$300 USDC</span>
+                  <div>
+                    <span className="font-semibold">Genesis 200 Node Package</span>
+                    <p className="text-xs text-gray-500 mt-1">Hardware + exclusive geographic license + 125K MLMA allocation + 12mo support</p>
+                  </div>
+                  <span className="font-mono text-white font-bold">$2,000 USDC</span>
                 </div>
                 <div className="p-8 bg-gray-900/80 flex justify-between items-center">
-                  <span className="font-black text-white text-2xl">Total Commitment Due</span>
-                  <span className="font-mono font-black text-malama-teal text-3xl drop-shadow-[0_0_10px_rgba(68,187,164,0.3)]">$1,500 USDC</span>
+                  <span className="font-black text-white text-2xl">Total Due at Reserve</span>
+                  <span className="font-mono font-black text-emerald-400 text-3xl drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">$2,000 USDC</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-6 pb-6 text-center">
                 <div className="p-6 border border-gray-800 rounded-2xl bg-malama-deep flex flex-col justify-center">
-                  <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Base Emission Rewards</h4>
-                  <p className="text-3xl font-black text-green-400 mt-2">2,400 <span className="text-base text-green-600 font-bold">MALAMA/mo</span></p>
+                  <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">MLMA Allocation</h4>
+                  <p className="text-3xl font-black text-emerald-400 mt-2">125K <span className="text-base text-emerald-600 font-bold">MLMA</span></p>
+                  <p className="text-xs text-gray-600 mt-1">25% at boot · 75% over 12mo</p>
                 </div>
                 <div className="p-6 border border-gray-800 rounded-2xl bg-malama-deep flex flex-col justify-center">
                   <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Selected Territory</h4>
-                  <p className="text-2xl font-mono font-bold text-white mt-2">{hexId}</p>
+                  <p className="text-xl font-mono font-bold text-white mt-2 break-all">{hexId}</p>
                 </div>
               </div>
 
@@ -289,8 +289,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 <img src="https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=029" className="w-16 h-16 grayscale brightness-200" alt="USDC" />
               </div>
               
-              <h2 className="text-5xl font-black text-white tracking-tight">Approve Vault Signature</h2>
-              <p className="text-xl text-gray-400 max-w-md leading-relaxed">Awaiting cryptographic signature releasing exactly $1,500 USDC strictly binding into the <span className="font-bold text-white">{evmConnected ? 'Base L2' : 'Cardano'}</span> settlement layer.</p>
+              <h2 className="text-5xl font-black text-white tracking-tight">Confirm Payment</h2>
+              <p className="text-xl text-gray-400 max-w-md leading-relaxed">Approve $2,000 USDC transfer on the <span className="font-bold text-white">{evmConnected ? 'Base network' : 'Cardano'}</span> to reserve your Genesis 200 hex node.</p>
 
               {error && (
                 <div className="p-5 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 flex items-center mt-4 w-full max-w-lg font-bold text-sm text-left">
