@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis 200 | Mālama Labs</title>
+    <style>
+        :root {
+            --color-accent-green: #10B981;
+            --color-text-secondary: #9CA3AF;
+            --bg-color: #0F172A;
+            --text-color: #F8FAFC;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+        section { padding: 4rem 2rem; max-width: 1200px; margin: 0 auto; }
+        .genesis-callout {
+            margin-top: 1.5rem; padding: 1.5rem; background: rgba(16, 185, 129, 0.1);
+            border-radius: 0.75rem; border-left: 4px solid var(--color-accent-green); margin-bottom: 2rem;
+        }
+        .genesis-label { color: var(--color-accent-green); font-weight: 700; font-size: 1.25rem; margin-bottom: 0.5rem; margin: 0; }
+        .genesis-description { color: var(--color-text-secondary); font-size: 1rem; line-height: 1.6; margin: 0; }
+        .btn { display: inline-block; padding: 0.75rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; }
+        .btn-primary { background: var(--color-accent-green); color: #fff; }
+        .btn-secondary { background: transparent; border: 1px solid var(--color-text-secondary); color: var(--text-color); margin-left: 1rem; }
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .card { background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 0.75rem; }
+        .card-title { color: var(--color-text-secondary); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .card-value { font-size: 1.5rem; font-weight: 700; color: var(--color-accent-green); margin: 0.5rem 0; }
+        .card-description { font-size: 0.875rem; line-height: 1.5; color: var(--color-text-secondary); }
+        .earnings-section { background: rgba(255,255,255,0.02); padding: 2rem; border-radius: 1rem; margin-top: 3rem; }
+        @media (max-width: 768px) {
+            .earnings-section > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+            .timeline > div { grid-template-columns: 1fr !important; }
+        }
+        .faq-item { margin-bottom: 1.5rem; }
+        .faq-q { font-weight: 600; margin-bottom: 0.5rem; color: #fff; }
+        .faq-a { color: var(--color-text-secondary); line-height: 1.6; }
+        .form-group { margin-bottom: 1.5rem; text-align: left; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--color-text-secondary); }
+        .form-group select, .form-group input { width: 100%; padding: 0.75rem; border-radius: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; }
+    </style>
+</head>
+<body>
+
+    <!-- PART 1: HERO SECTION -->
+    <section class="hero">
+        <div class="hero-container" style="text-align: center;">
+            <h1 style="font-size: 3rem; margin-bottom: 1rem;">Own the Infrastructure of Verified Carbon</h1>
+            <p class="subtitle" style="font-size: 1.25rem; color: var(--color-text-secondary); max-width: 800px; margin: 0 auto;">A Hex Node validates environmental data on shared protocol. Real-time verified evidence. Predictable revenue. Indigenous stewardship built in.</p>
+            
+            <div class="genesis-callout" style="max-width: 600px; margin: 1.5rem auto 2rem auto; text-align: left;">
+                <p class="genesis-label">Genesis 200 Scarcity Edition</p>
+                <p class="genesis-description">$2,000 per node license + hardware. Limited to 200 validators in key geographic zones. Allocation closes when sold or June 2026.</p>
+            </div>
+            
+            <div class="cta-group">
+                <a href="#reserve" class="btn btn-primary">Reserve Your Genesis Node Now</a>
+                <a href="#economics" class="btn btn-secondary">Explore Economics</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- PART 2: OPERATOR ECONOMICS CARDS -->
+    <section class="economics" id="economics">
+        <h2 style="font-size: 2rem;">Genesis Node Economics</h2>
+        <p class="section-subtitle" style="color: var(--color-text-secondary);">200 nodes allocated globally. $2,000 entry. Three reward streams. Payback in 2-3 months.</p>
+        
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-title">Entry Cost</div>
+                <div class="card-value">$2,000</div>
+                <div class="card-description">Hardware ($380) + exclusive geographic license ($1,620). One-time payment at reserve.</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Your MLMA Allocation</div>
+                <div class="card-value">125K MLMA</div>
+                <div class="card-description">25% vests at hardware boot. 75% vests monthly over 12 months. Lock as veMLMA for governance weight.</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Allocation Value</div>
+                <div class="card-value">$12.5K-37.5K</div>
+                <div class="card-description">At $0.10-0.30/MLMA launch price. Actual price depends on investor demand and network revenue maturity.</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Monthly Rewards</div>
+                <div class="card-value">8-100K MLMA</div>
+                <div class="card-description">Validation earnings depend on hex demand and geographic multiplier. Low to high demand scenarios shown below.</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Payback Timeline</div>
+                <div class="card-value">2-12 weeks</div>
+                <div class="card-description">Entry cost ($2K) recovers in 2 weeks (high demand), 4 weeks (medium), or 12 weeks (low demand) from first rewards.</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Revenue Onset</div>
+                <div class="card-value">Oct 2026</div>
+                <div class="card-description">Reserve May 2026, hardware ships September, deploy late September, earn rewards early-mid October.</div>
+            </div>
+        </div>
+
+        <!-- PART 3: YEAR 1 EARNINGS TABLE -->
+        <div class="earnings-section">
+            <h3 style="color: var(--color-accent-green); margin-bottom: 1rem;">Year 1 Illustrative Earnings (Subject to Data Inflow)</h3>
+            <p style="color: var(--color-text-secondary); margin-bottom: 1rem;">
+                <strong>Entry Cost:</strong> $2,000 per Genesis node (license + hardware). 
+                <strong>Assumptions:</strong> 200 Genesis nodes, 10-50 validations/hex/day, geographic multipliers 0.5×-3.0×, 99.9% uptime bonus active.
+            </p>
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 1.5rem;">
+                <!-- LOW DEMAND HEX -->
+                <div style="background: rgba(0,0,0,0.2); padding: 1.5rem; border-radius: 0.5rem;">
+                    <div style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: 0.5rem;">Low Demand Hex</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-accent-green);">~8-15K</div>
+                    <div style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">MLMA per month</div>
+                    <div style="font-size: 0.875rem; color: var(--color-text-secondary);">Payback: 6-12 weeks</div>
+                    <div style="font-size: 0.75rem; color: var(--color-text-secondary); margin-top: 0.5rem; line-height: 1.5;">
+                        Year 1 earnings: $39K-52K (at $0.20/MLMA)
+                    </div>
+                </div>
+                
+                <!-- MEDIUM DEMAND HEX -->
+                <div style="background: rgba(0,0,0,0.2); padding: 1.5rem; border-radius: 0.5rem;">
+                    <div style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: 0.5rem;">Medium Demand Hex</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-accent-green);">~25-40K</div>
+                    <div style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">MLMA per month</div>
+                    <div style="font-size: 0.875rem; color: var(--color-text-secondary);">Payback: 1-4 weeks</div>
+                    <div style="font-size: 0.75rem; color: var(--color-text-secondary); margin-top: 0.5rem; line-height: 1.5;">
+                        Year 1 earnings: $73K-103K (at $0.20/MLMA)
+                    </div>
+                </div>
+                
+                <!-- HIGH DEMAND HEX -->
+                <div style="background: rgba(0,0,0,0.2); padding: 1.5rem; border-radius: 0.5rem;">
+                    <div style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: 0.5rem;">High Demand Hex</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--color-accent-green);">~50-100K</div>
+                    <div style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">MLMA per month</div>
+                    <div style="font-size: 0.875rem; color: var(--color-text-secondary);">Payback: &lt;1 week</div>
+                    <div style="font-size: 0.75rem; color: var(--color-text-secondary); margin-top: 0.5rem; line-height: 1.5;">
+                        Year 1 earnings: $123K-223K (at $0.20/MLMA)
+                    </div>
+                </div>
+            </div>
+            
+            <p style="color: var(--color-text-secondary); font-size: 0.875rem; margin-top: 1rem; font-style: italic;">
+                <strong>Note:</strong> Earnings depend entirely on data inflow. We do not invent traffic. Early deployments are likely to see lower volumes until network stabilizes. Illustrative ranges shown for context only.
+            </p>
+        </div>
+    </section>
+
+    <!-- PART 4: TIMELINE SECTION -->
+    <section class="timeline" id="timeline">
+        <h2 style="font-size: 2rem;">Your Timeline: Reserve to Revenue</h2>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+            <!-- MAY -->
+            <div style="padding: 1.5rem; background: rgba(16, 185, 129, 0.05); border-radius: 0.75rem;">
+                <h3 style="color: var(--color-accent-green); margin-bottom: 1rem;">May 2026: Reserve</h3>
+                <ul style="color: var(--color-text-secondary); font-size: 0.95rem; line-height: 1.8; list-style: none; padding: 0; margin: 0;">
+                    <li>✓ Visit malamalabs.com/genesis</li>
+                    <li>✓ Complete pre-qualification (capital available, region)</li>
+                    <li>✓ Pay $2,000 entry cost</li>
+                    <li>✓ Receive NFT-HEX + 125K MLMA allocation</li>
+                    <li>✓ Hardware pre-order ships in September</li>
+                </ul>
+            </div>
+            
+            <!-- SEPTEMBER - OCTOBER -->
+            <div style="padding: 1.5rem; background: rgba(16, 185, 129, 0.05); border-radius: 0.75rem;">
+                <h3 style="color: var(--color-accent-green); margin-bottom: 1rem;">Sept-Oct 2026: Deploy & Earn</h3>
+                <ul style="color: var(--color-text-secondary); font-size: 0.95rem; line-height: 1.8; list-style: none; padding: 0; margin: 0;">
+                    <li>✓ Hardware arrives (September)</li>
+                    <li>✓ Unbox, charge, mount (30 minutes)</li>
+                    <li>✓ Boot and register node (online form)</li>
+                    <li>✓ First MLMA rewards (early-mid October)</li>
+                    <li>✓ Earn 8-100K MLMA/month ongoing</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 0.75rem; border-left: 4px solid var(--color-accent-green);">
+            <p style="color: var(--color-text-secondary); margin: 0; line-height: 1.7;">
+                <strong>Detailed timeline:</strong> See <a href="/docs/GENESIS_200_PHASE1_TIMELINE.md" style="color: var(--color-accent-green);">GENESIS_200_PHASE1_TIMELINE.md</a> for complete setup instructions, deployment checklist, and contingency scenarios.
+            </p>
+        </div>
+    </section>
+
+    <!-- PART 5: FAQ SECTION -->
+    <section class="faq" id="faq">
+        <h2 style="font-size: 2rem; margin-bottom: 2rem;">Frequently Asked Questions</h2>
+        
+        <div class="faq-item">
+            <div class="faq-q">Q: What exactly does the $2,000 entry cost include?</div>
+            <div class="faq-a">Hardware ($380) covers a Raspberry Pi Zero 2W, atmospheric sensors, weatherproof enclosure, solar UPS, and secure enclave. License ($1,620) covers exclusive geographic rights to your hex, Genesis 200 MLMA allocation, platform infrastructure, and 12 months of support. You pay once at reserve (May 2026). Hardware ships in September 2026.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">Q: When do I receive my 125K MLMA tokens?</div>
+            <div class="faq-a">Vesting happens in two phases: 25% (31,250 MLMA) vests when your hardware boots and you register your node (late September - early October 2026). The remaining 75% (93,750 MLMA) vests linearly over 12 months at ~7,813 MLMA/month. After 12 months, all tokens are unlocked and you can hold, stake, or sell them.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">Q: How quickly will I recover my $2,000 entry cost?</div>
+            <div class="faq-a">It depends on data demand in your hex. Low-demand zones: 6-12 weeks. Medium-demand zones: 1-4 weeks. High-demand zones: less than 1 week. All scenarios assume validation rewards accrue from early-mid October onward at typical $0.10-0.20/MLMA prices. See "Year 1 Earnings" section above for detailed scenarios.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">Q: When do I start earning rewards?</div>
+            <div class="faq-a">Reserve by May 31, 2026. Hardware ships in September. You deploy and boot in late September/early October. First MLMA rewards accrue in early-mid October 2026 (once SaveCard validations begin flowing to the network). Full detail in the timeline section above.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">Q: Why only 200 nodes?</div>
+            <div class="faq-a">Scarcity ensures geographic multiplier premium and prevents oversupply. Helium deployed 500K+ nodes and created oversupply, which collapsed node operator returns. We're demand-first: 200 nodes in key zones (Idaho, LA, NYC, London, Tokyo, other) with pre-screened carbon projects and energy partners. Once 200 nodes are reserved or June 2026 closes, Genesis 200 allocation ends. Phase 2 (2027+) will expand to Phase 2 validators, but at lower initial multipliers.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">Q: How do Geographic Multipliers work?</div>
+            <div class="faq-a">Your hex location (H3 Resolution 5, ~252.9 km²) determines your reward multiplier. Urban zones earn 0.5×, suburban 1.0×, rural 1.5×, frontier 2.0×, strategic up to 3.0×. High-demand zones (Idaho ERW, LA forestry, NYC emissions, London Article 6.4) are allocated first and earn premium multipliers due to validation volume.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">Q: What is the Indigenous Stewardship program?</div>
+            <div class="faq-a">If your hex overlaps Indigenous territory (UN self-identification + community acceptance), stewards receive 10-25% of your node rewards (default 15%). Settlement is monthly in MLMA or fiat (USD, EUR, BRL, etc.) at your choice. Mālama covers all conversion costs. Disputes resolved via prediction market + DAO governance.</div>
+        </div>
+    </section>
+
+    <!-- FORM & CTA SECTION -->
+    <section class="cta-final" id="reserve" style="text-align: center; background: rgba(0,0,0,0.3); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.05); max-width: 800px;">
+        <h2 style="font-size: 2rem;">Ready to Own Climate Infrastructure?</h2>
+        <p style="color: var(--color-text-secondary); line-height: 1.6; max-width: 600px; margin: 0 auto;">Genesis 200 Edition. $2,000 per node. Limited allocation in key geographic zones. Once reserved, you secure exclusive geographic rights, Genesis MLMA allocation, hardware, and lifetime multiplier tier.</p>
+        <p style="font-weight: 600; color: var(--color-accent-green); margin-top: 1rem;">200 nodes. Allocation closes when sold or June 2026.</p>
+        
+        <form action="mailto:support@malamalabs.com" method="POST" enctype="text/plain" style="margin-top: 3rem; background: rgba(255,255,255,0.02); padding: 2rem; border-radius: 1rem;">
+            
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" name="name" id="name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" name="email" id="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="company">Company / Individual</label>
+                <input type="text" name="company" id="company" required>
+            </div>
+
+            <div class="form-group">
+                <label for="capital">Do you have $2,000 USD available for Genesis node entry?</label>
+                <select name="capital" id="capital" required>
+                    <option value="">-- Select --</option>
+                    <option value="yes">Yes, ready to pay May 2026</option>
+                    <option value="maybe">Maybe, would like to learn more</option>
+                    <option value="no">No, just interested</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="region">Preferred geographic zone:</label>
+                <select name="region" id="region" required>
+                    <option value="">-- Select primary interest --</option>
+                    <option value="idaho">Idaho (ERW + Biochar)</option>
+                    <option value="la">Los Angeles (Smart City + Forestry)</option>
+                    <option value="nyc">New York City (Prediction Markets + Emissions)</option>
+                    <option value="london">London (Article 6.4 Compliance)</option>
+                    <option value="tokyo">Tokyo (Asia-Pacific + Corporate)</option>
+                    <option value="other">Other region</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="commitment">Can you commit to 12+ months of node operation?</label>
+                <select name="commitment" id="commitment" required>
+                    <option value="">-- Select --</option>
+                    <option value="yes">Yes, 12+ months committed</option>
+                    <option value="maybe">Maybe, depends on performance</option>
+                    <option value="no">Unsure</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="infrastructure">Do you have reliable power and internet where you'd deploy?</label>
+                <select name="infrastructure" id="infrastructure">
+                    <option value="">-- Select --</option>
+                    <option value="yes">Yes, both available</option>
+                    <option value="partial">One of the two, need to arrange the other</option>
+                    <option value="no">No, would need to set up</option>
+                </select>
+            </div>
+
+            <input type="hidden" name="source" value="genesis-200">
+            <input type="hidden" name="entry_cost" value="2000">
+            <input type="hidden" name="allocation" value="125k-mlma">
+
+            <div style="margin-top: 2rem;">
+                <button type="submit" class="btn btn-primary" style="width: 100%; border: none; cursor: pointer;">Reserve Your Genesis Node</button>
+            </div>
+            
+            <div style="margin-top: 2rem; padding: 1rem; background: rgba(16, 185, 129, 0.05); border-radius: 0.5rem; text-align: left;">
+                <p style="color: var(--color-text-secondary); font-size: 0.875rem; margin: 0; line-height: 1.6;">
+                    <strong>Next steps:</strong> Pre-qualify at the form above. We'll confirm your region, capital availability, and hardware shipping address. Questions? Email <a href="mailto:support@malamalabs.com" style="color: var(--color-accent-green);">support@malamalabs.com</a> or join our Discord.
+                </p>
+            </div>
+        </form>
+    </section>
+
+    <!-- FOOTER RESOURCES -->
+    <footer style="padding: 4rem 2rem; background: #0b1121; margin-top: 4rem; border-top: 1px solid rgba(255,255,255,0.05);">
+        <div class="resources-section" style="max-width: 1200px; margin: 0 auto;">
+            <h3 style="margin-bottom: 1rem;">Genesis 200 Resources</h3>
+            <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                <li><a href="/docs/MLMA_TOKENOMICS_WHITEPAPER_v1.0.md" style="color: var(--color-text-secondary); text-decoration: none;">📝 MLMA Tokenomics Whitepaper</a></li>
+                <li><a href="/docs/GENESIS_200_PRICING_AND_ROI_SUMMARY.md" style="color: var(--color-text-secondary); text-decoration: none;">📊 Pricing & ROI Summary</a></li>
+                <li><a href="/docs/GENESIS_200_PHASE1_TIMELINE.md" style="color: var(--color-text-secondary); text-decoration: none;">📅 Phase 1 Timeline</a></li>
+                <li><a href="/docs/GENESIS_PHASE1_DOCUMENTATION_BUNDLE.md" style="color: var(--color-text-secondary); text-decoration: none;">📚 Operator Documentation</a></li>
+                <li><a href="mailto:support@malamalabs.com" style="color: var(--color-text-secondary); text-decoration: none;">✉️ Email Support</a></li>
+                <li><a href="https://discord.gg/malamalabs" style="color: var(--color-text-secondary); text-decoration: none;">💬 Discord Community</a></li>
+            </ul>
+        </div>
+    </footer>
+
+</body>
+</html>

@@ -12,6 +12,10 @@ interface HexData {
   activeSensors: number
   uptime: number
   overlap: boolean
+  zone?: string
+  zoneName?: string
+  remaining?: number
+  quota?: number
 }
 
 export default function HexPanel({ 
@@ -48,11 +52,12 @@ export default function HexPanel({
             <X className="w-6 h-6 text-gray-400" />
           </button>
 
-          <div className="flex items-center space-x-4 mb-10">
+          <div className="flex items-center space-x-4 mb-6">
             <Hexagon className="w-10 h-10 text-malama-teal" />
             <div>
               <h2 className="text-sm text-gray-500 font-bold uppercase tracking-widest">H3 Index</h2>
-              <p className="text-2xl font-mono font-black text-white">{data.id}</p>
+              <p className="text-xl font-mono font-black text-white break-all">{data.id}</p>
+              {data.zoneName && <p className="text-xs text-emerald-400 font-bold mt-1">{data.zoneName}</p>}
             </div>
           </div>
 
@@ -77,14 +82,24 @@ export default function HexPanel({
               <MetricBox icon={<Cpu className="w-6 h-6 text-gray-500" />} label="Active Sensors" value={data.activeSensors.toString()} />
               <MetricBox icon={<ShieldCheck className="w-6 h-6 text-green-500" />} label="Avg Node Uptime" value={data.status === 'active' ? `${data.uptime}%` : 'N/A'} />
               <MetricBox icon={<Map className="w-6 h-6 text-malama-teal" />} label="Carbon Project Overlap" value={data.overlap ? 'Verified' : 'None'} />
-              <MetricBox icon={<Coins className="w-6 h-6 text-malama-amber" />} label="Starting Initial Bid" value={`$${data.startingBid} USDC`} />
+              <MetricBox icon={<Coins className="w-6 h-6 text-emerald-400" />} label="Genesis 200 Price" value="$2,000 USDC" />
             </div>
 
             <div className="pt-8 space-y-4">
+              {data.remaining !== undefined && data.quota !== undefined && (
+                <div className="text-center p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                  <span className="text-emerald-400 font-bold text-sm">{data.remaining} of {data.quota} nodes remaining in this zone</span>
+                </div>
+              )}
               {(data.status === 'available' || data.status === 'auction') && (
-                <Link href={`/presale?hex=${data.id}`} className="block w-full py-4 px-6 bg-gradient-to-r from-malama-amber to-orange-500 text-white text-center rounded-2xl font-black text-lg shadow-[0_0_30px_rgba(241,143,1,0.3)] hover:scale-[1.03] transition-transform">
-                  Claim This Hex
+                <Link href={`/presale?hex=${data.id}`} className="block w-full py-4 px-6 bg-emerald-500 text-white text-center rounded-2xl font-black text-lg shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:scale-[1.03] transition-transform">
+                  Reserve This Hex — $2,000
                 </Link>
+              )}
+              {data.status === 'reserved' && (
+                <div className="w-full py-4 px-6 bg-gray-800 text-gray-400 text-center rounded-2xl font-black text-lg">
+                  This Hex is Reserved
+                </div>
               )}
               {data.status === 'active' && (
                 <button className="w-full py-4 px-6 bg-malama-teal/10 border-2 border-malama-teal text-malama-teal text-center rounded-2xl font-black text-lg hover:bg-malama-teal/20 transition-colors shadow-[0_0_20px_rgba(68,187,164,0.1)]">
