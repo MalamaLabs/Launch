@@ -4,7 +4,8 @@ import Stripe from 'stripe'
 import regionsData from '@/data/regions.json'
 import { buildGenesisHexListItems } from '@/lib/genesis-hexes'
 import { getClaimByHex } from '@/lib/genesis-claim-registry'
-import { setSessionProcessing } from '@/lib/custodial-store'
+import { setSessionProcessing, lockHexForMagicCheckout } from '@/lib/custodial-store'
+import { getCardCustodyMode } from '@/lib/card-custody'
 import { getStripeSecretKey } from '@/lib/stripe-server'
 
 export const runtime = 'nodejs'
@@ -38,7 +39,6 @@ export async function POST(req: Request) {
     if (getClaimByHex(hexId)) {
       return NextResponse.json({ error: 'This hex is already reserved' }, { status: 409 })
     }
-
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const transferToken = randomUUID()
 
@@ -71,6 +71,19 @@ export async function POST(req: Request) {
 
     if (session.id) {
       setSessionProcessing(session.id)
+      if (getCardCustodyMode() === 'magic') {
+        if (!lockHexForMagicCheckout(hexId, session.id)) {
+          try {
+            await stripe.checkout.sessions.expire(session.id)
+          } catch {
+            /* best effort — avoid orphan paid-less session */
+          }
+          return NextResponse.json(
+            { error: 'This hex is already held by another active card checkout' },
+            { status: 409 }
+          )
+        }
+      }
     }
 
     return NextResponse.json({ url: session.url, sessionId: session.id })

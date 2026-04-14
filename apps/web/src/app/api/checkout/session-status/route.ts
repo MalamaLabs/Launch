@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { reconcilePaidCheckoutSession } from '@/lib/checkout-reconcile'
+import type { CustodialRecord } from '@/lib/custodial-store'
 import { getSessionStatus } from '@/lib/custodial-store'
 import { getStripeSecretKey } from '@/lib/stripe-server'
 
@@ -15,22 +17,62 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'session_id required' }, { status: 400 })
   }
 
-  const local = getSessionStatus(sessionId)
-  if (local?.state === 'complete' && local.record) {
-    const r = local.record
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    return NextResponse.json({
-      state: 'complete',
-      claimId: r.claimId,
-      hexId: r.hexId,
-      email: r.email,
-      custodialAddress: r.address,
-      evmTokenId: r.evmTokenId,
-      txHash: r.txHash,
-      explorerUrl: `https://sepolia.basescan.org/tx/${r.txHash}`,
-      openSeaUrl: `https://testnets.opensea.io/assets/base-sepolia/${GENESIS_CONTRACT}/${r.evmTokenId}`,
-      transferUrl: `${appUrl}/custodial/transfer?claimId=${encodeURIComponent(r.claimId)}&token=${encodeURIComponent(r.transferToken)}`,
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+  const respondAwaitingMagic = (p: { transferToken: string }, stripeCheckoutSessionId: string) =>
+    NextResponse.json({
+      state: 'awaiting_magic',
+      transferToken: p.transferToken,
+      stripeCheckoutSessionId,
+      launchUrl: `${appUrl}/launch?token=${encodeURIComponent(p.transferToken)}&session_id=${encodeURIComponent(stripeCheckoutSessionId)}`,
+      message:
+        'Payment received. Open Launch App and sign in with Magic using the same email you used at checkout.',
     })
+
+  const respondComplete = (rec: CustodialRecord) =>
+    NextResponse.json({
+      state: 'complete',
+      claimId: rec.claimId,
+      hexId: rec.hexId,
+      email: rec.email,
+      custody: rec.custody,
+      custodialAddress: rec.address,
+      evmTokenId: rec.evmTokenId,
+      txHash: rec.txHash,
+      explorerUrl: `https://sepolia.basescan.org/tx/${rec.txHash}`,
+      openSeaUrl: `https://testnets.opensea.io/assets/base-sepolia/${GENESIS_CONTRACT}/${rec.evmTokenId}`,
+      transferUrl:
+        rec.custody === 'server'
+          ? `${appUrl}/custodial/transfer?claimId=${encodeURIComponent(rec.claimId)}&token=${encodeURIComponent(rec.transferToken)}`
+          : rec.stripeCheckoutSessionId
+            ? `${appUrl}/launch?token=${encodeURIComponent(rec.transferToken)}&session_id=${encodeURIComponent(rec.stripeCheckoutSessionId)}`
+            : `${appUrl}/launch?token=${encodeURIComponent(rec.transferToken)}`,
+      launchUrl:
+        rec.custody === 'magic' && rec.stripeCheckoutSessionId
+          ? `${appUrl}/launch?token=${encodeURIComponent(rec.transferToken)}&session_id=${encodeURIComponent(rec.stripeCheckoutSessionId)}`
+          : `${appUrl}/launch?token=${encodeURIComponent(rec.transferToken)}`,
+    })
+
+  let local = getSessionStatus(sessionId)
+  if (local?.state === 'awaiting_magic') {
+    return respondAwaitingMagic(local.pending, sessionId)
+  }
+  if (local?.state === 'complete' && local.record) {
+    return respondComplete(local.record)
+  }
+  if (local?.state === 'error') {
+    return NextResponse.json({ state: 'error', error: local.error ?? 'Processing failed' })
+  }
+
+  /** Stripe paid but this server has no terminal state yet (first poll, sync missed, or cold instance). */
+  await reconcilePaidCheckoutSession(sessionId)
+
+  local = getSessionStatus(sessionId)
+  if (local?.state === 'awaiting_magic') {
+    return respondAwaitingMagic(local.pending, sessionId)
+  }
+  if (local?.state === 'complete' && local.record) {
+    return respondComplete(local.record)
   }
   if (local?.state === 'error') {
     return NextResponse.json({ state: 'error', error: local.error ?? 'Processing failed' })

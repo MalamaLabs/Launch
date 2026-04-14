@@ -2,6 +2,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { issueClaim, bindEvmTokenToClaim, updateClaimTxHash } from '@/lib/genesis-claim-registry'
 import { encryptPrivateKeyHex } from '@/lib/wallet-crypto'
 import { adminMintToAddress } from '@/lib/admin-genesis-mint'
+import { getCardCustodyMode } from '@/lib/card-custody'
 import type { CustodialRecord } from '@/lib/custodial-store'
 import {
   saveCustodialRecord,
@@ -13,6 +14,10 @@ import {
   clearPendingStripeFulfillment,
   getSessionStatus,
   isStripeSessionProcessed,
+  savePendingMagicPurchase,
+  setSessionAwaitingMagic,
+  getPendingMagicBySession,
+  unlockHexForMagicCheckout,
 } from '@/lib/custodial-store'
 
 const fulfillmentLocks = new Set<string>()
@@ -31,6 +36,31 @@ export async function fulfillCardPurchase(opts: {
   fulfillmentLocks.add(stripeSessionId)
 
   try {
+    if (getCardCustodyMode() === 'magic') {
+      if (getPendingMagicBySession(stripeSessionId)) return
+      if (getSessionStatus(stripeSessionId)?.state === 'awaiting_magic') return
+      const hasMagicSecret =
+        Boolean(process.env.MAGIC_SECRET_KEY?.trim()) || Boolean(process.env.MAGIC_SECRET?.trim())
+      if (!hasMagicSecret) {
+        setSessionError(
+          stripeSessionId,
+          'Magic server key not configured (set MAGIC_SECRET_KEY for DID verification)'
+        )
+        unlockHexForMagicCheckout(hexId, stripeSessionId)
+        return
+      }
+      const pending = {
+        stripeSessionId,
+        hexId,
+        email,
+        transferToken,
+        createdAt: new Date().toISOString(),
+      }
+      savePendingMagicPurchase(pending)
+      setSessionAwaitingMagic(stripeSessionId, pending)
+      return
+    }
+
     let pk: `0x${string}`
     let claimId: string
     let address: `0x${string}`
@@ -86,6 +116,7 @@ export async function fulfillCardPurchase(opts: {
       evmTokenId: tokenId,
       txHash,
       createdAt: new Date().toISOString(),
+      custody: 'server',
     }
 
     clearPendingStripeFulfillment(stripeSessionId)

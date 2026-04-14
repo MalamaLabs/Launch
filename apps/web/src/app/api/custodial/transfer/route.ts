@@ -37,6 +37,15 @@ export async function POST(req: Request) {
     if (!rec || rec.transferToken !== transferToken) {
       return NextResponse.json({ error: 'Invalid claim or transfer link' }, { status: 403 })
     }
+    if (rec.custody === 'magic') {
+      return NextResponse.json(
+        {
+          error:
+            'This NFT is in your Magic embedded wallet. Connect with the same email in the Launch app — on-chain transfer is not available via this server link.',
+        },
+        { status: 400 }
+      )
+    }
 
     const pk = decryptPrivateKeyHex(rec.encryptedPrivateKey)
     const account = privateKeyToAccount(pk)

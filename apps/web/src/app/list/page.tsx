@@ -15,7 +15,7 @@ export default function GenesisHexListPage() {
           ← Back to map
         </Link>
         <p className="hidden text-center text-[11px] font-mono uppercase tracking-widest text-gray-500 sm:block">
-          Listing prices match map tooltips · reserve $2,000 USDC
+          Reserve $2,000 USDC
         </p>
         <span className="hidden w-32 sm:block" aria-hidden />
       </header>
