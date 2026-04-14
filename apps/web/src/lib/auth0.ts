@@ -7,4 +7,10 @@ import { Auth0Client } from '@auth0/nextjs-auth0/server'
  */
 export const auth0 = new Auth0Client({
   signInReturnToPath: '/dashboard',
+  ...(process.env.AUTH0_DOMAIN ? {} : {
+    domain: 'dummy.auth0.com',
+    clientId: 'dummy_client_id',
+    clientSecret: 'dummy_client_secret',
+    secret: 'dummy_secret_required_to_be_32_characters_long',
+  })
 })

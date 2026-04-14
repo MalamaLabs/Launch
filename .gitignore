@@ -68,3 +68,5 @@ docker-volumes/
 *.swp
 *.swo
 *~
+.vercel
+.env*.local
