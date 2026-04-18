@@ -1,0 +1,18 @@
+name = "malama/genesis200"
+version = "0.1.0"
+license = "Apache-2.0"
+description = "Genesis 200 Hex Node Sale contracts: Dutch auction, MLMA vesting, license NFT"
+compiler = "1.1.0"
+plutus = "v3"
+
+[repository]
+user = "The-Malama-Project"
+project = "Genesis200"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "2.0.0"
+source = "github"
+
+[config]

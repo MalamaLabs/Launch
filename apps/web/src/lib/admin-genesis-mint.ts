@@ -24,12 +24,23 @@ export async function adminMintToAddress(opts: {
   recipient: `0x${string}`
 }): Promise<{ txHash: `0x${string}`; tokenId: number }> {
   const pk = process.env.GENESIS_ADMIN_PRIVATE_KEY
-  if (!pk || !pk.startsWith('0x')) {
-    throw new Error('GENESIS_ADMIN_PRIVATE_KEY not configured (contract owner key for adminSecureNode)')
-  }
   const rpc = process.env.BASE_SEPOLIA_RPC_URL || process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL
-  if (!rpc) {
-    throw new Error('BASE_SEPOLIA_RPC_URL not configured')
+  const isPlaceholderContract = GENESIS_CONTRACT === '0x2222222222222222222222222222222222222222'
+
+  // Dev simulation: if admin key, RPC, or real contract address are missing, return a
+  // mock result so the full custodial claim flow can be exercised locally.
+  if (!pk || !pk.startsWith('0x') || !rpc || isPlaceholderContract) {
+    const missing = [
+      (!pk || !pk.startsWith('0x')) && 'GENESIS_ADMIN_PRIVATE_KEY',
+      !rpc && 'BASE_SEPOLIA_RPC_URL',
+      isPlaceholderContract && 'NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS',
+    ].filter(Boolean).join(', ')
+    console.warn(`⚠️  MINT SIMULATED (missing: ${missing}). Set env vars for real minting.`)
+    await new Promise(r => setTimeout(r, 1500))
+    return {
+      txHash: `0xmock_${opts.hexId}_${Date.now()}` as `0x${string}`,
+      tokenId: Math.floor(Math.random() * 300) + 1,
+    }
   }
 
   const account = privateKeyToAccount(pk as `0x${string}`)

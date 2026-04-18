@@ -14,5 +14,8 @@
     "build:all": "npm run build --workspaces --if-present"
   },
   "author": "Mālama Labs",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "vercel": "^51.2.1"
+  }
 }
