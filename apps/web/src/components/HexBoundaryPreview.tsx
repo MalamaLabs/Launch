@@ -19,39 +19,39 @@ type LocationLabel = {
   detail: string
 }
 
-function parseGeocodeFeatures(
-  features: Array<{
-    place_type?: string[]
-    text?: string
-    place_name?: string
-  }>
-): LocationLabel {
-  if (!features?.length) {
-    return { primary: '', detail: '' }
+// Mapbox Search API v6 reverse geocode response shape
+type V6Feature = {
+  properties: {
+    feature_type?: string
+    name?: string
+    full_address?: string
+    context?: {
+      locality?: { name?: string }
+      district?: { name?: string }
+      place?: { name?: string }
+      region?: { name?: string }
+      country?: { name?: string }
+    }
   }
-  let city = ''
-  let locality = ''
-  let district = ''
-  let state = ''
-  let country = ''
-  for (const f of features) {
-    const t = f.place_type || []
-    if (t.includes('locality') && !locality) locality = f.text || ''
-    if (t.includes('district') && !district) district = f.text || ''
-    if (t.includes('place') && !city) city = f.text || ''
-    if (t.includes('region') && !state) state = f.text || ''
-    if (t.includes('country') && !country) country = f.text || ''
-  }
-  const cityLine = locality || district || city
-  const primary = [cityLine, state].filter(Boolean).join(', ') || features[0].place_name || ''
+}
+
+function parseV6Features(features: V6Feature[]): LocationLabel {
+  if (!features?.length) return { primary: '', detail: '' }
+  // v6 returns a single best-match feature for reverse geocode
+  const props = features[0].properties
+  const ctx = props.context || {}
+  const city =
+    ctx.locality?.name || ctx.district?.name || ctx.place?.name || props.name || ''
+  const state = ctx.region?.name || ''
+  const primary = [city, state].filter(Boolean).join(', ') || props.full_address || props.name || ''
   return {
     primary,
-    detail: features[0].place_name || primary,
+    detail: props.full_address || primary,
   }
 }
 
 /**
- * Mapbox map with H3 hex outline + reverse-geocoded city / state (Mapbox Places).
+ * Mapbox map with H3 hex outline + reverse-geocoded city / state (Mapbox Search API v6).
  */
 export default function HexBoundaryPreview({ hexId, genesisRegionLabel, className = '' }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -145,16 +145,17 @@ export default function HexBoundaryPreview({ hexId, genesisRegionLabel, classNam
     const [lat, lng] = cellToLatLng(hexId)
     let cancelled = false
 
+    // Mapbox Search API v6 (reverse geocode) — replaces deprecated v5 mapbox.places endpoint
     const params = new URLSearchParams({
       access_token: token,
-      limit: '5',
+      longitude: String(lng),
+      latitude: String(lat),
     })
-    // Omit `types` — some combinations (e.g. with `country`) return 422 on reverse geocode.
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?${params.toString()}`
+    const url = `https://api.mapbox.com/search/geocode/v6/reverse?${params.toString()}`
 
     fetch(url)
       .then(async (r) => {
-        const data = (await r.json()) as { features?: Parameters<typeof parseGeocodeFeatures>[0]; message?: string }
+        const data = (await r.json()) as { features?: V6Feature[]; message?: string }
         if (!r.ok) {
           throw new Error(data.message || `Geocode ${r.status}`)
         }
@@ -162,11 +163,9 @@ export default function HexBoundaryPreview({ hexId, genesisRegionLabel, classNam
       })
       .then((data) => {
         if (cancelled) return
-        const parsed = parseGeocodeFeatures(data.features || [])
+        const parsed = parseV6Features(data.features || [])
         if (parsed.primary || parsed.detail) {
           setLocation(parsed)
-        } else if (data.features?.[0]?.place_name) {
-          setLocation({ primary: data.features[0].place_name, detail: data.features[0].place_name })
         } else {
           setLocation(null)
         }

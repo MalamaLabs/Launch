@@ -1,12 +1,32 @@
 import { NextResponse } from 'next/server'
-import { getClaimByClaimId } from '@/lib/genesis-claim-registry'
+import { getClaimByClaimId, getClaimByHex, issueClaim } from '@/lib/genesis-claim-registry'
 
 /**
  * POST /api/nft/mint-cardano
  * Server-side Cardano CIP-25 NFT mint using MeshSDK + treasury mnemonic.
+ * If BLOCKFROST_API_KEY or TREASURY_MNEMONIC are missing, returns a simulated
+ * result (consistent with the EVM adminMintToAddress simulation mode).
  *
  * Body: { hexId, cardanoAddress, claimId }
  */
+export const runtime = 'nodejs'
+
+// CIP-25 enforces a 64-byte limit per metadatum string value.
+// Split any string that exceeds 64 bytes into an array of ≤64-byte chunks.
+// Cardano wallets and explorers reassemble array values transparently.
+const cip25Str = (str: string): string | string[] => {
+  if (Buffer.byteLength(str, 'utf8') <= 64) return str
+  const chunks: string[] = []
+  let remaining = str
+  while (remaining.length > 0) {
+    let end = remaining.length
+    while (end > 0 && Buffer.byteLength(remaining.slice(0, end), 'utf8') > 64) end--
+    chunks.push(remaining.slice(0, end))
+    remaining = remaining.slice(end)
+  }
+  return chunks
+}
+
 export async function POST(req: Request) {
   try {
     const { hexId, cardanoAddress, claimId } = await req.json()
@@ -18,76 +38,129 @@ export async function POST(req: Request) {
       )
     }
 
-    const claim = getClaimByClaimId(claimId)
+    // Resolve claim — in dev the in-memory registry resets on server restart,
+    // so fall back to hex lookup then re-issue rather than hard-failing with 404.
+    let claim = claimId ? getClaimByClaimId(claimId) : null
+
     if (!claim) {
-      return NextResponse.json({ error: 'Unknown claimId' }, { status: 404 })
-    }
-    if (claim.hexId !== hexId) {
-      return NextResponse.json({ error: 'claimId does not match hexId' }, { status: 400 })
-    }
-    if (claim.chain !== 'cardano') {
-      return NextResponse.json({ error: 'claim is not a Cardano reservation' }, { status: 400 })
+      // Maybe the server restarted; try looking up by hex
+      const existing = getClaimByHex(hexId)
+      if (existing && (existing.chain === 'cardano' || existing.chain === 'base')) {
+        claim = existing
+      } else {
+        // Re-issue a fresh Cardano claim
+        const issued = issueClaim(hexId, 'cardano', cardanoAddress)
+        if (!issued.ok) {
+          return NextResponse.json(
+            { error: issued.error ?? 'Hex already claimed on another chain' },
+            { status: 409 }
+          )
+        }
+        claim = issued.claim
+      }
     }
 
     const editionNumber = claim.editionNumber
-
     const mnemonic = process.env.TREASURY_MNEMONIC
     const blockfrostKey = process.env.BLOCKFROST_API_KEY
 
+    // Dev simulation — mirrors EVM adminMintToAddress behaviour
     if (!mnemonic || !blockfrostKey) {
-      return NextResponse.json(
-        { error: 'Server wallet not configured' },
-        { status: 500 }
-      )
+      const missing = [!mnemonic && 'TREASURY_MNEMONIC', !blockfrostKey && 'BLOCKFROST_API_KEY']
+        .filter(Boolean)
+        .join(', ')
+      console.warn(`⚠️  CARDANO MINT SIMULATED (missing: ${missing}). Set env vars for real minting.`)
+      await new Promise((r) => setTimeout(r, 1500))
+      const mockTxHash = `mock_cardano_${hexId}_${Date.now()}`
+      return NextResponse.json({
+        success: true,
+        simulated: true,
+        txHash: mockTxHash,
+        claimId,
+        editionNumber,
+        tokenName: `MalamaHexNode${String(editionNumber).padStart(3, '0')}`,
+        explorerUrl: `https://preview.cardanoscan.io/transaction/${mockTxHash}`,
+        cnftUrl: `https://preview.cexplorer.io/tx/${mockTxHash}`,
+      })
     }
 
-    const { MeshWallet, Transaction, ForgeScript } = await import('@meshsdk/core')
+    const {
+      MeshWallet,
+      BlockfrostProvider,
+      MeshTxBuilder,
+      resolveNativeScriptHash,
+      resolveNativeScriptHex,
+      resolvePaymentKeyHash,
+      stringToHex,
+    } = await import('@meshsdk/core')
+
+    const blockchainProvider = new BlockfrostProvider(blockfrostKey)
 
     const wallet = new MeshWallet({
-      networkId: 0,
-      fetcher: { blockfrostProjectId: blockfrostKey, isTestnet: true } as any,
-      submitter: { blockfrostProjectId: blockfrostKey, isTestnet: true } as any,
+      networkId: 0, // 0 = testnet/preprod
+      fetcher: blockchainProvider,
+      submitter: blockchainProvider,
       key: {
         type: 'mnemonic',
-        words: mnemonic.replace(/"/g, '').split(' '),
+        words: mnemonic.replace(/"/g, '').trim().split(/\s+/),
       },
     })
 
     const changeAddress = await wallet.getChangeAddress()
-    const forgingScript = ForgeScript.withOneSignature(changeAddress)
+
+    // Build NativeScript object (single-sig policy locked to treasury key).
+    // ForgeScript.withOneSignature returns a string in v1.x, but resolveNativeScriptHash/Hex
+    // require the NativeScript object — so we build it directly.
+    const keyHash = resolvePaymentKeyHash(changeAddress)
+    const nativeScript = { type: 'sig' as const, keyHash }
+    const policyId = resolveNativeScriptHash(nativeScript)
+    const scriptCbor = resolveNativeScriptHex(nativeScript)
 
     const genPad = String(editionNumber).padStart(3, '0')
     const tokenNameRaw = `MalamaHexNode${genPad}`
+    const assetNameHex = stringToHex(tokenNameRaw)
+
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://malamalaunch.vercel.app'
     const imageUrl = `${baseUrl}/api/nft/${editionNumber}/image?hexId=${encodeURIComponent(hexId)}&chain=cardano&claimId=${encodeURIComponent(claimId)}`
 
-    const metadata = {
-      name: `Mālama Hex Node License ${claimId}`,
-      image: imageUrl,
-      mediaType: 'image/svg+xml',
-      description: `Genesis 200 validator node. Claim ${claimId}. Territory: ${hexId}. Exclusive geographic rights on the Mālama DePIN network.`,
-      claimId,
-      hexId,
-      editionNumber,
-      edition: 'Genesis 200',
-      mlmaAllocation: '125000',
-      vestingSchedule: '25% at boot, 75% over 12 months',
+    const cip25Metadata = {
+      [policyId]: {
+        [tokenNameRaw]: {
+          name: cip25Str(`Malama Hex Node License ${claimId}`),
+          image: cip25Str(imageUrl),
+          mediaType: 'image/svg+xml',
+          description: cip25Str(`Genesis 200 validator node. Claim ${claimId}. Territory: ${hexId}.`),
+          claimId,
+          hexId,
+          editionNumber,
+          edition: 'Genesis 200',
+          mlmaAllocation: '125000',
+          vestingSchedule: cip25Str('25% at boot, 75% over 12 months'),
+        },
+      },
     }
 
-    const tx = new Transaction({ initiator: wallet })
-    tx.mintAsset(forgingScript, {
-      assetName: tokenNameRaw,
-      assetQuantity: '1',
-      metadata,
-      label: '721',
-      recipient: cardanoAddress,
+    const utxos = await wallet.getUtxos()
+
+    const txBuilder = new MeshTxBuilder({
+      fetcher: blockchainProvider,
+      submitter: blockchainProvider,
     })
 
-    const unsignedTx = await tx.build()
+    const unsignedTx = await txBuilder
+      .mint('1', policyId, assetNameHex)
+      .mintingScript(scriptCbor)
+      .metadataValue(721, cip25Metadata)
+      .txOut(cardanoAddress, [{ unit: `${policyId}${assetNameHex}`, quantity: '1' }])
+      .changeAddress(changeAddress)
+      .selectUtxosFrom(utxos)
+      .complete()
+
     const signedTx = await wallet.signTx(unsignedTx)
     const txHash = await wallet.submitTx(signedTx)
 
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/nft/claim`, {
+    // Non-blocking: update claim record with tx hash
+    fetch(`${baseUrl}/api/nft/claim`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claimId, txHash }),
@@ -95,6 +168,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
+      simulated: false,
       txHash,
       claimId,
       editionNumber,

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CardanoWallet, useWallet as useCardanoWallet } from '@meshsdk/react'
+import { useWallet as useCardanoWallet } from '@meshsdk/react'
 import {
   useAccount as useEVMWallet,
   useConnect as useEVMConnect,
@@ -53,6 +53,8 @@ interface SuccessData {
   openSeaUrl?: string
   cnftUrl?: string
   tokenName?: string
+  /** True when mint env vars were missing and a mock result was returned */
+  simulated?: boolean
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -91,13 +93,23 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [legalAck, setLegalAck]     = useState(initialLegalAck)
   const [paymentMode, setPaymentMode] = useState<'crypto' | 'card'>('crypto')
   const [cardEmail, setCardEmail]   = useState('')
+  const [mmImportOpen, setMmImportOpen] = useState(false)
+  const [mmCopied, setMmCopied]     = useState<'address' | 'tokenId' | null>(null)
 
   const legalComplete = allLegalAcknowledged(legalAck)
 
   const cardEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cardEmail.trim())
 
   // ── Wallet hooks ────────────────────────────────────────────────────────
-  const { connected: cardanoConnected, wallet: cardanoWallet, name: cardanoWalletName } = useCardanoWallet()
+  const { connected: cardanoConnected, wallet: cardanoWallet, name: cardanoWalletName, connect: connectCardano } = useCardanoWallet()
+  const [cardanoWallets, setCardanoWallets] = useState<{ name: string; icon: string }[]>([])
+  const [showCardanoPicker, setShowCardanoPicker] = useState(false)
+  // Raw CIP-30 API object — stored after window.cardano[name].enable() succeeds.
+  // Used for signData() calls (triggers Lace signing popup) without going through MeshSDK.
+  const [cardanoCip30Api, setCardanoCip30Api] = useState<{
+    getChangeAddress: () => Promise<string>
+    signData: (address: string, payload: string) => Promise<{ signature: string; key: string }>
+  } | null>(null)
   const { address: evmAddress, isConnected: evmConnected } = useEVMWallet()
   const { connect: connectEVM }    = useEVMConnect()
   const { disconnect: disconnectEVM } = useEVMDisconnect()
@@ -105,9 +117,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const { writeContractAsync } = useWriteContract()
 
   const activeChain      = evmConnected ? 'base' : cardanoConnected ? 'cardano' : preferredChain
+  const cardanoReady     = cardanoConnected || !!cardanoCip30Api
   const isSetupComplete =
     !!hexId &&
-    (paymentMode === 'card' ? cardEmailOk : cardanoConnected || evmConnected)
+    (paymentMode === 'card' ? cardEmailOk : cardanoReady || evmConnected)
   const appBase          = process.env.NEXT_PUBLIC_APP_URL ?? 'https://malamalaunch.vercel.app'
 
   // ── Sync local purchased map ─────────────────────────────────────────────
@@ -127,10 +140,58 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     })
   }
 
+  // ── Direct CIP-30 connect — triggers Lace's "Connect this dApp?" popup ──
+  const connectCardanoWallet = async (walletKey: string) => {
+    const win = window as typeof window & {
+      cardano?: Record<string, { name?: string; icon?: string; enable: () => Promise<any> }>
+    }
+    const api = await win.cardano![walletKey].enable()
+    setCardanoCip30Api(api)
+    // Also connect via MeshSDK so cardanoWallet/cardanoConnected state updates
+    await connectCardano(walletKey).catch(() => {
+      // MeshSDK may warn internally but the raw API is already stored
+    })
+  }
+
   // ── Add NFT to MetaMask ──────────────────────────────────────────────────
+  const copyMm = (text: string, field: 'address' | 'tokenId') => {
+    navigator.clipboard.writeText(text).then(() => {
+      setMmCopied(field)
+      setTimeout(() => setMmCopied(null), 2000)
+    })
+  }
+
   const addToMetaMask = async (evmTokenId: number) => {
+    const eth = (window as any).ethereum
+    // Always open the manual panel so the user can copy values regardless
+    setMmImportOpen(true)
+
+    if (!eth) return // panel is open; user reads contract + tokenId manually
+
     try {
-      await (window as any).ethereum?.request({
+      // Switch to Base Sepolia first
+      const chainId: string = await eth.request({ method: 'eth_chainId' })
+      if (chainId !== '0x14a34') {
+        await eth.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x14a34' }],
+        }).catch(async (switchErr: any) => {
+          if (switchErr.code === 4902) {
+            await eth.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x14a34',
+                chainName: 'Base Sepolia',
+                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://sepolia.base.org'],
+                blockExplorerUrls: ['https://sepolia.basescan.org'],
+              }],
+            })
+          }
+        })
+      }
+      // wallet_watchAsset pops MetaMask's "Import NFT" dialog
+      await eth.request({
         method: 'wallet_watchAsset',
         params: {
           type: 'ERC721',
@@ -141,7 +202,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         },
       })
     } catch (e) {
-      console.warn('wallet_watchAsset failed', e)
+      console.warn('wallet_watchAsset failed — manual import panel open', e)
     }
   }
 
@@ -224,9 +285,13 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
   // ── Cardano payment flow ─────────────────────────────────────────────────
   const handleCardanoPayment = async () => {
-    if (!cardanoWallet || !hexId) throw new Error('Wallet or hex not ready')
+    if (!hexId) throw new Error('No hex selected')
+    if (!cardanoWallet && !cardanoCip30Api) throw new Error('Cardano wallet not connected')
 
-    const cardanoAddress = await cardanoWallet.getChangeAddress()
+    // Prefer MeshSDK wallet for address (handles CBOR decoding), fall back to raw CIP-30
+    const cardanoAddress = cardanoWallet
+      ? await cardanoWallet.getChangeAddress()
+      : await cardanoCip30Api!.getChangeAddress()
 
     // 1. Reserve in global claim registry (prevents Base from stealing same hex)
     const claimRes = await fetch('/api/nft/claim', {
@@ -238,7 +303,26 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     if (!claimRes.ok) throw new Error(claimData.error ?? 'Hex already claimed on another chain')
     const { claimId, editionNumber } = claimData as { claimId: string; editionNumber: number }
 
-    // 2. Server-side mint (treasury signs and submits)
+    // 2. CIP-8 message signing — pops Lace's signing dialog so the user
+    //    explicitly authorises the mint against their address.
+    if (cardanoCip30Api) {
+      const message = `Malama Labs: Authorise Genesis Node mint\nHex: ${hexId}\nClaim: ${claimId}`
+      const payloadHex = Array.from(new TextEncoder().encode(message))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+      try {
+        await cardanoCip30Api.signData(cardanoAddress, payloadHex)
+      } catch (err: any) {
+        // CIP-30 error code 2 = user declined
+        if (err?.code === 2 || err?.message?.toLowerCase().includes('declined')) {
+          throw new Error('Signing cancelled in Lace — mint aborted')
+        }
+        // Other errors (e.g. ProofGeneration) — log but allow mint to proceed
+        console.warn('[CIP-8 signData]', err)
+      }
+    }
+
+    // 3. Server-side treasury mint (treasury pays ADA fees, sends NFT to user)
     const mintRes = await fetch('/api/nft/mint-cardano', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -258,6 +342,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       cnftUrl: mintData.cnftUrl,
       tokenName: mintData.tokenName,
       nftImageUrl: `${appBase}/api/nft/${editionNumber}/image?hexId=${encodeURIComponent(hexId)}&chain=cardano&claimId=${encodeURIComponent(claimId)}`,
+      simulated: mintData.simulated,
     }
   }
 
@@ -459,23 +544,69 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               ) : (
               <div className="grid gap-6 md:grid-cols-2">
                 {/* Cardano wallet */}
-                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${cardanoConnected ? 'bg-malama-accent/10 border-malama-accent/40 shadow-[0_0_20px_rgba(196,240,97,0.1)]' : evmConnected ? 'bg-gray-900 border-gray-800 opacity-50' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${cardanoConnected ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
-                    <Wallet className={`w-7 h-7 ${cardanoConnected ? 'text-malama-accent' : 'text-gray-500'}`} />
+                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${cardanoReady ? 'bg-malama-accent/10 border-malama-accent/40 shadow-[0_0_20px_rgba(196,240,97,0.1)]' : evmConnected ? 'bg-gray-900 border-gray-800 opacity-50' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${cardanoReady ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
+                    <Wallet className={`w-7 h-7 ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`} />
                   </div>
                   <div>
                     <h3 className="font-bold text-white uppercase tracking-wider text-xs">Cardano NFT</h3>
-                    <p className={`text-sm mt-1 font-mono ${cardanoConnected ? 'text-malama-accent' : 'text-gray-500'}`}>
-                      {cardanoConnected ? (cardanoWalletName?.toUpperCase() ?? 'CONNECTED') : 'DISCONNECTED'}
+                    <p className={`text-sm mt-1 font-mono ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`}>
+                      {cardanoReady ? (cardanoWalletName?.toUpperCase() ?? 'LACE CONNECTED') : 'DISCONNECTED'}
                     </p>
-                    <p className="text-xs text-gray-600 mt-1">CIP-25 Token</p>
+                    <p className="text-xs text-gray-600 mt-1">CIP-25 Token · Lace signs</p>
                   </div>
-                  {cardanoConnected ? (
+                  {cardanoReady ? (
                     <div className="w-full py-2 bg-malama-accent/20 border border-malama-accent/50 text-malama-accent rounded-lg font-bold text-xs text-center">
                       ✓ READY TO MINT
                     </div>
                   ) : (
-                    <CardanoWallet label="Connect Cardano" />
+                    <div className="relative w-full">
+                      <button
+                        onClick={async () => {
+                          const win = window as typeof window & {
+                            cardano?: Record<string, { name?: string; icon?: string; enable: () => Promise<any> }>
+                          }
+                          const detected = Object.entries(win.cardano ?? {}).map(([key, w]) => ({
+                            name: key,
+                            icon: w.icon ?? '',
+                          }))
+                          if (detected.length === 0) {
+                            setCardanoWallets([])
+                            setShowCardanoPicker(true)
+                          } else if (detected.length === 1) {
+                            await connectCardanoWallet(detected[0].name)
+                          } else {
+                            setCardanoWallets(detected)
+                            setShowCardanoPicker(true)
+                          }
+                        }}
+                        className="w-full py-2 bg-malama-accent/10 border border-malama-accent/40 text-malama-accent rounded-lg font-bold text-xs hover:bg-malama-accent/20 transition-colors"
+                      >
+                        Connect Lace / Cardano
+                      </button>
+                      {showCardanoPicker && cardanoWallets.length > 0 && (
+                        <div className="absolute bottom-full mb-2 left-0 w-full bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
+                          {cardanoWallets.map((w) => (
+                            <button
+                              key={w.name}
+                              onClick={async () => {
+                                setShowCardanoPicker(false)
+                                await connectCardanoWallet(w.name)
+                              }}
+                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-gray-800 transition-colors text-left"
+                            >
+                              {w.icon && <img src={w.icon} alt={w.name} className="w-5 h-5 rounded" />}
+                              <span className="text-white text-xs font-bold uppercase tracking-wider">{w.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showCardanoPicker && cardanoWallets.length === 0 && (
+                        <div className="absolute bottom-full mb-2 left-0 w-full bg-gray-900 border border-gray-700 rounded-xl p-4 z-50 shadow-xl text-center">
+                          <p className="text-gray-400 text-xs">No Cardano wallet detected.<br />Install Lace or Eternl.</p>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -743,6 +874,11 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 <p className="text-gray-400 mt-2 text-sm">
                   Minted on <span className="text-white font-bold">{successData.chain === 'base' ? 'Base L2' : 'Cardano'}</span>
                 </p>
+                {successData.simulated && (
+                  <p className="mt-2 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 inline-block">
+                    ⚠️ Dev simulation — set env vars for real on-chain mint
+                  </p>
+                )}
               </div>
 
               {/* NFT Card */}
@@ -788,12 +924,59 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 )}
 
                 {successData.chain === 'base' && successData.evmTokenId != null && (
-                  <button
-                    onClick={() => addToMetaMask(successData.evmTokenId!)}
-                    className="flex items-center justify-center gap-2 py-4 bg-orange-950 border border-orange-800 text-orange-300 rounded-xl font-bold hover:bg-orange-900 transition-colors"
-                  >
-                    🦊 Add to MetaMask
-                  </button>
+                  <div className="sm:col-span-2 flex flex-col gap-2">
+                    <button
+                      onClick={() => addToMetaMask(successData.evmTokenId!)}
+                      className="flex items-center justify-center gap-2 py-4 bg-orange-950 border border-orange-800 text-orange-300 rounded-xl font-bold hover:bg-orange-900 transition-colors w-full"
+                    >
+                      🦊 Add to MetaMask
+                    </button>
+                    {/* Manual import panel — always shown after clicking Add to MetaMask */}
+                    {mmImportOpen && (
+                      <div className="bg-gray-900 border border-orange-800/40 rounded-xl p-4 text-left space-y-3">
+                        <p className="text-xs font-black uppercase tracking-wider text-orange-300">
+                          Import NFT manually in MetaMask
+                        </p>
+                        <p className="text-[11px] text-gray-500 leading-relaxed">
+                          MetaMask → NFTs tab → Import NFT → paste the values below.
+                        </p>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest text-gray-600 mb-1">Network</p>
+                            <p className="text-xs text-orange-200 font-mono">Base Sepolia (chain 84532)</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest text-gray-600 mb-1">Contract Address</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-white font-mono break-all flex-1">{GENESIS_CONTRACT}</span>
+                              <button
+                                onClick={() => copyMm(GENESIS_CONTRACT, 'address')}
+                                className="flex-shrink-0 text-gray-500 hover:text-orange-300 transition-colors"
+                                title="Copy"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              {mmCopied === 'address' && <span className="text-orange-300 text-[10px]">Copied!</span>}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest text-gray-600 mb-1">Token ID</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-white font-mono flex-1">{successData.evmTokenId}</span>
+                              <button
+                                onClick={() => copyMm(String(successData.evmTokenId), 'tokenId')}
+                                className="flex-shrink-0 text-gray-500 hover:text-orange-300 transition-colors"
+                                title="Copy"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              {mmCopied === 'tokenId' && <span className="text-orange-300 text-[10px]">Copied!</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <a
