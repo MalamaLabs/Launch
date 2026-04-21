@@ -11,13 +11,20 @@ import {
   usePublicClient,
 } from 'wagmi'
 import { injected } from 'wagmi/connectors'
-import { parseAbi, parseUnits, decodeEventLog } from 'viem'
+import { parseAbi, decodeEventLog } from 'viem'
 import {
   MapPin, ShoppingCart, Wallet, Globe,
   ChevronRight, CheckCircle2, AlertCircle, ExternalLink, Copy,
   CreditCard,
 } from 'lucide-react'
 import Link from 'next/link'
+import regionsData from '@/data/regions.json'
+import { getGenesisPoolSlot } from '@/lib/genesis-hexes'
+import {
+  reserveHexOnChain,
+  reportMintObserved,
+  createStripeCheckout,
+} from '@/lib/api'
 import {
   PurchaseLegalAcknowledgement,
   LegalMintReminder,
@@ -26,9 +33,11 @@ import {
 } from '@/components/legal/PurchaseLegalAcknowledgement'
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
-const GENESIS_CONTRACT = (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '0x2222222222222222222222222222222222222222') as `0x${string}`
-const USDC_CONTRACT    = (process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS         ?? '0x1111111111111111111111111111111111111111') as `0x${string}`
-const PRICE_USDC       = parseUnits('2000', 6) // $2,000 USDC (6 decimals)
+// Fallbacks only. Actual contract + USDC addresses come from the dagwelldev-api
+// purchase-intent response — that way the backend is the single source of truth
+// for which network (sepolia/mainnet) and which contract deployment are active.
+const GENESIS_CONTRACT_FALLBACK = (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '0x2222222222222222222222222222222222222222') as `0x${string}`
+const USDC_CONTRACT_FALLBACK    = (process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS         ?? '0x1111111111111111111111111111111111111111') as `0x${string}`
 
 const USDC_ABI = parseAbi([
   'function approve(address spender, uint256 amount) public returns (bool)',
@@ -46,6 +55,8 @@ interface SuccessData {
   editionNumber: number
   /** Base ERC-721 token id (on-chain); Cardano omits */
   evmTokenId?: number
+  /** Contract address used for the mint — drives MetaMask import panel. */
+  contractAddress?: `0x${string}`
   txHash: string
   chain: 'base' | 'cardano'
   explorerUrl: string
@@ -84,7 +95,6 @@ function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [step, setStep] = useState(1)
-  const [preferredChain, setPreferredChain] = useState<'base' | 'cardano'>('base')
   const [loading, setLoading]       = useState(false)
   const [evmTxStatus, setEvmTxStatus] = useState<'' | 'claiming' | 'approving' | 'minting'>('')
   const [error, setError]           = useState('')
@@ -116,11 +126,11 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
 
-  const activeChain      = evmConnected ? 'base' : cardanoConnected ? 'cardano' : preferredChain
   const cardanoReady     = cardanoConnected || !!cardanoCip30Api
+  // Crypto path MUST have Base connected (Cardano-as-primary is disabled).
+  // Card path ALSO requires Base, because backend needs a delivery address.
   const isSetupComplete =
-    !!hexId &&
-    (paymentMode === 'card' ? cardEmailOk : cardanoReady || evmConnected)
+    !!hexId && evmConnected && (paymentMode === 'card' ? cardEmailOk : true)
   const appBase          = process.env.NEXT_PUBLIC_APP_URL ?? 'https://malamalaunch.vercel.app'
 
   // ── Sync local purchased map ─────────────────────────────────────────────
@@ -196,7 +206,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         params: {
           type: 'ERC721',
           options: {
-            address: GENESIS_CONTRACT,
+            address: successData?.contractAddress ?? GENESIS_CONTRACT_FALLBACK,
             tokenId: String(evmTokenId),
           },
         },
@@ -206,20 +216,24 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     }
   }
 
-  // ── Base payment flow ────────────────────────────────────────────────────
+  // ── Base payment flow (via dagwelldev-api) ──────────────────────────────
   const handleBasePayment = async () => {
     if (!publicClient || !evmAddress || !hexId) throw new Error('Wallet or hex not ready')
 
-    // 1. Reserve in global claim registry
+    // 1. Reserve with dagwelldev-api. Backend validates availability + returns
+    //    the authoritative contract + USDC addresses to use. If the hex is
+    //    already sold or claimed on-chain, this throws with a clear message.
     setEvmTxStatus('claiming')
-    const claimRes = await fetch('/api/nft/claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hexId, chain: 'base', buyerAddress: evmAddress }),
-    })
-    const claimData = await claimRes.json()
-    if (!claimRes.ok) throw new Error(claimData.error ?? 'Hex already claimed on another chain')
-    const { claimId, editionNumber } = claimData as { claimId: string; editionNumber: number }
+    const intent = await reserveHexOnChain(hexId, evmAddress)
+
+    const GENESIS_CONTRACT = intent.contract ?? GENESIS_CONTRACT_FALLBACK
+    const USDC_CONTRACT    = intent.usdcAddress ?? USDC_CONTRACT_FALLBACK
+    const priceRaw         = BigInt(intent.priceRaw)
+
+    // Pool slot is deterministic from hexId + regions.json, so we can render
+    // a human-readable claim id immediately without a round-trip.
+    const editionNumber = getGenesisPoolSlot(hexId, regionsData) ?? 0
+    const claimId       = `G200-${String(editionNumber).padStart(3, '0')}`
 
     // 2. USDC approve
     setEvmTxStatus('approving')
@@ -229,14 +243,14 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         address: USDC_CONTRACT,
         abi: USDC_ABI,
         functionName: 'approve',
-        args: [GENESIS_CONTRACT, PRICE_USDC],
+        args: [GENESIS_CONTRACT, priceRaw],
       })
-    } catch (e: any) {
+    } catch {
       throw new Error('USDC approval rejected — please approve in your wallet')
     }
     await publicClient.waitForTransactionReceipt({ hash: approveHash })
 
-    // 3. Mint NFT
+    // 3. Mint NFT (secureNode on GenesisValidator)
     setEvmTxStatus('minting')
     let mintHash: `0x${string}`
     try {
@@ -246,125 +260,81 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         functionName: 'secureNode',
         args: [hexId],
       })
-    } catch (e: any) {
+    } catch {
       throw new Error('Mint transaction rejected or hex already taken on-chain')
     }
     const receipt = await publicClient.waitForTransactionReceipt({ hash: mintHash })
 
-    // 4. Extract tokenId from NodeSecured event
+    // 4. Extract tokenId from NodeSecured event (fallback = edition #)
     let evmTokenId = editionNumber
     for (const log of receipt.logs) {
       try {
         const decoded = decodeEventLog({ abi: MHNL_ABI, ...log })
         if (decoded.eventName === 'NodeSecured') {
-          evmTokenId = Number((decoded.args as any).tokenId)
+          evmTokenId = Number((decoded.args as { tokenId: bigint }).tokenId)
         }
       } catch {}
     }
 
-    // 5. Bind on-chain token to claimId for metadata / image resolution
-    await fetch('/api/nft/claim', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ claimId, hexId, txHash: mintHash, tokenId: evmTokenId }),
-    }).catch(() => {})
+    // 5. Notify backend → syncs Mongo, best-effort mints Cardano mirror.
+    //    Idempotent; safe even if it fails — the user already owns the NFT.
+    const observed = await reportMintObserved({ hexId, txHash: mintHash }).catch((err) => {
+      console.warn('[mint-observed] backend sync failed — NFT still minted on-chain', err)
+      return null
+    })
+
+    // Prefer backend's canonical tokenId if it reported one.
+    if (observed?.baseTokenId != null) evmTokenId = observed.baseTokenId
 
     syncNodeToMap(hexId)
+
+    const explorerHost = intent.network === 'mainnet' ? 'basescan.org' : 'sepolia.basescan.org'
+    const openSeaHost  = intent.network === 'mainnet' ? 'opensea.io/assets/base' : 'testnets.opensea.io/assets/base-sepolia'
 
     return {
       claimId,
       editionNumber,
       evmTokenId,
-      txHash: mintHash,
-      chain: 'base' as const,
-      explorerUrl: `https://sepolia.basescan.org/tx/${mintHash}`,
-      openSeaUrl: `https://testnets.opensea.io/assets/base-sepolia/${GENESIS_CONTRACT}/${evmTokenId}`,
-      nftImageUrl: `${appBase}/api/nft/${evmTokenId}/image?hexId=${encodeURIComponent(hexId)}&chain=base&claimId=${encodeURIComponent(claimId)}`,
+      contractAddress: GENESIS_CONTRACT,
+      txHash:          mintHash,
+      chain:           'base' as const,
+      explorerUrl:     `https://${explorerHost}/tx/${mintHash}`,
+      openSeaUrl:      `https://${openSeaHost}/${GENESIS_CONTRACT}/${evmTokenId}`,
+      nftImageUrl:     `${appBase}/api/nft/${evmTokenId}/image?hexId=${encodeURIComponent(hexId)}&chain=base&claimId=${encodeURIComponent(claimId)}`,
     }
   }
 
-  // ── Cardano payment flow ─────────────────────────────────────────────────
-  const handleCardanoPayment = async () => {
-    if (!hexId) throw new Error('No hex selected')
-    if (!cardanoWallet && !cardanoCip30Api) throw new Error('Cardano wallet not connected')
-
-    // Prefer MeshSDK wallet for address (handles CBOR decoding), fall back to raw CIP-30
-    const cardanoAddress = cardanoWallet
-      ? await cardanoWallet.getChangeAddress()
-      : await cardanoCip30Api!.getChangeAddress()
-
-    // 1. Reserve in global claim registry (prevents Base from stealing same hex)
-    const claimRes = await fetch('/api/nft/claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hexId, chain: 'cardano', buyerAddress: cardanoAddress }),
-    })
-    const claimData = await claimRes.json()
-    if (!claimRes.ok) throw new Error(claimData.error ?? 'Hex already claimed on another chain')
-    const { claimId, editionNumber } = claimData as { claimId: string; editionNumber: number }
-
-    // 2. CIP-8 message signing — pops Lace's signing dialog so the user
-    //    explicitly authorises the mint against their address.
-    if (cardanoCip30Api) {
-      const message = `Malama Labs: Authorise Genesis Node mint\nHex: ${hexId}\nClaim: ${claimId}`
-      const payloadHex = Array.from(new TextEncoder().encode(message))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')
-      try {
-        await cardanoCip30Api.signData(cardanoAddress, payloadHex)
-      } catch (err: any) {
-        // CIP-30 error code 2 = user declined
-        if (err?.code === 2 || err?.message?.toLowerCase().includes('declined')) {
-          throw new Error('Signing cancelled in Lace — mint aborted')
-        }
-        // Other errors (e.g. ProofGeneration) — log but allow mint to proceed
-        console.warn('[CIP-8 signData]', err)
-      }
-    }
-
-    // 3. Server-side treasury mint (treasury pays ADA fees, sends NFT to user)
-    const mintRes = await fetch('/api/nft/mint-cardano', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hexId, cardanoAddress, claimId }),
-    })
-    const mintData = await mintRes.json()
-    if (!mintRes.ok) throw new Error(mintData.error ?? 'Cardano mint failed')
-
-    syncNodeToMap(hexId)
-
-    return {
-      claimId,
-      editionNumber,
-      txHash: mintData.txHash,
-      chain: 'cardano' as const,
-      explorerUrl: mintData.explorerUrl,
-      cnftUrl: mintData.cnftUrl,
-      tokenName: mintData.tokenName,
-      nftImageUrl: `${appBase}/api/nft/${editionNumber}/image?hexId=${encodeURIComponent(hexId)}&chain=cardano&claimId=${encodeURIComponent(claimId)}`,
-      simulated: mintData.simulated,
-    }
+  // ── Cardano-as-primary-chain is disabled for MVP ────────────────────────
+  // The Cardano CIP-68 mirror still happens automatically on the backend
+  // after the Base mint confirms — it's an anchor, not a purchase path.
+  // Keeping the Cardano wallet connect UI around is harmless (users can
+  // still sign identity messages later), but payments go through Base.
+  const handleCardanoPayment = async (): Promise<never> => {
+    throw new Error(
+      'Cardano-as-primary-chain mint is disabled during Genesis sale. Connect MetaMask / Base wallet to purchase — a Cardano CIP-68 mirror is anchored automatically after your Base mint confirms.',
+    )
   }
 
+  // ── Card checkout (Stripe) via dagwelldev-api ───────────────────────────
+  // MVP requires an EVM address for the NFT to ultimately mint to (no
+  // custody layer in v1), so the user must also have MetaMask connected.
   const handleCardCheckout = async () => {
     if (!hexId || !cardEmailOk) return
+    if (!evmAddress) {
+      setError('Connect your Base wallet first — that is where your NFT will be delivered after card payment.')
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/checkout/create-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hexId, email: cardEmail.trim() }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Could not start card checkout')
-      if (data.url) {
-        window.location.href = data.url as string
+      const intent = await createStripeCheckout(hexId, evmAddress, cardEmail.trim())
+      if (intent.url) {
+        window.location.href = intent.url
         return
       }
-      throw new Error('No checkout URL returned')
-    } catch (err: any) {
-      setError(err.message ?? 'Checkout failed')
+      throw new Error('No checkout URL returned from backend')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Checkout failed')
     } finally {
       setLoading(false)
     }
@@ -380,8 +350,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         : await handleCardanoPayment()
       setSuccessData(result)
       setStep(5)
-    } catch (err: any) {
-      setError(err.message ?? 'Payment failed — please try again')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Payment failed — please try again')
     } finally {
       setLoading(false)
       setEvmTxStatus('')
@@ -948,9 +918,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                           <div>
                             <p className="text-[10px] uppercase tracking-widest text-gray-600 mb-1">Contract Address</p>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-white font-mono break-all flex-1">{GENESIS_CONTRACT}</span>
+                              <span className="text-xs text-white font-mono break-all flex-1">{successData.contractAddress ?? GENESIS_CONTRACT_FALLBACK}</span>
                               <button
-                                onClick={() => copyMm(GENESIS_CONTRACT, 'address')}
+                                onClick={() => copyMm(successData.contractAddress ?? GENESIS_CONTRACT_FALLBACK, 'address')}
                                 className="flex-shrink-0 text-gray-500 hover:text-orange-300 transition-colors"
                                 title="Copy"
                               >
