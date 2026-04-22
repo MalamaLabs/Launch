@@ -7,7 +7,16 @@ const COOKIE_VALUE = 'ml-launch-2026-authorized'
 const MAX_AGE = 60 * 60 * 24 * 7
 
 export async function POST(req: Request) {
-  const { password, from } = await req.json()
+  // Guard against empty/malformed bodies (prefetches, HEAD probes, etc.)
+  // throwing SyntaxError on req.json() and blowing up the middleware stack.
+  let body: { password?: unknown; from?: unknown } = {}
+  try {
+    const text = await req.text()
+    body = text ? JSON.parse(text) : {}
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+  const { password, from } = body as { password?: string; from?: string }
 
   if (password !== PASSWORD) {
     return NextResponse.json({ error: 'Incorrect password' }, { status: 401 })

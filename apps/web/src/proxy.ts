@@ -1,4 +1,3 @@
-import { auth0 } from './lib/auth0'
 import { NextResponse } from 'next/server'
 
 const ACCESS_COOKIE = 'malama_access'
@@ -14,31 +13,36 @@ function isPublicPath(pathname: string) {
   )
 }
 
+/**
+ * Password gate only. Auth0 middleware was previously chained here but the
+ * Genesis-200 hex sale flow does not use Auth0 — loading it on every request
+ * was adding ~10s to dev-mode compiles without affecting the buy path.
+ */
 export async function proxy(request: Request) {
   const url = new URL(request.url)
   const { pathname } = url
 
-  // ── Password gate ────────────────────────────────────────────────────────
-  if (!isPublicPath(pathname)) {
-    const cookieHeader = request.headers.get('cookie') ?? ''
-    const hasAccess = cookieHeader
-      .split(';')
-      .some(c => c.trim() === `${ACCESS_COOKIE}=${ACCESS_VALUE}`)
-
-    if (!hasAccess) {
-      const dest = new URL('/password', request.url)
-      dest.searchParams.set('from', pathname)
-      return NextResponse.redirect(dest)
-    }
+  if (isPublicPath(pathname)) {
+    return NextResponse.next()
   }
 
-  // ── Auth0 middleware (runs after password gate passes) ───────────────────
-  return auth0.middleware(request)
+  const cookieHeader = request.headers.get('cookie') ?? ''
+  const hasAccess = cookieHeader
+    .split(';')
+    .some(c => c.trim() === `${ACCESS_COOKIE}=${ACCESS_VALUE}`)
+
+  if (!hasAccess) {
+    const dest = new URL('/password', request.url)
+    dest.searchParams.set('from', pathname)
+    return NextResponse.redirect(dest)
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    // Do not run on /api — JSON handlers (Stripe, Magic, custodial) must not be intercepted.
+    // Do not run on /api — JSON handlers (Stripe, purchase-intent, etc.) must not be intercepted.
     // Password gate API route (/api/auth/password) is handled by isPublicPath() above.
     '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
   ],
