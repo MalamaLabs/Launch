@@ -24,6 +24,7 @@ import {
   reserveHexOnChain,
   reportMintObserved,
   createStripeCheckout,
+  nftImageUrl,
 } from '@/lib/api'
 import {
   PurchaseLegalAcknowledgement,
@@ -78,10 +79,6 @@ function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
         src={data.nftImageUrl}
         alt={`Mālama Hex Node License ${data.claimId}`}
         className="w-full h-full object-cover"
-        onError={(e) => {
-          // Fallback if image fails
-          (e.target as HTMLImageElement).src = '/hardware-exploded.png'
-        }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
       <div className="absolute bottom-3 left-3 right-3">
@@ -322,9 +319,15 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       chain:           'base' as const,
       explorerUrl:     `https://${explorerHost}/tx/${mintHash}`,
       openSeaUrl:      `https://${openSeaHost}/${GENESIS_CONTRACT}/${evmTokenId}`,
-      // Static preview — dagwelldev-api doesn't render per-hex images yet.
-      // Swap for `${API_BASE}/hexes/nft-image/${evmTokenId}` once that ships.
-      nftImageUrl:     '/hardware-exploded.png',
+      // Per-hex SVG rendered by dagwelldev-api — same URL the ERC-721
+      // tokenURI points OpenSea at, so the card we show here is byte-
+      // identical to the one marketplaces render.
+      nftImageUrl: nftImageUrl({
+        hexId,
+        tokenId: evmTokenId,
+        chain:   'base',
+        claimId,
+      }),
     }
   }
 

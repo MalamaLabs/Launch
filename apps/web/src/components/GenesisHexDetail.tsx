@@ -6,15 +6,8 @@ import { X, FileText, ExternalLink } from 'lucide-react'
 import type { GenesisHexListItem } from '@/lib/genesis-hexes'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 import { formatGenesisListingUsd, GENESIS_ENTRY_USD } from '@/lib/h3'
-import { API_BASE } from '@/lib/api'
+import { API_BASE, nftImageUrl } from '@/lib/api'
 import HexBoundaryPreview from './HexBoundaryPreview'
-
-/**
- * Preview image for the NFT card. Static asset served from /public —
- * the dagwelldev-api does not render per-hex preview images yet. Once a
- * real image generator ships, swap this for a URL off API_BASE.
- */
-const NFT_PREVIEW_IMAGE = '/hardware-exploded.png'
 
 /**
  * Metadata URL for minted hexes. Points at the ERC-721 tokenURI endpoint
@@ -42,7 +35,13 @@ export default function GenesisHexDetail({
   if (!item) return null
   if (variant === 'drawer' && !open) return null
 
-  const imgSrc = NFT_PREVIEW_IMAGE
+  // Per-hex SVG rendered by dagwelldev-api — same artwork marketplaces see.
+  const imgSrc = nftImageUrl({
+    hexId:   item.hexId,
+    tokenId: claim?.evmTokenId ?? null,
+    chain:   'base',
+    claimId: claim?.claimId ?? null,
+  })
   const metaSrc = mintedMetadataUrl(claim)
   const canReserve = item.status === 'available'
 

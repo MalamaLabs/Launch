@@ -13,6 +13,42 @@ export const API_BASE = (
   process.env.NEXT_PUBLIC_DAGWELLDEV_API_BASE?.trim() || 'https://api.dagwelldev.com'
 ).replace(/\/$/, '')
 
+// ─── Backend-served brand images ──────────────────────────────────────────
+// Static brand assets live on dagwelldev-api under /static/images/ with a
+// year-long immutable cache header. Every component that renders these
+// should reference `IMAGES.*` so we get cache re-use across the site and a
+// single swap-point when new art ships.
+//
+// The NFT artwork itself is NOT static — it's rendered per-hex by
+// `nftImageUrl()` below (see routes/hexes/nft-image.js on the backend),
+// matching the original Launch per-token SVG design.
+export const IMAGES = {
+  logo:       `${API_BASE}/static/images/brand-logo.png`,
+  logoDarkBg: `${API_BASE}/static/images/brand-logo-dark-bg.png`,
+} as const
+
+/**
+ * URL for the dynamically-rendered hex-node NFT artwork. Points at the same
+ * backend endpoint that ERC-721 `tokenURI` metadata references, so the card
+ * shown in the Launch UI is byte-identical to the one OpenSea renders. Works
+ * for both pre-mint previews (pass only hexId) and post-mint cards (pass
+ * tokenId + claimId so the SVG shows the claim label + real edition #).
+ */
+export function nftImageUrl(args: {
+  hexId:    string
+  tokenId?: number | null
+  chain?:   'base' | 'cardano'
+  claimId?: string | null
+}): string {
+  const qs = new URLSearchParams({ hexId: args.hexId })
+  if (args.tokenId != null && Number.isFinite(args.tokenId) && args.tokenId > 0) {
+    qs.set('tokenId', String(args.tokenId))
+  }
+  qs.set('chain', args.chain === 'cardano' ? 'cardano' : 'base')
+  if (args.claimId) qs.set('claimId', args.claimId)
+  return `${API_BASE}/hexes/nft-image?${qs.toString()}`
+}
+
 type Json = Record<string, unknown>
 
 /** Thin fetch wrapper that throws on non-ok responses with a useful message. */
