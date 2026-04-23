@@ -6,7 +6,15 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import GenesisHexDetail from './GenesisHexDetail'
 import { formatGenesisListingUsd } from '@/lib/h3'
 import { Loader2, Navigation } from 'lucide-react'
+import regionsData from '@/data/regions.json'
+import {
+  buildGenesisHexFeatureCollection,
+  buildGenesisHexListItems,
+  getGenesisPoolSlot,
+} from '@/lib/genesis-hexes'
 import type { GenesisHexListItem } from '@/lib/genesis-hexes'
+import { listHexes, getHexDetail } from '@/lib/api'
+import { overlayBackendStatusOnFeatures } from '@/lib/genesis-hex-status'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
@@ -91,21 +99,41 @@ export default function HexMap() {
 
       m.on('load', async () => {
       try {
-        const res = await fetch('/api/hexes')
-        const data = await res.json()
+        // 1. Build the deterministic pool FeatureCollection client-side from
+        //    regions.json (identities + scoring don't need a round-trip).
+        const fc = buildGenesisHexFeatureCollection(regionsData)
 
-        // Omnichain Local State Synchronization
-        // Reads purchased nodes from the decoupled payment gateway and visibly renders them active.
+        // 2. Overlay live sale state from dagwelldev-api. If the backend is
+        //    unreachable, we fall back to the deterministic pool (everything
+        //    renders as available or Malama-reserved) so the map still works.
+        let features = fc.features
+        try {
+          const { hexes } = await listHexes({ limit: 500 })
+          features = overlayBackendStatusOnFeatures(fc.features, hexes)
+        } catch (err) {
+          console.warn('[HexMap] listHexes failed — rendering deterministic pool only', err)
+        }
+
+        // 3. Client-side "just purchased" optimistic overlay (shows SOLD
+        //    without waiting for the backend's next fetch).
         try {
           const purchasedString = localStorage.getItem('malamalabs_purchased_nodes')
           if (purchasedString) {
             const purchasedHexes: string[] = JSON.parse(purchasedString)
-            if (purchasedHexes.length > 0 && Array.isArray(data.features)) {
-              data.features.forEach((feature: any) => {
+            if (purchasedHexes.length > 0) {
+              features = features.map((feature: any) => {
                 if (feature.properties && purchasedHexes.includes(feature.properties.id)) {
-                  feature.properties.status = 'active'
-                  feature.properties.purchasedLocal = true // Flag it purely for diagnostic debugging
+                  return {
+                    ...feature,
+                    properties: {
+                      ...feature.properties,
+                      status: 'active',
+                      sold:   true,
+                      purchasedLocal: true,
+                    },
+                  }
                 }
+                return feature
               })
             }
           }
@@ -113,9 +141,11 @@ export default function HexMap() {
           console.warn("Failed to sync purchased nodes", e)
         }
 
+        const data = { type: fc.type, features }
+
         m.addSource('hexes', {
           type: 'geojson',
-          data
+          data: data as any,
         })
 
         m.addLayer({
@@ -236,14 +266,44 @@ export default function HexMap() {
       m.setFilter('hex-highlight', ['==', 'id', id])
       setDetailLoading(true)
       try {
-        const res = await fetch(`/api/hexes/by-id/${encodeURIComponent(id)}`)
-        if (!res.ok) {
+        // Build the list-item synchronously (regions.json is deterministic).
+        const items = buildGenesisHexListItems(regionsData)
+        const item = items.find((r) => r.hexId === id)
+        if (!item) {
           m.setFilter('hex-highlight', ['==', 'id', ''])
           return
         }
-        const j = (await res.json()) as { item: GenesisHexListItem; claim: GenesisClaim | null }
-        setDetailItem(j.item)
-        setDetailClaim(j.claim)
+
+        // Ask the backend for live sale state; if it's sold, synthesise a
+        // GenesisClaim so the detail panel shows the buyer + tx info. If the
+        // backend is down, fall back to showing the item as unclaimed.
+        let claim: GenesisClaim | null = null
+        let overlaidItem: GenesisHexListItem = item
+        try {
+          const detail = await getHexDetail(id)
+          const isSold = detail.status === 'sold' || detail.status === 'bound'
+          if (isSold) {
+            overlaidItem = { ...item, status: 'reserved', sold: true }
+            const editionNumber = getGenesisPoolSlot(id, regionsData) ?? 0
+            claim = {
+              claimId:      `G200-${String(editionNumber).padStart(3, '0')}`,
+              editionNumber,
+              hexId:        id,
+              chain:        'base',
+              buyerAddress: detail.ownerEvmAddress ?? '',
+              claimedAt:    detail.mintedAt ?? new Date(0).toISOString(),
+              txHash:       detail.baseTxHash,
+              evmTokenId:   detail.baseTokenId,
+            }
+          } else if (detail.status === 'reserved') {
+            overlaidItem = { ...item, status: 'reserved' }
+          }
+        } catch (err) {
+          console.warn('[HexMap] getHexDetail failed — rendering item without backend state', err)
+        }
+
+        setDetailItem(overlaidItem)
+        setDetailClaim(claim)
         setDetailOpen(true)
       } catch {
         m.setFilter('hex-highlight', ['==', 'id', ''])

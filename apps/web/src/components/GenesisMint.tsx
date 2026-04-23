@@ -115,7 +115,11 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [cardanoWallets, setCardanoWallets] = useState<{ name: string; icon: string }[]>([])
   const [showCardanoPicker, setShowCardanoPicker] = useState(false)
   // Raw CIP-30 API object — stored after window.cardano[name].enable() succeeds.
-  // Used for signData() calls (triggers Lace signing popup) without going through MeshSDK.
+  // Used for:
+  //   (a) getChangeAddress() → passed to reportMintObserved so the CIP-68
+  //       mirror token (222) is delivered to the buyer's Cardano wallet
+  //       instead of bank custody.
+  //   (b) signData() → triggers Lace's signing popup for identity proofs.
   const [cardanoCip30Api, setCardanoCip30Api] = useState<{
     getChangeAddress: () => Promise<string>
     signData: (address: string, payload: string) => Promise<{ signature: string; key: string }>
@@ -276,9 +280,28 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       } catch {}
     }
 
-    // 5. Notify backend → syncs Mongo, best-effort mints Cardano mirror.
+    // 5. If the buyer has a Cardano wallet connected, grab their change
+    //    address so the CIP-68 mirror (222 token) ships to them directly.
+    //    MeshSDK's getChangeAddress() returns a bech32 address already; the
+    //    backend validates network-match + bech32 shape before using it and
+    //    falls back to bank custody on anything suspicious.
+    let cardanoAddress: string | undefined
+    if (cardanoConnected && cardanoWallet) {
+      try {
+        const addr = await cardanoWallet.getChangeAddress()
+        if (typeof addr === 'string' && addr.length > 0) cardanoAddress = addr
+      } catch (err) {
+        console.warn('[mint-observed] getChangeAddress failed — mirror will go to bank custody', err)
+      }
+    }
+
+    // 6. Notify backend → syncs Mongo, best-effort mints Cardano mirror.
     //    Idempotent; safe even if it fails — the user already owns the NFT.
-    const observed = await reportMintObserved({ hexId, txHash: mintHash }).catch((err) => {
+    const observed = await reportMintObserved({
+      hexId,
+      txHash: mintHash,
+      cardanoAddress,
+    }).catch((err) => {
       console.warn('[mint-observed] backend sync failed — NFT still minted on-chain', err)
       return null
     })
@@ -513,21 +536,25 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 </div>
               ) : (
               <div className="grid gap-6 md:grid-cols-2">
-                {/* Cardano wallet */}
-                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${cardanoReady ? 'bg-malama-accent/10 border-malama-accent/40 shadow-[0_0_20px_rgba(196,240,97,0.1)]' : evmConnected ? 'bg-gray-900 border-gray-800 opacity-50' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
+                {/* Cardano wallet (optional — routes CIP-68 mirror NFT to buyer) */}
+                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${cardanoReady ? 'bg-malama-accent/10 border-malama-accent/40 shadow-[0_0_20px_rgba(196,240,97,0.1)]' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center ${cardanoReady ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
                     <Wallet className={`w-7 h-7 ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-white uppercase tracking-wider text-xs">Cardano NFT</h3>
+                    <h3 className="font-bold text-white uppercase tracking-wider text-xs">
+                      Cardano CIP-68 mirror <span className="text-gray-500 normal-case">(optional)</span>
+                    </h3>
                     <p className={`text-sm mt-1 font-mono ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`}>
                       {cardanoReady ? (cardanoWalletName?.toUpperCase() ?? 'LACE CONNECTED') : 'DISCONNECTED'}
                     </p>
-                    <p className="text-xs text-gray-600 mt-1">CIP-25 Token · Lace signs</p>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Connect to receive the CIP-68 mirror NFT in your Cardano wallet. Skip to retain in treasury.
+                    </p>
                   </div>
                   {cardanoReady ? (
                     <div className="w-full py-2 bg-malama-accent/20 border border-malama-accent/50 text-malama-accent rounded-lg font-bold text-xs text-center">
-                      ✓ READY TO MINT
+                      ✓ MIRROR DELIVERY SET
                     </div>
                   ) : (
                     <div className="relative w-full">
@@ -580,17 +607,21 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   )}
                 </div>
 
-                {/* Base wallet */}
-                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${evmConnected ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : cardanoConnected ? 'bg-gray-900 border-gray-800 opacity-50' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
+                {/* Base wallet (required — primary mint chain) */}
+                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${evmConnected ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center ${evmConnected ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
                     <Globe className={`w-7 h-7 ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-white uppercase tracking-wider text-xs">Base L2 NFT</h3>
+                    <h3 className="font-bold text-white uppercase tracking-wider text-xs">
+                      Base L2 NFT <span className="text-malama-accent normal-case">(required)</span>
+                    </h3>
                     <p className={`text-sm mt-1 font-mono ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`}>
                       {evmConnected ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}` : 'DISCONNECTED'}
                     </p>
-                    <p className="text-xs text-gray-600 mt-1">ERC-721 Token</p>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Primary mint — ERC-721 via USDC on Base.
+                    </p>
                   </div>
                   {evmConnected ? (
                     <button onClick={() => disconnectEVM()} className="w-full py-2 bg-blue-500/20 border border-blue-500/50 text-blue-400 rounded-lg font-bold text-xs hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/40 transition-colors">
@@ -598,11 +629,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     </button>
                   ) : (
                     <button
-                      disabled={cardanoConnected}
                       onClick={() => connectEVM({ connector: injected() })}
-                      className={`px-4 py-3 rounded-xl text-xs font-black transition-all shadow-lg w-full ${cardanoConnected ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                      className="px-4 py-3 rounded-xl text-xs font-black transition-all shadow-lg w-full bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                      {cardanoConnected ? 'Cardano Active' : 'Connect MetaMask / CB'}
+                      Connect MetaMask / CB
                     </button>
                   )}
                 </div>

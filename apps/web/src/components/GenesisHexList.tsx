@@ -13,10 +13,20 @@ import {
   PanelRight,
 } from 'lucide-react'
 import type { GenesisHexListItem, GenesisRegionKey } from '@/lib/genesis-hexes'
-import { GENESIS_REGION_KEYS, GENESIS_REGION_LABELS } from '@/lib/genesis-hexes'
+import {
+  GENESIS_REGION_KEYS,
+  GENESIS_REGION_LABELS,
+  GENESIS_HEX_CAP,
+  GENESIS_SLOTS_PER_REGION,
+  buildGenesisHexListItems,
+  getGenesisPoolSlot,
+} from '@/lib/genesis-hexes'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 import { formatGenesisListingUsd } from '@/lib/h3'
 import GenesisHexDetail from './GenesisHexDetail'
+import regionsData from '@/data/regions.json'
+import { listHexes, getHexDetail } from '@/lib/api'
+import { overlayBackendStatus } from '@/lib/genesis-hex-status'
 
 type ApiResponse = {
   genesisHexCap: number
@@ -55,10 +65,26 @@ export default function GenesisHexList({ className = '' }: { className?: string 
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/hexes/list')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = (await res.json()) as ApiResponse
-      setData(json)
+      // The Genesis-200 identity, region, score, and starting bid are all
+      // deterministic from regions.json — no round-trip needed. The backend
+      // only owns live sale state (sold / reserved / bound), which we
+      // overlay on top.
+      const baseItems = buildGenesisHexListItems(regionsData)
+      let items = baseItems
+      try {
+        const { hexes } = await listHexes({ limit: 500 })
+        items = overlayBackendStatus(baseItems, hexes)
+      } catch (err) {
+        // Backend unreachable — fall back to the deterministic pool so the
+        // list still renders (nothing will show SOLD except Malama-reserved).
+        console.warn('[GenesisHexList] listHexes failed — rendering deterministic pool only', err)
+      }
+      setData({
+        genesisHexCap:  GENESIS_HEX_CAP,
+        slotsPerRegion: GENESIS_SLOTS_PER_REGION,
+        count:          items.length,
+        items,
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
@@ -101,10 +127,20 @@ export default function GenesisHexList({ className = '' }: { className?: string 
     setDetailClaim(null)
     setDetailOpen(true)
     try {
-      const res = await fetch(`/api/hexes/by-id/${encodeURIComponent(row.hexId)}`)
-      if (res.ok) {
-        const j = (await res.json()) as { item: GenesisHexListItem; claim: GenesisClaim | null }
-        setDetailClaim(j.claim)
+      const detail = await getHexDetail(row.hexId)
+      const isSold = detail.status === 'sold' || detail.status === 'bound'
+      if (isSold) {
+        const editionNumber = getGenesisPoolSlot(row.hexId, regionsData) ?? 0
+        setDetailClaim({
+          claimId:      `G200-${String(editionNumber).padStart(3, '0')}`,
+          editionNumber,
+          hexId:        row.hexId,
+          chain:        'base',
+          buyerAddress: detail.ownerEvmAddress ?? '',
+          claimedAt:    detail.mintedAt ?? new Date(0).toISOString(),
+          txHash:       detail.baseTxHash,
+          evmTokenId:   detail.baseTokenId,
+        })
       }
     } catch {
       /* keep null claim */

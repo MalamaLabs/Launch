@@ -120,15 +120,56 @@ export interface MintObservedResponse {
  * Notifies the backend that an on-chain secureNode() tx has confirmed. The
  * backend re-verifies against the contract, upserts Mongo, and best-effort
  * mints the Cardano CIP-68 mirror. Safe to call repeatedly (idempotent).
+ *
+ * `cardanoAddress` (optional): if provided, the CIP-68 mirror token (222)
+ * will be delivered to that wallet instead of the default treasury address.
+ * Only set this when the buyer has connected a Cardano wallet (CIP-30).
  */
 export async function reportMintObserved(args: {
-  hexId:   string
-  txHash?: string
+  hexId:           string
+  txHash?:         string
+  cardanoAddress?: string
 }): Promise<MintObservedResponse> {
   return apiFetch<MintObservedResponse>(`/hexes/events/mint-observed`, {
     method: 'POST',
     body:   JSON.stringify(args),
   })
+}
+
+// ─── GET /hexes ───────────────────────────────────────────────────────────
+export type BackendHexStatus = 'available' | 'reserved' | 'sold' | 'bound'
+
+/** One row in GET /hexes — enough for list/map overlay. */
+export interface BackendHexSummary {
+  hexId:            string
+  status:           BackendHexStatus
+  baseTokenId?:     number
+  ownerEvmAddress?: string
+  operatorDid?:     string
+  mintPath?:        'onchain' | 'stripe' | 'admin' | string
+  mintedAt?:        string
+}
+
+export interface BackendHexList {
+  ok:    true
+  count: number
+  hexes: BackendHexSummary[]
+}
+
+/**
+ * Lists every hex the backend knows about (Mongo-backed). Use this to overlay
+ * SOLD/BOUND status onto the deterministic regions.json pool. Optional status
+ * filter mirrors the backend `?status=` query param.
+ */
+export async function listHexes(opts?: {
+  status?: BackendHexStatus
+  limit?:  number
+}): Promise<BackendHexList> {
+  const qs = new URLSearchParams()
+  if (opts?.status) qs.set('status', opts.status)
+  if (opts?.limit)  qs.set('limit', String(opts.limit))
+  const suffix = qs.toString() ? `?${qs}` : ''
+  return apiFetch<BackendHexList>(`/hexes${suffix}`)
 }
 
 // ─── GET /hexes/:hexId ────────────────────────────────────────────────────
