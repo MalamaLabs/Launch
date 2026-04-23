@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import GenesisMint from '@/components/GenesisMintDynamic'
+import { getSaleState } from '@/lib/api'
 
 export const metadata: Metadata = {
   title: 'Reserve with Crypto or Card | Genesis 200 | Mālama Labs',
@@ -79,20 +80,31 @@ export default async function PresalePage({
 }
 
 async function PresaleStats() {
+  // Defaults match the sale plan: 200 hexes, ~5 internal allocations taken.
+  // If dagwelldev-api is reachable we overwrite with live numbers; if not,
+  // render the defaults so the hero never blocks on a bad backend.
   let total = 200
   let remaining = 195
   let reserved = 5
   try {
-    const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const res = await fetch(`${base}/api/presale`, { cache: 'no-store' })
-    const data = await res.json()
-    total = data.total ?? 200
-    remaining = data.remaining ?? 195
-    reserved =
-      typeof data.reserved === 'number'
-        ? data.reserved
-        : total - remaining
-  } catch {}
+    const state = await getSaleState()
+    // Prefer on-chain numbers when the contract is configured — that's the
+    // authoritative source. Otherwise fall back to Mongo's view.
+    total =
+      state.onChain.totalCap ??
+      state.mongo.total ??
+      200
+    remaining =
+      state.onChain.remaining ??
+      state.mongo.available ??
+      total - reserved
+    // Reserved = everything not still available (includes sold + bound +
+    // in-flight reservations). Keeps the hero honest about scarcity.
+    reserved = Math.max(0, total - remaining)
+  } catch {
+    // Backend unreachable — keep defaults. Logged server-side so we notice
+    // but never block the public marketing page.
+  }
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border border-malama-line bg-malama-elev/80 backdrop-blur-md shadow-2xl rounded-3xl p-8 md:px-10 md:py-8 gap-8 md:gap-10 items-center">

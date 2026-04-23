@@ -6,25 +6,24 @@ import { X, FileText, ExternalLink } from 'lucide-react'
 import type { GenesisHexListItem } from '@/lib/genesis-hexes'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 import { formatGenesisListingUsd, GENESIS_ENTRY_USD } from '@/lib/h3'
-import { NFT_PREVIEW_TOKEN_ID } from '@/lib/nft-preview'
+import { API_BASE } from '@/lib/api'
 import HexBoundaryPreview from './HexBoundaryPreview'
 
-function nftImagePath(item: GenesisHexListItem, claim: GenesisClaim | null): string {
-  const tokenId =
-    claim?.evmTokenId != null && claim.evmTokenId > 0 ? claim.evmTokenId : NFT_PREVIEW_TOKEN_ID
-  const qs = new URLSearchParams({
-    hexId: item.hexId,
-    chain: 'base',
-  })
-  if (claim?.claimId) qs.set('claimId', claim.claimId)
-  return `/api/nft/${tokenId}/image?${qs.toString()}`
-}
+/**
+ * Preview image for the NFT card. Static asset served from /public —
+ * the dagwelldev-api does not render per-hex preview images yet. Once a
+ * real image generator ships, swap this for a URL off API_BASE.
+ */
+const NFT_PREVIEW_IMAGE = '/hardware-exploded.png'
 
-function metadataPath(item: GenesisHexListItem, claim: GenesisClaim | null): string {
-  const tokenId =
-    claim?.evmTokenId != null && claim.evmTokenId > 0 ? claim.evmTokenId : NFT_PREVIEW_TOKEN_ID
-  const qs = new URLSearchParams({ hexId: item.hexId })
-  return `/api/nft/${tokenId}?${qs.toString()}`
+/**
+ * Metadata URL for minted hexes. Points at the ERC-721 tokenURI endpoint
+ * on dagwelldev-api (the same URL OpenSea uses). Returns null for unminted
+ * hexes so the UI can hide the metadata link instead of 404-ing.
+ */
+function mintedMetadataUrl(claim: GenesisClaim | null): string | null {
+  if (!claim?.evmTokenId || claim.evmTokenId <= 0) return null
+  return `${API_BASE}/hexes/token-uri/${claim.evmTokenId}`
 }
 
 export default function GenesisHexDetail({
@@ -43,8 +42,8 @@ export default function GenesisHexDetail({
   if (!item) return null
   if (variant === 'drawer' && !open) return null
 
-  const imgSrc = nftImagePath(item, claim)
-  const metaSrc = metadataPath(item, claim)
+  const imgSrc = NFT_PREVIEW_IMAGE
+  const metaSrc = mintedMetadataUrl(claim)
   const canReserve = item.status === 'available'
 
   const shell =
@@ -87,16 +86,22 @@ export default function GenesisHexDetail({
               className="absolute inset-0 h-full w-full object-cover object-top"
             />
           </div>
-          <a
-            href={metaSrc}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-malama-teal hover:underline"
-          >
-            <FileText className="h-4 w-4" />
-            View ERC-721 metadata JSON
-            <ExternalLink className="h-3 w-3 opacity-70" />
-          </a>
+          {metaSrc ? (
+            <a
+              href={metaSrc}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-malama-teal hover:underline"
+            >
+              <FileText className="h-4 w-4" />
+              View ERC-721 metadata JSON
+              <ExternalLink className="h-3 w-3 opacity-70" />
+            </a>
+          ) : (
+            <p className="mt-3 text-[11px] text-gray-500">
+              ERC-721 metadata will appear here once this hex is minted on Base.
+            </p>
+          )}
           {claim && (
             <p className="mt-2 text-[11px] text-gray-500">
               Claim <span className="font-mono text-gray-400">{claim.claimId}</span>

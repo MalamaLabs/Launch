@@ -43,10 +43,13 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
+          {/* Launch App CTA routes straight to /presale — the post-login
+              dashboard has been retired for this MVP. Once there's a real
+              operator dashboard again, swap the href back. */}
           <Link
-            href="/dashboard"
+            href="/presale"
             className={`ml-1 shrink-0 whitespace-nowrap rounded-malama-sm px-[18px] py-[11px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-px sm:ml-2 ${
-              pathname.startsWith('/dashboard')
+              pathname.startsWith('/presale')
                 ? 'bg-malama-accent text-malama-bg ring-1 ring-malama-accent/60'
                 : 'bg-malama-accent text-malama-bg hover:shadow-[0_8px_24px_rgba(196,240,97,0.2)]'
             }`}

@@ -135,7 +135,6 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   // Card path ALSO requires Base, because backend needs a delivery address.
   const isSetupComplete =
     !!hexId && evmConnected && (paymentMode === 'card' ? cardEmailOk : true)
-  const appBase          = process.env.NEXT_PUBLIC_APP_URL ?? 'https://malamalaunch.vercel.app'
 
   // ── Sync local purchased map ─────────────────────────────────────────────
   const syncNodeToMap = (id: string | null) => {
@@ -323,7 +322,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       chain:           'base' as const,
       explorerUrl:     `https://${explorerHost}/tx/${mintHash}`,
       openSeaUrl:      `https://${openSeaHost}/${GENESIS_CONTRACT}/${evmTokenId}`,
-      nftImageUrl:     `${appBase}/api/nft/${evmTokenId}/image?hexId=${encodeURIComponent(hexId)}&chain=base&claimId=${encodeURIComponent(claimId)}`,
+      // Static preview — dagwelldev-api doesn't render per-hex images yet.
+      // Swap for `${API_BASE}/hexes/nft-image/${evmTokenId}` once that ships.
+      nftImageUrl:     '/hardware-exploded.png',
     }
   }
 
