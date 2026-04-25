@@ -1,8 +1,8 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { IMAGES } from '@/lib/api'
 
 const topNavLinks = [
   { href: '/presale', label: 'Reserve', active: (p: string) => p.startsWith('/presale') },
@@ -21,12 +21,17 @@ export default function Navbar() {
           href="/"
           className="flex shrink-0 items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-malama-accent/50"
         >
-          <Image
-            src="/brand-logo.png"
+          {/* Served from dagwelldev-api/static/images via IMAGES.logo (api.ts).
+              Using a plain <img> here because next/image's optimizer goes
+              through /_next/image which would itself need an allowlist for
+              api.dagwelldev.com — and the logo is small + already
+              year-cached at the source. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={IMAGES.logo}
             alt="Mālama Labs Logo"
             width={700}
             height={300}
-            priority
             className="h-9 w-auto max-w-[min(100%,15rem)] object-contain object-left drop-shadow-[0_0_18px_rgba(196,240,97,0.18)] transition-[filter] duration-300 hover:drop-shadow-[0_0_26px_rgba(196,240,97,0.35)] sm:h-11 sm:max-w-[20rem] md:h-12 md:max-w-[24rem]"
           />
         </Link>

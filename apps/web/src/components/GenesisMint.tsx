@@ -426,14 +426,41 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     // 2. Reserve the hex + get treasury + price from backend.
     const intent = await reserveHexCardano(hexId, buyerAddr)
 
+    // Sanity check the price BEFORE asking the wallet to spend. If the
+    // backend mis-configured the price (e.g. the old 2 ADA preprod default),
+    // we want a loud error instead of silently sending dust to treasury.
+    // Anything under 1 ADA is almost certainly wrong; mainnet floor is ~$2k
+    // worth of ADA. We treat <1_000_000 lovelace as a config error.
+    if (!Number.isFinite(intent.priceLovelace) || intent.priceLovelace < 1_000_000) {
+      throw new Error(
+        `Backend returned a price of ${intent.priceLovelace} lovelace — that's below the 1 ADA floor and almost certainly a misconfiguration. Set HEX_PRICE_LOVELACE_${(intent.network ?? 'PREPROD').toUpperCase()} (or HEX_PRICE_USD + ADA_USD_RATE) on the API, then retry.`
+      )
+    }
+
     // Pool slot is deterministic — compute claim id immediately for the UI.
     const editionNumber = getGenesisPoolSlot(hexId, regionsData) ?? 0
     const claimId       = `G200-${String(editionNumber).padStart(3, '0')}`
 
     // 3. Build + sign + submit the ADA payment tx via Mesh.
+    //
+    // ── Why we pre-init libsodium ──────────────────────────────────────
+    // Mesh's tx builder pulls in @cardano-sdk/crypto, which depends on
+    // libsodium-wrappers-sumo (a WASM ed25519 lib). The crypto package's
+    // `SodiumBip32Ed25519` only awaits `sodium.ready` inside its
+    // `static async create()` factory — but downstream code can call key
+    // primitives via the constructor path BEFORE that factory has run. The
+    // result is the dreaded "libsodium was not correctly initialized" you
+    // see in the dev console, after which the wallet builds a degenerate
+    // tx (~2 ADA, just min-utxo + change) instead of the real payment.
+    //
+    // Awaiting the ready promise on the top-level libsodium-wrappers-sumo
+    // (the one transpilePackages dedupes to in next.config.js) compiles
+    // the WASM up front and makes downstream crypto calls safe.
     setEvmTxStatus('approving')
     let paymentTxHash: string
     try {
+      const sodium = (await import('libsodium-wrappers-sumo')).default
+      await sodium.ready
       const { Transaction } = await import('@meshsdk/core')
       const tx = new Transaction({ initiator: cardanoWallet })
         .sendLovelace(intent.treasury, String(intent.priceLovelace))
@@ -445,6 +472,11 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       // CIP-30 code -3 is "user declined". Mesh wraps the underlying error.
       if (/declined|rejected|user|cancel/i.test(msg)) {
         throw new Error('Cardano payment was declined — retry when ready.')
+      }
+      if (/libsodium/i.test(msg)) {
+        throw new Error(
+          'Cardano crypto libs failed to initialize. Reload the page and retry — if it persists, your browser may be blocking WebAssembly (check extensions or strict privacy mode).'
+        )
       }
       throw new Error(`Cardano payment failed: ${msg}`)
     }

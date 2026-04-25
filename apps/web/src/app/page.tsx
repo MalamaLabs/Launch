@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { IMAGES } from '@/lib/api'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -133,9 +134,12 @@ export default function Home() {
               viewport={{ once: true }}
               className="overflow-hidden rounded-malama border border-malama-line shadow-2xl"
             >
+              {/* Pulled from dagwelldev-api/static/images via IMAGES.* — see
+                  src/lib/api.ts. The backend serves these with a year-long
+                  immutable cache header so subsequent loads are 304s. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/hardware-exploded.png"
+                src={IMAGES.hardwareExploded}
                 alt="Mālama Hex Node — full hardware exploded view"
                 className="h-auto w-full object-cover"
               />
@@ -150,7 +154,7 @@ export default function Home() {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/hardware-views.png"
+                src={IMAGES.hardwareViews}
                 alt="Mālama Hex Node — enclosure, power system, sensor and network views"
                 className="h-auto w-full object-cover"
               />

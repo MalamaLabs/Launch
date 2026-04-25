@@ -23,8 +23,13 @@ export const API_BASE = (
 // `nftImageUrl()` below (see routes/hexes/nft-image.js on the backend),
 // matching the original Launch per-token SVG design.
 export const IMAGES = {
-  logo:       `${API_BASE}/static/images/brand-logo.png`,
-  logoDarkBg: `${API_BASE}/static/images/brand-logo-dark-bg.png`,
+  logo:              `${API_BASE}/static/images/brand-logo.png`,
+  logoDarkBg:        `${API_BASE}/static/images/brand-logo-dark-bg.png`,
+  // Marketing renders used on the landing page hardware section. Both ship
+  // from the same backend whitelist so the FE never has to bundle 2-5MB of
+  // PNGs and the NAS can serve them with year-long cache headers.
+  hardwareExploded:  `${API_BASE}/static/images/hardware-exploded.png`,
+  hardwareViews:     `${API_BASE}/static/images/hardware-views.png`,
 } as const
 
 /**
