@@ -551,7 +551,18 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     setLoading(true)
     setError('')
     try {
-      const intent = await createStripeCheckout(hexId, evmAddress, cardEmail.trim())
+      // Build redirects from the current origin so dev (localhost), preview,
+      // and prod each round-trip the buyer back to themselves. Stripe
+      // substitutes {CHECKOUT_SESSION_ID} into success_url at redirect time;
+      // we also include hex= so /presale/card-complete can poll the right
+      // hex without re-deriving it from session metadata.
+      const origin     = window.location.origin
+      const successUrl = `${origin}/presale/card-complete?hex=${encodeURIComponent(hexId)}&session_id={CHECKOUT_SESSION_ID}`
+      const cancelUrl  = `${origin}/presale?hex=${encodeURIComponent(hexId)}`
+      const intent = await createStripeCheckout(hexId, evmAddress, cardEmail.trim(), {
+        successUrl,
+        cancelUrl,
+      })
       if (intent.url) {
         window.location.href = intent.url
         return

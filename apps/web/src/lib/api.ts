@@ -126,17 +126,29 @@ export interface StripePurchaseIntent {
  * after payment clears. `evmAddress` is where the NFT ultimately mints to —
  * for MVP we require the buyer to also connect a wallet so we have an address
  * to send to (no custody layer in v1).
+ *
+ * Caller passes `successUrl` + `cancelUrl` so the buyer ends up back on the
+ * same origin they started on (localhost during dev, prod domain in prod).
+ * Use Stripe's `{CHECKOUT_SESSION_ID}` template literal in successUrl — it's
+ * substituted by Stripe at redirect time.
  */
 export async function createStripeCheckout(
   hexId: string,
   evmAddress: string,
   email: string,
+  redirects: { successUrl: string; cancelUrl: string },
 ): Promise<StripePurchaseIntent> {
   return apiFetch<StripePurchaseIntent>(
     `/hexes/${encodeURIComponent(hexId)}/purchase-intent`,
     {
       method: 'POST',
-      body: JSON.stringify({ method: 'stripe', evmAddress, email }),
+      body: JSON.stringify({
+        method:     'stripe',
+        evmAddress,
+        email,
+        successUrl: redirects.successUrl,
+        cancelUrl:  redirects.cancelUrl,
+      }),
     },
   )
 }
