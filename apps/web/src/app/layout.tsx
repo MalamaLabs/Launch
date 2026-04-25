@@ -36,7 +36,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="en"
       className={`dark ${interTight.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}
     >
+      {/*
+        suppressHydrationWarning here is for the well-known Grammarly /
+        password-manager / dark-mode-extension hydration mismatch — those
+        extensions inject attributes (e.g. data-new-gr-c-s-check-loaded,
+        data-gr-ext-installed) on <body> *between* the server HTML arriving
+        and React hydrating, which Next then flags as a mismatch. The
+        suppress only silences the diff at the body level; child mismatches
+        still raise as normal.
+      */}
       <body
+        suppressHydrationWarning
         className={`${interTight.className} bg-malama-bg text-malama-ink min-h-screen flex flex-col font-sans antialiased`}
       >
         <Providers>
