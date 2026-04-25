@@ -26,6 +26,7 @@ import {
   createStripeCheckout,
   reserveHexCardano,
   reportCardanoMintObserved,
+  CardanoMintVerificationError,
   nftImageUrl,
 } from '@/lib/api'
 
@@ -448,17 +449,39 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       throw new Error(`Cardano payment failed: ${msg}`)
     }
 
-    // 4. Wait briefly for the tx to propagate, then ping backend. The
-    //    backend polls Kupo — if the tx isn't visible yet, it'll return an
-    //    error that the user can retry from. Kupo usually indexes within
-    //    seconds on preprod.
+    // 4. Wait for the tx to propagate, then ping backend. The backend now
+    //    polls Kupo internally for ~90s — but Cardano preprod blocks are
+    //    ~20s and a fresh tx can sit in mempool a while, so on a
+    //    "not_indexed" response we wait an extra 30s here and retry once.
+    //    Anything else (no_treasury_output / underpaid) is a hard fail and
+    //    we surface it immediately.
     setEvmTxStatus('minting')
-    const observed = await reportCardanoMintObserved({
-      hexId,
-      txHash:         paymentTxHash,
-      cardanoAddress: buyerAddr,
-      purchaseId:     intent.purchaseId,
-    })
+    const callObserved = () =>
+      reportCardanoMintObserved({
+        hexId,
+        txHash:         paymentTxHash,
+        cardanoAddress: buyerAddr,
+        purchaseId:     intent.purchaseId,
+      })
+
+    let observed: Awaited<ReturnType<typeof callObserved>>
+    try {
+      observed = await callObserved()
+    } catch (err) {
+      if (err instanceof CardanoMintVerificationError && err.diagnostic === 'not_indexed') {
+        // Block confirmation usually completes within ~30s on preprod;
+        // give it one more shot before bothering the user.
+        await new Promise((r) => setTimeout(r, 30_000))
+        observed = await callObserved()
+      } else if (err instanceof CardanoMintVerificationError && err.diagnostic === 'underpaid') {
+        const paid = err.paidLovelace != null ? `${(err.paidLovelace / 1_000_000).toFixed(2)} ADA` : 'less than expected'
+        throw new Error(`Payment underpaid (${paid}). Contact support — your tx hash is ${paymentTxHash.slice(0, 12)}…`)
+      } else if (err instanceof CardanoMintVerificationError && err.diagnostic === 'no_treasury_output') {
+        throw new Error(`Your tx (${paymentTxHash.slice(0, 12)}…) was found on-chain but didn't pay the Mālama treasury. Please contact support before retrying.`)
+      } else {
+        throw err
+      }
+    }
 
     syncNodeToMap(hexId)
 

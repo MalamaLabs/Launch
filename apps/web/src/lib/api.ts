@@ -205,10 +205,56 @@ export interface CardanoMintObservedResponse {
 }
 
 /**
+ * Diagnostic codes the backend returns inside a 402 body when payment
+ * verification fails. Callers use these to decide whether a retry is
+ * appropriate (timing) or whether to fail loudly (wrong address / underpaid).
+ *
+ *   not_indexed         — Kupo hasn't seen the tx yet. Retryable.
+ *   no_treasury_output  — Tx exists but pays a different address. Hard fail.
+ *   underpaid           — Tx pays treasury but for less than expected. Hard fail.
+ *   kupo_unreachable    — Backend can't reach Kupo. Retry-after-a-moment.
+ *   bad_input           — Backend rejected our payload. Hard fail.
+ */
+export type CardanoMintDiagnostic =
+  | 'not_indexed'
+  | 'no_treasury_output'
+  | 'underpaid'
+  | 'kupo_unreachable'
+  | 'bad_input'
+
+/**
+ * Thrown by reportCardanoMintObserved when the backend returns a 402. Carries
+ * the verification diagnostic so the UI can pick "retry quietly" vs.
+ * "tell the user to contact ops".
+ */
+export class CardanoMintVerificationError extends Error {
+  diagnostic?:       CardanoMintDiagnostic
+  paidLovelace?:     number
+  expectedLovelace?: number
+  txHash?:           string
+  constructor(msg: string, fields: {
+    diagnostic?:       CardanoMintDiagnostic
+    paidLovelace?:     number
+    expectedLovelace?: number
+    txHash?:           string
+  } = {}) {
+    super(msg)
+    this.name             = 'CardanoMintVerificationError'
+    this.diagnostic       = fields.diagnostic
+    this.paidLovelace     = fields.paidLovelace
+    this.expectedLovelace = fields.expectedLovelace
+    this.txHash           = fields.txHash
+  }
+}
+
+/**
  * Tells the backend the buyer's Cardano payment has confirmed on-chain.
  * Backend re-verifies via Kupo (defence against spoofing), then mints the
  * CIP-68 pair with mintPath="cardano_primary". Idempotent: safe to call
  * repeatedly — the second call returns alreadyMinted=true.
+ *
+ * On 402 (verification failure) this throws CardanoMintVerificationError
+ * carrying the diagnostic. All other failures throw a plain Error.
  */
 export async function reportCardanoMintObserved(args: {
   hexId:          string
@@ -216,10 +262,31 @@ export async function reportCardanoMintObserved(args: {
   cardanoAddress: string
   purchaseId?:    string
 }): Promise<CardanoMintObservedResponse> {
-  return apiFetch<CardanoMintObservedResponse>(
-    `/hexes/events/mint-observed-cardano`,
-    { method: 'POST', body: JSON.stringify(args) },
-  )
+  const res = await fetch(`${API_BASE}/hexes/events/mint-observed-cardano`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(args),
+  })
+  const text = await res.text()
+  let body: Record<string, unknown> | string
+  try { body = text ? JSON.parse(text) : {} } catch { body = text }
+
+  if (res.ok) return body as unknown as CardanoMintObservedResponse
+
+  const errMsg = (typeof body === 'object' && body && 'error' in body)
+    ? String((body as { error: unknown }).error)
+    : `HTTP ${res.status}`
+
+  if (res.status === 402 && typeof body === 'object' && body) {
+    const b = body as Record<string, unknown>
+    throw new CardanoMintVerificationError(errMsg, {
+      diagnostic:       b.diagnostic       as CardanoMintDiagnostic | undefined,
+      paidLovelace:     typeof b.paidLovelace     === 'number' ? b.paidLovelace     : undefined,
+      expectedLovelace: typeof b.expectedLovelace === 'number' ? b.expectedLovelace : undefined,
+      txHash:           typeof b.txHash           === 'string' ? b.txHash           : undefined,
+    })
+  }
+  throw new Error(errMsg)
 }
 
 // ─── POST /hexes/events/mint-observed ─────────────────────────────────────
