@@ -136,6 +136,92 @@ export async function createStripeCheckout(
   )
 }
 
+// ─── POST /hexes/:hexId/purchase-intent  (method: cardano) ────────────────
+export interface CardanoPurchaseIntent {
+  ok:             true
+  method:         'cardano'
+  hexId:          string
+  network:        'mainnet' | 'preprod'
+  /** Treasury bech32 address — buyer pays this in ADA. */
+  treasury:       string
+  /** Price in lovelace (1 ADA = 1_000_000 lovelace). Send ≥ this amount. */
+  priceLovelace:  number
+  /** Convenience ADA value for UI display. */
+  priceAda:       number
+  /** Policy key hash of the CIP-68 pair that will be minted on confirmation. */
+  policyKeyHash:  string
+  /** CIP-68 contract address (receives the ref token). */
+  contract:       string
+  /** Deterministic 24-hex asset name for this hex on Cardano. */
+  assetName:      string
+  /** Echo of the buyer address the server recorded. */
+  buyer:          string
+  /** Use this as `purchaseId` when reporting the mint — matches the pending record. */
+  purchaseId:     string
+}
+
+/**
+ * Reserves a hex for Cardano-primary payment. Backend records a pending
+ * hex_purchases row keyed by `purchaseId`; the frontend then builds a Lucid
+ * transaction sending at least `priceLovelace` to `treasury`, and once the
+ * tx confirms, POSTs the hash to `/hexes/events/mint-observed-cardano`.
+ *
+ * Independent of Base — works even when the Base contract isn't configured.
+ */
+export async function reserveHexCardano(
+  hexId: string,
+  cardanoAddress: string,
+): Promise<CardanoPurchaseIntent> {
+  return apiFetch<CardanoPurchaseIntent>(
+    `/hexes/${encodeURIComponent(hexId)}/purchase-intent`,
+    {
+      method: 'POST',
+      body:   JSON.stringify({ method: 'cardano', cardanoAddress }),
+    },
+  )
+}
+
+// ─── POST /hexes/events/mint-observed-cardano ─────────────────────────────
+export interface CardanoMintObservedResponse {
+  ok:       true
+  hexId:    string
+  mintPath: 'cardano_primary'
+  cardano: {
+    txHash?:      string
+    explorerUrl?: string
+    assetName?:   string
+    hexId?:       string
+    baseTokenId?: string
+    action?:      'mint'
+    userDelivery?: 'buyer' | 'bank'
+    error?:       string
+    alreadyMinted?: boolean
+  }
+  payment?: {
+    txHash:        string
+    explorerUrl:   string
+    paidLovelace:  number
+  }
+}
+
+/**
+ * Tells the backend the buyer's Cardano payment has confirmed on-chain.
+ * Backend re-verifies via Kupo (defence against spoofing), then mints the
+ * CIP-68 pair with mintPath="cardano_primary". Idempotent: safe to call
+ * repeatedly — the second call returns alreadyMinted=true.
+ */
+export async function reportCardanoMintObserved(args: {
+  hexId:          string
+  txHash:         string
+  cardanoAddress: string
+  purchaseId?:    string
+}): Promise<CardanoMintObservedResponse> {
+  return apiFetch<CardanoMintObservedResponse>(
+    `/hexes/events/mint-observed-cardano`,
+    { method: 'POST', body: JSON.stringify(args) },
+  )
+}
+
 // ─── POST /hexes/events/mint-observed ─────────────────────────────────────
 export interface MintObservedResponse {
   ok:          true
@@ -240,15 +326,20 @@ export async function getHexDetail(hexId: string): Promise<HexDetail> {
 export interface SaleState {
   ok: true
   onChain: {
-    enabled:    boolean
-    network?:   'sepolia' | 'mainnet'
-    address?:   string
-    totalCap?:  number
-    totalMinted?: number
-    remaining?: number
-    priceUsdc?: number
-    priceRaw?:  string
-    error?:     string
+    enabled:      boolean
+    network?:     'sepolia' | 'mainnet'
+    address?:     string
+    /**
+     * Total ever minted on-chain (Base). Named `totalSupply` to match the
+     * ERC-721 view function the backend proxies. Not the Genesis cap of 200
+     * — that's a product-level constant, not an on-chain value.
+     */
+    totalSupply?: number
+    remaining?:   number
+    priceUsdc?:   number
+    priceRaw?:    string
+    treasury?:    string
+    error?:       string
   }
   mongo: {
     available: number

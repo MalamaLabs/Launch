@@ -24,8 +24,24 @@ import {
   reserveHexOnChain,
   reportMintObserved,
   createStripeCheckout,
+  reserveHexCardano,
+  reportCardanoMintObserved,
   nftImageUrl,
 } from '@/lib/api'
+
+/**
+ * Three mutually-exclusive purchase lanes. Lane defines which wallet(s) must
+ * be connected, which chain settles the sale, and which handleXxxPayment()
+ * runs at step 4.
+ *
+ *   base    — connect MetaMask → pay USDC → Base ERC-721 mint.
+ *             CIP-68 mirror is best-effort & optional.
+ *   cardano — connect Lace/Eternl/etc → pay ADA to treasury → backend
+ *             mints CIP-68 pair with user token (222) to buyer.
+ *   stripe  — enter email + connect MetaMask (delivery address) → Stripe
+ *             checkout → webhook mints on Base.
+ */
+type PaymentLane = 'base' | 'cardano' | 'stripe'
 import {
   PurchaseLegalAcknowledgement,
   LegalMintReminder,
@@ -98,7 +114,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
   const [copied, setCopied]         = useState(false)
   const [legalAck, setLegalAck]     = useState(initialLegalAck)
-  const [paymentMode, setPaymentMode] = useState<'crypto' | 'card'>('crypto')
+  const [paymentMode, setPaymentMode] = useState<PaymentLane>('base')
   const [cardEmail, setCardEmail]   = useState('')
   const [mmImportOpen, setMmImportOpen] = useState(false)
   const [mmCopied, setMmCopied]     = useState<'address' | 'tokenId' | null>(null)
@@ -111,6 +127,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const { connected: cardanoConnected, wallet: cardanoWallet, name: cardanoWalletName, connect: connectCardano } = useCardanoWallet()
   const [cardanoWallets, setCardanoWallets] = useState<{ name: string; icon: string }[]>([])
   const [showCardanoPicker, setShowCardanoPicker] = useState(false)
+  const [cardanoError, setCardanoError] = useState<string | null>(null)
   // Raw CIP-30 API object — stored after window.cardano[name].enable() succeeds.
   // Used for:
   //   (a) getChangeAddress() → passed to reportMintObserved so the CIP-68
@@ -128,10 +145,19 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const { writeContractAsync } = useWriteContract()
 
   const cardanoReady     = cardanoConnected || !!cardanoCip30Api
-  // Crypto path MUST have Base connected (Cardano-as-primary is disabled).
-  // Card path ALSO requires Base, because backend needs a delivery address.
+  // Per-lane setup gates. Each lane has exactly one required wallet/email
+  // combo — no lane requires connecting wallets it doesn't settle on.
+  //   base    → MetaMask/Base only.
+  //   cardano → Cardano wallet only (Mesh-connected so we can build a tx).
+  //             Base is NOT required — this lane is an escape hatch for
+  //             buyers who don't want an EVM wallet at all.
+  //   stripe  → Email (receipt) + EVM delivery address (backend mints NFT to it).
   const isSetupComplete =
-    !!hexId && evmConnected && (paymentMode === 'card' ? cardEmailOk : true)
+    !!hexId && (
+      paymentMode === 'base'    ? evmConnected :
+      paymentMode === 'cardano' ? cardanoConnected :
+      /* stripe */                evmConnected && cardEmailOk
+    )
 
   // ── Sync local purchased map ─────────────────────────────────────────────
   const syncNodeToMap = (id: string | null) => {
@@ -150,16 +176,54 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     })
   }
 
-  // ── Direct CIP-30 connect — triggers Lace's "Connect this dApp?" popup ──
+  // ── Direct CIP-30 connect — triggers the wallet's "Connect this dApp?" popup.
+  //
+  // Cardano connect is OPTIONAL in this flow — the CIP-68 mirror token ships
+  // to the treasury by default if we don't have a buyer Cardano address, so a
+  // failure here must not blow up the purchase. Common failure modes we want
+  // to swallow politely:
+  //   - User has Eternl installed but no account is set ("no account set")
+  //   - User rejected the connect popup (CIP-30 APIError code -3)
+  //   - Wallet's internal messaging glitched ("dom:receive no data domId")
+  // In all cases we surface a friendly string under the Connect button and
+  // leave the rest of the UI (Base connect, checkout) fully usable.
+  const readableCardanoError = (err: unknown): string => {
+    const e = err as { info?: string; message?: string; code?: number } | null
+    const msg = (e?.info || e?.message || '').toString().toLowerCase()
+    if (msg.includes('no account')) {
+      return 'Your Cardano wallet has no account selected — open the extension, create/select an account, then retry.'
+    }
+    if (msg.includes('user declined') || msg.includes('rejected') || e?.code === -3) {
+      return 'Cardano connect was declined. Retry when you\'re ready — this wallet is optional.'
+    }
+    if (msg.includes('dom:receive') || msg.includes('no data')) {
+      return 'The Cardano extension didn\'t respond. Try unlocking it, then retry.'
+    }
+    return e?.info || e?.message || 'Cardano connect failed — this wallet is optional; you can still complete your purchase.'
+  }
+
   const connectCardanoWallet = async (walletKey: string) => {
+    setCardanoError(null)
     const win = window as typeof window & {
       cardano?: Record<string, { name?: string; icon?: string; enable: () => Promise<any> }>
     }
-    const api = await win.cardano![walletKey].enable()
-    setCardanoCip30Api(api)
-    // Also connect via MeshSDK so cardanoWallet/cardanoConnected state updates
-    await connectCardano(walletKey).catch(() => {
-      // MeshSDK may warn internally but the raw API is already stored
+    const provider = win.cardano?.[walletKey]
+    if (!provider) {
+      setCardanoError('That Cardano wallet extension isn\'t loaded — try reloading the page.')
+      return
+    }
+    try {
+      const api = await provider.enable()
+      setCardanoCip30Api(api)
+    } catch (err) {
+      console.warn('[cardano-connect] enable() failed', err)
+      setCardanoError(readableCardanoError(err))
+      return // don't fall through to Mesh — nothing to connect
+    }
+    // Best-effort MeshSDK sync so cardanoWallet/cardanoConnected state updates.
+    // The raw CIP-30 api is already stored above, so a Mesh failure is harmless.
+    await connectCardano(walletKey).catch((err) => {
+      console.warn('[cardano-connect] Mesh sync warning (non-fatal)', err)
     })
   }
 
@@ -331,15 +395,93 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     }
   }
 
-  // ── Cardano-as-primary-chain is disabled for MVP ────────────────────────
-  // The Cardano CIP-68 mirror still happens automatically on the backend
-  // after the Base mint confirms — it's an anchor, not a purchase path.
-  // Keeping the Cardano wallet connect UI around is harmless (users can
-  // still sign identity messages later), but payments go through Base.
-  const handleCardanoPayment = async (): Promise<never> => {
-    throw new Error(
-      'Cardano-as-primary-chain mint is disabled during Genesis sale. Connect MetaMask / Base wallet to purchase — a Cardano CIP-68 mirror is anchored automatically after your Base mint confirms.',
-    )
+  // ── Cardano-primary payment flow ────────────────────────────────────────
+  // Buyer pays ADA to the Mālama treasury; backend verifies the on-chain
+  // payment via Kupo and then mints the CIP-68 pair (user token → buyer).
+  // No Base mint on this path — the CIP-68 asset IS the ownership receipt.
+  //
+  // Tx build strategy: Mesh SDK's Transaction class. We avoid Lucid in the
+  // browser to keep the bundle small; Mesh piggybacks on the already-imported
+  // @meshsdk/react ecosystem so no new runtime deps.
+  const handleCardanoPayment = async () => {
+    if (!hexId) throw new Error('Select a hex before paying with Cardano')
+    if (!cardanoConnected || !cardanoWallet) {
+      throw new Error('Connect a Cardano wallet first (Lace, Eternl, Nami, Typhon, Flint)')
+    }
+
+    // 1. Buyer address — the bech32 we'll deliver the user token (222) to,
+    //    and that the backend records on the pending purchase row.
+    setEvmTxStatus('claiming')
+    let buyerAddr = ''
+    try {
+      buyerAddr = await cardanoWallet.getChangeAddress()
+    } catch (err) {
+      throw new Error(`Could not read your Cardano address: ${(err as Error).message}`)
+    }
+    if (!buyerAddr || typeof buyerAddr !== 'string') {
+      throw new Error('Cardano wallet returned no change address')
+    }
+
+    // 2. Reserve the hex + get treasury + price from backend.
+    const intent = await reserveHexCardano(hexId, buyerAddr)
+
+    // Pool slot is deterministic — compute claim id immediately for the UI.
+    const editionNumber = getGenesisPoolSlot(hexId, regionsData) ?? 0
+    const claimId       = `G200-${String(editionNumber).padStart(3, '0')}`
+
+    // 3. Build + sign + submit the ADA payment tx via Mesh.
+    setEvmTxStatus('approving')
+    let paymentTxHash: string
+    try {
+      const { Transaction } = await import('@meshsdk/core')
+      const tx = new Transaction({ initiator: cardanoWallet })
+        .sendLovelace(intent.treasury, String(intent.priceLovelace))
+      const unsignedTx = await tx.build()
+      const signedTx   = await cardanoWallet.signTx(unsignedTx)
+      paymentTxHash    = await cardanoWallet.submitTx(signedTx)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // CIP-30 code -3 is "user declined". Mesh wraps the underlying error.
+      if (/declined|rejected|user|cancel/i.test(msg)) {
+        throw new Error('Cardano payment was declined — retry when ready.')
+      }
+      throw new Error(`Cardano payment failed: ${msg}`)
+    }
+
+    // 4. Wait briefly for the tx to propagate, then ping backend. The
+    //    backend polls Kupo — if the tx isn't visible yet, it'll return an
+    //    error that the user can retry from. Kupo usually indexes within
+    //    seconds on preprod.
+    setEvmTxStatus('minting')
+    const observed = await reportCardanoMintObserved({
+      hexId,
+      txHash:         paymentTxHash,
+      cardanoAddress: buyerAddr,
+      purchaseId:     intent.purchaseId,
+    })
+
+    syncNodeToMap(hexId)
+
+    const mint = observed.cardano
+    return {
+      claimId,
+      editionNumber,
+      // Cardano lane has no EVM token id — the cnft asset is the receipt.
+      evmTokenId:      undefined,
+      contractAddress: undefined,
+      txHash:          mint.txHash || paymentTxHash,
+      chain:           'cardano' as const,
+      explorerUrl:     mint.explorerUrl || observed.payment?.explorerUrl || '',
+      // Per-hex SVG rendered by dagwelldev-api — flagged as chain=cardano so
+      // the badge on the NFT card matches.
+      nftImageUrl: nftImageUrl({
+        hexId,
+        chain:   'cardano',
+        claimId,
+      }),
+      cnftUrl: mint.explorerUrl,
+      tokenName: mint.assetName ? `ref ${mint.assetName.slice(0, 16)}…` : undefined,
+    }
   }
 
   // ── Card checkout (Stripe) via dagwelldev-api ───────────────────────────
@@ -368,13 +510,16 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   }
 
   // ── Main payment dispatcher ───────────────────────────────────────────────
+  // Branches on paymentMode — each lane is a standalone function with its
+  // own chain/wallet/backend contract. Stripe is handled separately because
+  // it redirects the browser instead of returning a result in-session.
   const handlePayment = async () => {
     setLoading(true)
     setError('')
     try {
-      const result = evmConnected
-        ? await handleBasePayment()
-        : await handleCardanoPayment()
+      const result =
+        paymentMode === 'cardano' ? await handleCardanoPayment() :
+        /* base */                  await handleBasePayment()
       setSuccessData(result)
       setStep(5)
     } catch (err: unknown) {
@@ -386,11 +531,19 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   }
 
   const submitLabel = () => {
-    if (paymentMode === 'card') {
+    if (paymentMode === 'stripe') {
       if (!loading) return 'Pay $2,000 with card (Stripe)'
       return 'Redirecting to secure checkout…'
     }
-    if (!loading) return `Confirm & Mint on ${evmConnected ? 'Base' : 'Cardano'}`
+    if (paymentMode === 'cardano') {
+      if (!loading) return 'Confirm & pay with ADA'
+      if (evmTxStatus === 'claiming')  return '1/3 Reserving hex globally…'
+      if (evmTxStatus === 'approving') return '2/3 Sign ADA payment…'
+      if (evmTxStatus === 'minting')   return '3/3 Minting your CIP-68 NFT…'
+      return 'Processing…'
+    }
+    // base
+    if (!loading) return 'Confirm & Mint on Base'
     if (evmTxStatus === 'claiming')  return '1/3 Reserving hex globally…'
     if (evmTxStatus === 'approving') return '2/3 Approving USDC…'
     if (evmTxStatus === 'minting')   return '3/3 Minting your NFT…'
@@ -491,33 +644,35 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 )}
               </div>
 
-              <div className="mx-auto mb-8 flex max-w-2xl flex-col justify-center gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('crypto')}
-                  className={`flex-1 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider border transition-all ${
-                    paymentMode === 'crypto'
-                      ? 'bg-malama-accent/10 border-malama-accent text-malama-accent shadow-[0_0_20px_rgba(196,240,97,0.15)]'
-                      : 'bg-gray-900/80 border-gray-800 text-gray-500 hover:border-gray-600'
-                  }`}
-                >
-                  Crypto wallet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('card')}
-                  className={`flex-1 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider border transition-all inline-flex items-center justify-center gap-2 ${
-                    paymentMode === 'card'
-                      ? 'bg-malama-accent/10 border-malama-accent text-malama-accent shadow-[0_0_20px_rgba(196,240,97,0.15)]'
-                      : 'bg-gray-900/80 border-gray-800 text-gray-500 hover:border-gray-600'
-                  }`}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Card (Magic wallet)
-                </button>
+              {/* Lane picker — three tabs, one row. Each tab owns exactly one
+                  chain/payment surface and swaps in its own connect UI below. */}
+              <div className="mx-auto mb-8 grid max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+                {([
+                  { id: 'base',    label: 'Base L2',  sub: 'USDC · ERC-721',       icon: <Globe      className="w-4 h-4" /> },
+                  { id: 'cardano', label: 'Cardano',  sub: 'ADA · CIP-68',         icon: <Wallet     className="w-4 h-4" /> },
+                  { id: 'stripe',  label: 'Card',     sub: 'Stripe · fiat',        icon: <CreditCard className="w-4 h-4" /> },
+                ] as const).map(({ id, label, sub, icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setPaymentMode(id)}
+                    className={`px-5 py-4 rounded-2xl text-left border transition-all ${
+                      paymentMode === id
+                        ? 'bg-malama-accent/10 border-malama-accent text-malama-accent shadow-[0_0_20px_rgba(196,240,97,0.15)]'
+                        : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider">
+                      {icon} {label}
+                    </div>
+                    <p className={`mt-1 text-[11px] font-mono ${paymentMode === id ? 'text-malama-accent/80' : 'text-gray-500'}`}>
+                      {sub}
+                    </p>
+                  </button>
+                ))}
               </div>
 
-              {paymentMode === 'card' ? (
+              {paymentMode === 'stripe' ? (
                 <div className="mx-auto max-w-xl space-y-6">
                   <p className="text-center text-sm leading-relaxed text-gray-500">
                     After checkout, your Genesis NFT is minted on Base to a new wallet we generate for you.
@@ -538,109 +693,119 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     />
                   </label>
                 </div>
+              ) : paymentMode === 'cardano' ? (
+                /* ── Cardano lane — ADA to treasury, CIP-68 primary ──────── */
+                <div className="mx-auto max-w-xl">
+                  <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${cardanoConnected ? 'bg-malama-accent/10 border-malama-accent/40 shadow-[0_0_20px_rgba(196,240,97,0.1)]' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center ${cardanoConnected ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
+                      <Wallet className={`w-7 h-7 ${cardanoConnected ? 'text-malama-accent' : 'text-gray-500'}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white uppercase tracking-wider text-xs">
+                        Cardano wallet <span className="text-malama-accent normal-case">(required for this lane)</span>
+                      </h3>
+                      <p className={`text-sm mt-1 font-mono ${cardanoConnected ? 'text-malama-accent' : 'text-gray-500'}`}>
+                        {cardanoConnected ? (cardanoWalletName?.toUpperCase() ?? 'CONNECTED') : 'DISCONNECTED'}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                        You&apos;ll sign an ADA payment to the Mālama treasury. After it confirms on
+                        Cardano, the backend mints the CIP-68 hex license to this same wallet — that
+                        NFT IS your ownership receipt (no Base mint on this lane).
+                      </p>
+                    </div>
+                    {cardanoConnected ? (
+                      <div className="w-full py-2 bg-malama-accent/20 border border-malama-accent/50 text-malama-accent rounded-lg font-bold text-xs text-center">
+                        ✓ READY TO PAY IN ADA
+                      </div>
+                    ) : (
+                      <div className="relative w-full">
+                        <button
+                          onClick={async () => {
+                            const win = window as typeof window & {
+                              cardano?: Record<string, { name?: string; icon?: string; enable: () => Promise<any> }>
+                            }
+                            const detected = Object.entries(win.cardano ?? {}).map(([key, w]) => ({
+                              name: key,
+                              icon: w.icon ?? '',
+                            }))
+                            if (detected.length === 0) {
+                              setCardanoWallets([])
+                              setShowCardanoPicker(true)
+                            } else if (detected.length === 1) {
+                              await connectCardanoWallet(detected[0].name)
+                            } else {
+                              setCardanoWallets(detected)
+                              setShowCardanoPicker(true)
+                            }
+                          }}
+                          className="w-full py-2 bg-malama-accent/10 border border-malama-accent/40 text-malama-accent rounded-lg font-bold text-xs hover:bg-malama-accent/20 transition-colors"
+                        >
+                          Connect Lace / Eternl / Nami / Typhon / Flint
+                        </button>
+                        {showCardanoPicker && cardanoWallets.length > 0 && (
+                          <div className="absolute bottom-full mb-2 left-0 w-full bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
+                            {cardanoWallets.map((w) => (
+                              <button
+                                key={w.name}
+                                onClick={async () => {
+                                  setShowCardanoPicker(false)
+                                  await connectCardanoWallet(w.name)
+                                }}
+                                className="flex items-center gap-3 w-full px-4 py-3 hover:bg-gray-800 transition-colors text-left"
+                              >
+                                {w.icon && <img src={w.icon} alt={w.name} className="w-5 h-5 rounded" />}
+                                <span className="text-white text-xs font-bold uppercase tracking-wider">{w.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {showCardanoPicker && cardanoWallets.length === 0 && (
+                          <div className="absolute bottom-full mb-2 left-0 w-full bg-gray-900 border border-gray-700 rounded-xl p-4 z-50 shadow-xl text-center">
+                            <p className="text-gray-400 text-xs">No Cardano wallet detected.<br />Install Lace or Eternl.</p>
+                          </div>
+                        )}
+                        {cardanoError && (
+                          <p className="mt-2 text-[11px] leading-relaxed text-amber-400/90">
+                            {cardanoError}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : (
-              <div className="grid gap-6 md:grid-cols-2">
-                {/* Cardano wallet (optional — routes CIP-68 mirror NFT to buyer) */}
-                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${cardanoReady ? 'bg-malama-accent/10 border-malama-accent/40 shadow-[0_0_20px_rgba(196,240,97,0.1)]' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${cardanoReady ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
-                    <Wallet className={`w-7 h-7 ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white uppercase tracking-wider text-xs">
-                      Cardano CIP-68 mirror <span className="text-gray-500 normal-case">(optional)</span>
-                    </h3>
-                    <p className={`text-sm mt-1 font-mono ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`}>
-                      {cardanoReady ? (cardanoWalletName?.toUpperCase() ?? 'LACE CONNECTED') : 'DISCONNECTED'}
-                    </p>
-                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      Connect to receive the CIP-68 mirror NFT in your Cardano wallet. Skip to retain in treasury.
-                    </p>
-                  </div>
-                  {cardanoReady ? (
-                    <div className="w-full py-2 bg-malama-accent/20 border border-malama-accent/50 text-malama-accent rounded-lg font-bold text-xs text-center">
-                      ✓ MIRROR DELIVERY SET
+                /* ── Base lane — USDC + ERC-721 on Base ──────────────────── */
+                <div className="mx-auto max-w-xl">
+                  <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${evmConnected ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center ${evmConnected ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
+                      <Globe className={`w-7 h-7 ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`} />
                     </div>
-                  ) : (
-                    <div className="relative w-full">
-                      <button
-                        onClick={async () => {
-                          const win = window as typeof window & {
-                            cardano?: Record<string, { name?: string; icon?: string; enable: () => Promise<any> }>
-                          }
-                          const detected = Object.entries(win.cardano ?? {}).map(([key, w]) => ({
-                            name: key,
-                            icon: w.icon ?? '',
-                          }))
-                          if (detected.length === 0) {
-                            setCardanoWallets([])
-                            setShowCardanoPicker(true)
-                          } else if (detected.length === 1) {
-                            await connectCardanoWallet(detected[0].name)
-                          } else {
-                            setCardanoWallets(detected)
-                            setShowCardanoPicker(true)
-                          }
-                        }}
-                        className="w-full py-2 bg-malama-accent/10 border border-malama-accent/40 text-malama-accent rounded-lg font-bold text-xs hover:bg-malama-accent/20 transition-colors"
-                      >
-                        Connect Lace / Cardano
+                    <div>
+                      <h3 className="font-bold text-white uppercase tracking-wider text-xs">
+                        Base L2 wallet <span className="text-malama-accent normal-case">(required for this lane)</span>
+                      </h3>
+                      <p className={`text-sm mt-1 font-mono ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`}>
+                        {evmConnected ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}` : 'DISCONNECTED'}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                        Pay $2,000 USDC on Base → your wallet gets the Genesis ERC-721. A CIP-68
+                        mirror is auto-anchored on Cardano (custodial by default).
+                      </p>
+                    </div>
+                    {evmConnected ? (
+                      <button onClick={() => disconnectEVM()} className="w-full py-2 bg-blue-500/20 border border-blue-500/50 text-blue-400 rounded-lg font-bold text-xs hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/40 transition-colors">
+                        Disconnect {evmAddress?.slice(0, 6)}…{evmAddress?.slice(-4)}
                       </button>
-                      {showCardanoPicker && cardanoWallets.length > 0 && (
-                        <div className="absolute bottom-full mb-2 left-0 w-full bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
-                          {cardanoWallets.map((w) => (
-                            <button
-                              key={w.name}
-                              onClick={async () => {
-                                setShowCardanoPicker(false)
-                                await connectCardanoWallet(w.name)
-                              }}
-                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-gray-800 transition-colors text-left"
-                            >
-                              {w.icon && <img src={w.icon} alt={w.name} className="w-5 h-5 rounded" />}
-                              <span className="text-white text-xs font-bold uppercase tracking-wider">{w.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {showCardanoPicker && cardanoWallets.length === 0 && (
-                        <div className="absolute bottom-full mb-2 left-0 w-full bg-gray-900 border border-gray-700 rounded-xl p-4 z-50 shadow-xl text-center">
-                          <p className="text-gray-400 text-xs">No Cardano wallet detected.<br />Install Lace or Eternl.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Base wallet (required — primary mint chain) */}
-                <div className={`p-6 border rounded-2xl flex flex-col items-center text-center space-y-4 transition-all ${evmConnected ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'bg-malama-deep border-gray-800 hover:border-gray-700'}`}>
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${evmConnected ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
-                    <Globe className={`w-7 h-7 ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`} />
+                    ) : (
+                      <button
+                        onClick={() => connectEVM({ connector: injected() })}
+                        className="px-4 py-3 rounded-xl text-xs font-black transition-all shadow-lg w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        Connect MetaMask / Coinbase Wallet
+                      </button>
+                    )}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-white uppercase tracking-wider text-xs">
-                      Base L2 NFT <span className="text-malama-accent normal-case">(required)</span>
-                    </h3>
-                    <p className={`text-sm mt-1 font-mono ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`}>
-                      {evmConnected ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}` : 'DISCONNECTED'}
-                    </p>
-                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      Primary mint — ERC-721 via USDC on Base.
-                    </p>
-                  </div>
-                  {evmConnected ? (
-                    <button onClick={() => disconnectEVM()} className="w-full py-2 bg-blue-500/20 border border-blue-500/50 text-blue-400 rounded-lg font-bold text-xs hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/40 transition-colors">
-                      {evmAddress?.slice(0, 6)}…{evmAddress?.slice(-4)}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => connectEVM({ connector: injected() })}
-                      className="px-4 py-3 rounded-xl text-xs font-black transition-all shadow-lg w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      Connect MetaMask / CB
-                    </button>
-                  )}
                 </div>
-              </div>
               )}
 
               <div className="flex flex-col items-center gap-4 pt-4">
@@ -677,20 +842,24 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 <h2 className="text-3xl font-black text-white flex items-center">
                   <ShoppingCart className="mr-3 text-malama-accent w-8 h-8" /> Order Review
                 </h2>
+                {/* Lane badge is driven purely by paymentMode — the old code
+                    used evmConnected as a proxy for "Base" which broke when
+                    a buyer on the Cardano lane also happened to have MetaMask
+                    connected from an earlier session. */}
                 <span
                   className={`px-3 py-1.5 font-bold text-xs rounded-full border ${
-                    paymentMode === 'card'
+                    paymentMode === 'stripe'
                       ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
-                      : evmConnected
+                      : paymentMode === 'base'
                         ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                         : 'bg-malama-accent/10 text-malama-accent border-malama-accent/30'
                   }`}
                 >
-                  {paymentMode === 'card'
-                    ? 'CARD → CUSTODIAL BASE NFT'
-                    : evmConnected
+                  {paymentMode === 'stripe'
+                    ? 'CARD → BASE ERC-721 (custodial)'
+                    : paymentMode === 'base'
                       ? '⬡ BASE L2  ERC-721'
-                      : '₳ CARDANO  CIP-25'}
+                      : '₳ CARDANO  CIP-68'}
                 </span>
               </div>
 
@@ -700,19 +869,25 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     <div className="font-bold text-white text-lg">Mālama Hex Node License NFT</div>
                     <p className="text-sm text-gray-500 mt-1">Hardware + exclusive geographic license + 125K MLMA allocation + 12mo support</p>
                     <p className="text-xs text-gray-600 mt-2 font-mono">Hex: {hexId}</p>
-                    {paymentMode === 'card' && (
+                    {paymentMode === 'stripe' && (
                       <p className="text-xs text-violet-400/90 mt-2 font-mono">Email: {cardEmail.trim()}</p>
                     )}
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="font-mono text-white font-bold text-lg">$2,000</div>
-                    <div className="text-xs text-gray-500 mt-1">{paymentMode === 'card' ? 'USD' : 'USDC'}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {paymentMode === 'stripe' ? 'USD' : paymentMode === 'cardano' ? 'ADA equivalent' : 'USDC'}
+                    </div>
                   </div>
                 </div>
                 <div className="p-6 bg-gray-900/60 flex justify-between items-center">
                   <span className="font-black text-white text-xl">Total Due</span>
                   <span className="font-mono font-black text-malama-accent text-3xl drop-shadow-[0_0_10px_rgba(196,240,97,0.3)]">
-                    {paymentMode === 'card' ? '$2,000 USD (Stripe)' : '$2,000 USDC'}
+                    {paymentMode === 'stripe'
+                      ? '$2,000 USD (Stripe)'
+                      : paymentMode === 'cardano'
+                        ? '≈ $2,000 in ADA'
+                        : '$2,000 USDC'}
                   </span>
                 </div>
               </div>
@@ -722,13 +897,13 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   { label: 'MLMA Allocation', value: '125K', sub: '25% at boot · 75% vested' },
                   {
                     label: 'Chain',
-                    value: paymentMode === 'card' ? 'Base L2' : evmConnected ? 'Base L2' : 'Cardano',
+                    value: paymentMode === 'cardano' ? 'Cardano' : 'Base L2',
                     sub:
-                      paymentMode === 'card'
+                      paymentMode === 'stripe'
                         ? 'Custodial ERC-721 → you transfer'
-                        : evmConnected
-                          ? 'ERC-721 NFT'
-                          : 'CIP-25 Token',
+                        : paymentMode === 'cardano'
+                          ? 'CIP-68 Token (primary)'
+                          : 'ERC-721 NFT',
                   },
                   { label: 'Revenue Start', value: 'Oct 2026', sub: 'Hardware ships Sept' },
                 ].map(({ label, value, sub }) => (
@@ -752,9 +927,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   className={`flex-[2] py-5 rounded-2xl font-black text-xl transition-transform shadow-2xl ${
                     legalComplete
                       ? `${
-                          paymentMode === 'card'
+                          paymentMode === 'stripe'
                             ? 'bg-violet-600 text-white hover:scale-[1.02] shadow-violet-500/20'
-                            : evmConnected
+                            : paymentMode === 'base'
                               ? 'bg-blue-600 text-white hover:scale-[1.02] shadow-blue-500/20'
                               : 'bg-malama-accent text-black hover:scale-[1.02] shadow-[0_0_20px_rgba(196,240,97,0.15)]'
                         }`
@@ -773,19 +948,21 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
           {/* ─── Step 4: Payment ────────────────────────────────────────────── */}
           {step === 4 && (
             <motion.div key="step4-pay" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8 flex flex-col items-center justify-center text-center">
-              {/* Chain visual */}
+              {/* Chain visual — strictly keyed off paymentMode. evmConnected is
+                  NOT a valid proxy for "Base lane" anymore: a Cardano buyer
+                  can still have MetaMask connected from a previous session. */}
               <div
                 className={`w-28 h-28 rounded-full flex items-center justify-center border-2 shadow-2xl ${
-                  paymentMode === 'card'
+                  paymentMode === 'stripe'
                     ? 'bg-violet-500/10 border-violet-500/40 shadow-violet-500/20'
-                    : evmConnected
+                    : paymentMode === 'base'
                       ? 'bg-blue-500/10 border-blue-500/40 shadow-blue-500/20'
                       : 'bg-malama-accent/10 border-malama-accent/40 shadow-[0_0_20px_rgba(196,240,97,0.15)]'
                 }`}
               >
-                {paymentMode === 'card' ? (
+                {paymentMode === 'stripe' ? (
                   <CreditCard className="w-14 h-14 text-violet-300" />
-                ) : evmConnected ? (
+                ) : paymentMode === 'base' ? (
                   <Globe className="w-14 h-14 text-blue-400" />
                 ) : (
                   <Wallet className="w-14 h-14 text-malama-accent" />
@@ -794,25 +971,31 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
               <div>
                 <h2 className="text-4xl font-black text-white">
-                  {paymentMode === 'card' ? 'Pay with card' : 'Mint Your NFT'}
+                  {paymentMode === 'stripe' ? 'Pay with card' : 'Mint Your NFT'}
                 </h2>
                 <p className="text-gray-400 mt-3 max-w-md mx-auto leading-relaxed">
-                  {paymentMode === 'card'
-                    ? 'You will be redirected to Stripe Checkout. After payment clears, open Launch App, sign in with Magic (same email), and we mint your Genesis NFT to your embedded wallet on Base Sepolia.'
-                    : evmConnected
+                  {paymentMode === 'stripe'
+                    ? 'You will be redirected to Stripe Checkout. After payment clears, we mint your Genesis NFT on Base to the wallet you connected — no further action needed.'
+                    : paymentMode === 'base'
                       ? 'Your wallet will prompt you to approve $2,000 USDC and then sign the mint transaction on Base.'
-                      : 'The server will mint your Cardano CIP-25 NFT directly to your wallet. No gas required from you.'}
+                      : 'Your Cardano wallet will prompt for an ADA payment to the Mālama treasury. Once the tx confirms, the backend mints your CIP-68 hex license directly to the same wallet.'}
                 </p>
               </div>
 
-              {/* Progress indicators when loading */}
-              {loading && paymentMode !== 'card' && (
+              {/* Progress indicators — both Base and Cardano lanes share the
+                  Reserve → Sign → Mint triple; Stripe redirects out so no
+                  inline progress pips needed. */}
+              {loading && paymentMode !== 'stripe' && (
                 <div className="flex items-center gap-3 text-sm">
                   {(['claiming', 'approving', 'minting'] as const).map((s, i) => (
                     <React.Fragment key={s}>
                       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold transition-all ${evmTxStatus === s ? 'bg-malama-accent/20 border-malama-accent/50 text-malama-accent animate-pulse' : ['claiming', 'approving', 'minting'].indexOf(evmTxStatus as any) > i ? 'bg-malama-accent/15 border-malama-accent/40 text-malama-accent-dim' : 'bg-gray-900 border-gray-800 text-gray-600'}`}>
                         {['claiming', 'approving', 'minting'].indexOf(evmTxStatus as any) > i ? '✓' : i + 1}
-                        {' '}{s === 'claiming' ? 'Reserve' : s === 'approving' ? 'Approve' : 'Mint'}
+                        {' '}{s === 'claiming'
+                                ? 'Reserve'
+                                : s === 'approving'
+                                  ? (paymentMode === 'cardano' ? 'Sign ADA' : 'Approve')
+                                  : 'Mint'}
                       </div>
                       {i < 2 && <span className="text-gray-700">→</span>}
                     </React.Fragment>
@@ -831,14 +1014,14 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
               <div className="flex flex-col w-full max-w-lg gap-3">
                 <button
-                  onClick={paymentMode === 'card' ? handleCardCheckout : handlePayment}
-                  disabled={loading || !legalComplete || (paymentMode === 'card' && !cardEmailOk)}
+                  onClick={paymentMode === 'stripe' ? handleCardCheckout : handlePayment}
+                  disabled={loading || !legalComplete || (paymentMode === 'stripe' && !cardEmailOk)}
                   className={`w-full py-5 text-white rounded-2xl font-black text-xl transition-all shadow-2xl ${
-                    loading || !legalComplete || (paymentMode === 'card' && !cardEmailOk)
+                    loading || !legalComplete || (paymentMode === 'stripe' && !cardEmailOk)
                       ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
-                      : paymentMode === 'card'
+                      : paymentMode === 'stripe'
                         ? 'bg-violet-600 hover:bg-violet-500 shadow-violet-500/25 hover:scale-[1.02]'
-                        : evmConnected
+                        : paymentMode === 'base'
                           ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20 hover:scale-[1.02]'
                           : 'bg-malama-accent text-black hover:bg-malama-accent-dim shadow-[0_0_20px_rgba(196,240,97,0.15)] hover:scale-[1.02]'
                   }`}

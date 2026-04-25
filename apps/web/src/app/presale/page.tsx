@@ -81,29 +81,55 @@ export default async function PresalePage({
 
 async function PresaleStats() {
   // Defaults match the sale plan: 200 hexes, ~5 internal allocations taken.
-  // If dagwelldev-api is reachable we overwrite with live numbers; if not,
-  // render the defaults so the hero never blocks on a bad backend.
-  let total = 200
-  let remaining = 195
-  let reserved = 5
+  // These render when either (a) the backend is unreachable, (b) the backend
+  // is up but Mongo hasn't been seeded AND the Base contract isn't deployed
+  // yet, or (c) the Base contract is reachable but in a degenerate state
+  // (remaining=0 with nothing sold in Mongo — e.g. contract address points
+  // to a mis-deployed/zero-cap contract). We specifically want to avoid the
+  // old "200/200 reserved" failure mode that tripped at launch.
+  const DEFAULT_TOTAL = 200
+  const DEFAULT_RESERVED = 5
+  let total = DEFAULT_TOTAL
+  let remaining = DEFAULT_TOTAL - DEFAULT_RESERVED
+  let reserved = DEFAULT_RESERVED
   try {
     const state = await getSaleState()
-    // Prefer on-chain numbers when the contract is configured — that's the
-    // authoritative source. Otherwise fall back to Mongo's view.
-    total =
-      state.onChain.totalCap ??
-      state.mongo.total ??
-      200
-    remaining =
-      state.onChain.remaining ??
-      state.mongo.available ??
-      total - reserved
-    // Reserved = everything not still available (includes sold + bound +
-    // in-flight reservations). Keeps the hero honest about scarcity.
-    reserved = Math.max(0, total - remaining)
+    const onChainEnabled = state.onChain.enabled === true
+    const mongoSeeded = (state.mongo.total ?? 0) > 0
+    // Note: `state.onChain.remaining` is a *number*, so `?? fallback` only
+    // fires on null/undefined — a contract returning 0 is taken at face
+    // value. That's the trap; see `onChainLooksBroken` below.
+    const onChainRemaining =
+      onChainEnabled && typeof state.onChain.remaining === 'number'
+        ? state.onChain.remaining
+        : null
+    const mongoTaken = mongoSeeded
+      ? state.mongo.reserved + state.mongo.sold + state.mongo.bound
+      : 0
+
+    // A contract claiming "0 remaining" when Mongo has nothing sold is almost
+    // certainly a mis-configured contract address, not an actual sell-out —
+    // render marketing numbers instead of scaring buyers off with 200/200.
+    const onChainLooksBroken =
+      onChainRemaining === 0 && mongoTaken === 0
+
+    if (onChainRemaining != null && !onChainLooksBroken) {
+      // Contract is live + plausible → use the on-chain remaining as truth.
+      // Base contract caps at 200 by construction, so treat that as total.
+      total = DEFAULT_TOTAL
+      remaining = onChainRemaining
+      reserved = Math.max(0, total - remaining)
+    } else if (mongoSeeded) {
+      // No contract (or contract looks broken), but the pool has been seeded
+      // — Mongo is the source of truth for reservations made via Stripe,
+      // admin, or Cardano-primary lanes.
+      total = state.mongo.total
+      reserved = Math.max(DEFAULT_RESERVED, mongoTaken)
+      remaining = Math.max(0, total - reserved)
+    }
+    // else: pre-seed, pre-contract → keep marketing defaults.
   } catch {
-    // Backend unreachable — keep defaults. Logged server-side so we notice
-    // but never block the public marketing page.
+    // Backend unreachable — keep defaults. Never block the public page.
   }
 
   return (
