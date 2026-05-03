@@ -24,9 +24,8 @@ import {
   reserveHexOnChain,
   reportMintObserved,
   createStripeCheckout,
-  reserveHexCardano,
-  reportCardanoMintObserved,
-  CardanoMintVerificationError,
+  prepareCardanoMintTx,
+  confirmCardanoMintTx,
   nftImageUrl,
 } from '@/lib/api'
 
@@ -300,33 +299,99 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     const editionNumber = getGenesisPoolSlot(hexId, regionsData) ?? 0
     const claimId       = `G200-${String(editionNumber).padStart(3, '0')}`
 
-    // 2. USDC approve
+    // ── 2. USDC approve ────────────────────────────────────────────────
+    // Pre-fetch nonce + gas + EIP-1559 fee suggestions from our public RPC
+    // (Alchemy, via Providers.tsx wagmi transport) and pass them explicitly
+    // into writeContractAsync. By default wagmi/viem lets MetaMask do the
+    // estimation, and MM uses its OWN (often public, often flaky) RPC. On
+    // Base Sepolia that surfaces as "Failed to fetch" before the second
+    // popup. Pre-supplying these fields means MM only has to sign — no
+    // RPC estimation round-trip on its side.
+    //
+    // NOTE: do NOT pass `chainId` — wagmi treats that as a switch-chain
+    // hint that hits the flaky RPC again (memory:
+    // feedback_wagmi_chainid_param). Step 4 already gates on evmConnected
+    // so the wallet is on the right chain.
     setEvmTxStatus('approving')
     let approveHash: `0x${string}`
     try {
+      const approveNonce = await publicClient.getTransactionCount({
+        address:  evmAddress,
+        blockTag: 'pending',
+      })
+      const approveGas = await publicClient.estimateContractGas({
+        address: USDC_CONTRACT,
+        abi:     USDC_ABI,
+        functionName: 'approve',
+        args:    [GENESIS_CONTRACT, priceRaw],
+        account: evmAddress,
+      })
+      const approveFees = await publicClient.estimateFeesPerGas()
+
       approveHash = await writeContractAsync({
         address: USDC_CONTRACT,
-        abi: USDC_ABI,
+        abi:     USDC_ABI,
         functionName: 'approve',
-        args: [GENESIS_CONTRACT, priceRaw],
+        args:    [GENESIS_CONTRACT, priceRaw],
+        // 25% headroom — Sepolia estimation occasionally underbids.
+        gas:                  (approveGas * 125n) / 100n,
+        nonce:                approveNonce,
+        maxFeePerGas:         approveFees.maxFeePerGas,
+        maxPriorityFeePerGas: approveFees.maxPriorityFeePerGas,
       })
-    } catch {
-      throw new Error('USDC approval rejected — please approve in your wallet')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (/user|reject|denied|cancel/i.test(msg)) {
+        throw new Error('USDC approval rejected — please approve in your wallet')
+      }
+      throw new Error(`USDC approval failed: ${msg.slice(0, 200)}`)
     }
     await publicClient.waitForTransactionReceipt({ hash: approveHash })
 
-    // 3. Mint NFT (secureNode on GenesisValidator)
+    // ── 3. Mint NFT (secureNode on GenesisValidator) ───────────────────
+    // Same pre-fetch pattern. We re-call getTransactionCount instead of
+    // assuming approveNonce + 1 because MM occasionally re-orders nonces
+    // on testnets, and the safe number is whatever 'pending' says now.
     setEvmTxStatus('minting')
     let mintHash: `0x${string}`
     try {
+      const mintNonce = await publicClient.getTransactionCount({
+        address:  evmAddress,
+        blockTag: 'pending',
+      })
+      const mintGas = await publicClient.estimateContractGas({
+        address: GENESIS_CONTRACT,
+        abi:     MHNL_ABI,
+        functionName: 'secureNode',
+        args:    [hexId],
+        account: evmAddress,
+      })
+      const mintFees = await publicClient.estimateFeesPerGas()
+
       mintHash = await writeContractAsync({
         address: GENESIS_CONTRACT,
-        abi: MHNL_ABI,
+        abi:     MHNL_ABI,
         functionName: 'secureNode',
-        args: [hexId],
+        args:    [hexId],
+        gas:                  (mintGas * 125n) / 100n,
+        nonce:                mintNonce,
+        maxFeePerGas:         mintFees.maxFeePerGas,
+        maxPriorityFeePerGas: mintFees.maxPriorityFeePerGas,
       })
-    } catch {
-      throw new Error('Mint transaction rejected or hex already taken on-chain')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (/user|reject|denied|cancel/i.test(msg)) {
+        throw new Error('Mint transaction rejected — please confirm in your wallet')
+      }
+      // Surface known revert classes so the operator knows where to look.
+      if (/transfer|allowance|paymentToken|insufficient/i.test(msg)) {
+        throw new Error(
+          `Mint reverted on-chain — usually a USDC ↔ contract.paymentToken() mismatch. ` +
+          `Verify USDC_ADDRESS_SEPOLIA matches GenesisValidator.paymentToken() (cast call $ADDR "paymentToken()(address)"). ` +
+          `Raw: ${msg.slice(0, 160)}`,
+        )
+      }
+      throw new Error(`Mint failed: ${msg.slice(0, 200)}`)
     }
     const receipt = await publicClient.waitForTransactionReceipt({ hash: mintHash })
 
@@ -396,22 +461,32 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     }
   }
 
-  // ── Cardano-primary payment flow ────────────────────────────────────────
-  // Buyer pays ADA to the Mālama treasury; backend verifies the on-chain
-  // payment via Kupo and then mints the CIP-68 pair (user token → buyer).
-  // No Base mint on this path — the CIP-68 asset IS the ownership receipt.
+  // ── Cardano-primary payment flow (ATOMIC) ──────────────────────────────
+  // Single transaction: buyer pays treasury AND mints+receives the CIP-68
+  // user token in one settlement. No Kupo polling, no two-step "pay then
+  // mint-observed" race condition.
   //
-  // Tx build strategy: Mesh SDK's Transaction class. We avoid Lucid in the
-  // browser to keep the bundle small; Mesh piggybacks on the already-imported
-  // @meshsdk/react ecosystem so no new runtime deps.
+  // Flow:
+  //   1. Read buyer change address from CIP-30 wallet.
+  //   2. POST /hexes/cardano/prepare-tx — backend builds + partial-signs
+  //      the atomic mint tx with the policy key. Returns CBOR.
+  //   3. cardanoWallet.signTx(cbor, /*partial*/ true) — wallet adds the
+  //      buyer witness, returns fully-signed CBOR.
+  //   4. cardanoWallet.submitTx(fullySigned) — broadcasts directly.
+  //   5. POST /hexes/cardano/confirm-tx — bookkeeping (Mongo flip).
+  //      Skipping this would still leave the buyer holding their NFT —
+  //      it just means the marketplace UI lags by one cycle.
+  //
+  // libsodium pre-init is still needed before Mesh's signTx/submitTx
+  // because @cardano-sdk/crypto's transitive use of libsodium-wrappers-sumo
+  // doesn't await its own readiness. See feedback_libsodium_nested_dep_dedupe.
   const handleCardanoPayment = async () => {
     if (!hexId) throw new Error('Select a hex before paying with Cardano')
     if (!cardanoConnected || !cardanoWallet) {
       throw new Error('Connect a Cardano wallet first (Lace, Eternl, Nami, Typhon, Flint)')
     }
 
-    // 1. Buyer address — the bech32 we'll deliver the user token (222) to,
-    //    and that the backend records on the pending purchase row.
+    // 1. Buyer change address (also the user-token recipient)
     setEvmTxStatus('claiming')
     let buyerAddr = ''
     try {
@@ -423,119 +498,81 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       throw new Error('Cardano wallet returned no change address')
     }
 
-    // 2. Reserve the hex + get treasury + price from backend.
-    const intent = await reserveHexCardano(hexId, buyerAddr)
+    // 2. Backend builds + partial-signs the atomic mint tx
+    const prepared = await prepareCardanoMintTx({ hexId, buyerAddress: buyerAddr })
 
-    // Sanity check the price BEFORE asking the wallet to spend. If the
-    // backend mis-configured the price (e.g. the old 2 ADA preprod default),
-    // we want a loud error instead of silently sending dust to treasury.
-    // Anything under 1 ADA is almost certainly wrong; mainnet floor is ~$2k
-    // worth of ADA. We treat <1_000_000 lovelace as a config error.
-    if (!Number.isFinite(intent.priceLovelace) || intent.priceLovelace < 1_000_000) {
+    // Defensive price check — the backend's price config can drift; we
+    // refuse to even prompt the wallet for anything < 1 ADA.
+    if (!Number.isFinite(prepared.priceLovelace) || prepared.priceLovelace < 1_000_000) {
       throw new Error(
-        `Backend returned a price of ${intent.priceLovelace} lovelace — that's below the 1 ADA floor and almost certainly a misconfiguration. Set HEX_PRICE_LOVELACE_${(intent.network ?? 'PREPROD').toUpperCase()} (or HEX_PRICE_USD + ADA_USD_RATE) on the API, then retry.`
+        `Backend returned price=${prepared.priceLovelace} lovelace — below the 1 ADA floor and almost certainly a misconfig. Set HEX_PRICE_LOVELACE_${prepared.network.toUpperCase()} (or HEX_PRICE_USD + ADA_USD_RATE) on the API, then retry.`
       )
     }
 
-    // Pool slot is deterministic — compute claim id immediately for the UI.
     const editionNumber = getGenesisPoolSlot(hexId, regionsData) ?? 0
     const claimId       = `G200-${String(editionNumber).padStart(3, '0')}`
 
-    // 3. Build + sign + submit the ADA payment tx via Mesh.
-    //
-    // ── Why we pre-init libsodium ──────────────────────────────────────
-    // Mesh's tx builder pulls in @cardano-sdk/crypto, which depends on
-    // libsodium-wrappers-sumo (a WASM ed25519 lib). The crypto package's
-    // `SodiumBip32Ed25519` only awaits `sodium.ready` inside its
-    // `static async create()` factory — but downstream code can call key
-    // primitives via the constructor path BEFORE that factory has run. The
-    // result is the dreaded "libsodium was not correctly initialized" you
-    // see in the dev console, after which the wallet builds a degenerate
-    // tx (~2 ADA, just min-utxo + change) instead of the real payment.
-    //
-    // Awaiting the ready promise on the top-level libsodium-wrappers-sumo
-    // (the one transpilePackages dedupes to in next.config.js) compiles
-    // the WASM up front and makes downstream crypto calls safe.
+    // 3 + 4. Buyer wallet adds witness, then submits directly
     setEvmTxStatus('approving')
-    let paymentTxHash: string
+    let txHash: string
     try {
+      // libsodium WASM warm-up — same reason as before. We dedupe this
+      // module via webpack alias in next.config.js so this is the same
+      // instance Mesh's @cardano-sdk/crypto ends up using.
       const sodium = (await import('libsodium-wrappers-sumo')).default
       await sodium.ready
-      const { Transaction } = await import('@meshsdk/core')
-      const tx = new Transaction({ initiator: cardanoWallet })
-        .sendLovelace(intent.treasury, String(intent.priceLovelace))
-      const unsignedTx = await tx.build()
-      const signedTx   = await cardanoWallet.signTx(unsignedTx)
-      paymentTxHash    = await cardanoWallet.submitTx(signedTx)
+
+      // partialSign=true tells the wallet "you're not the only required
+      // signer" (the policy witness is already on the tx). Without it,
+      // some wallets refuse to sign claiming the tx is malformed.
+      const fullySignedCbor = await cardanoWallet.signTx(prepared.txCbor, true)
+      txHash = await cardanoWallet.submitTx(fullySignedCbor)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // CIP-30 code -3 is "user declined". Mesh wraps the underlying error.
       if (/declined|rejected|user|cancel/i.test(msg)) {
         throw new Error('Cardano payment was declined — retry when ready.')
       }
-      if (/libsodium/i.test(msg)) {
+      if (/libsodium/i.test(msg) || /sodium/i.test(msg)) {
         throw new Error(
-          'Cardano crypto libs failed to initialize. Reload the page and retry — if it persists, your browser may be blocking WebAssembly (check extensions or strict privacy mode).'
+          'Cardano crypto libs failed to initialize. Reload the page and retry — if it persists, the dev server may have stale chunks (rm -rf apps/web/.next && restart).'
         )
       }
       throw new Error(`Cardano payment failed: ${msg}`)
     }
 
-    // 4. Wait for the tx to propagate, then ping backend. The backend now
-    //    polls Kupo internally for ~90s — but Cardano preprod blocks are
-    //    ~20s and a fresh tx can sit in mempool a while, so on a
-    //    "not_indexed" response we wait an extra 30s here and retry once.
-    //    Anything else (no_treasury_output / underpaid) is a hard fail and
-    //    we surface it immediately.
+    // 5. Tell the backend so Mongo reflects the sale. Failure here
+    //    doesn't roll back the on-chain mint — the buyer already has
+    //    their NFT. We surface a soft warning instead of throwing.
     setEvmTxStatus('minting')
-    const callObserved = () =>
-      reportCardanoMintObserved({
-        hexId,
-        txHash:         paymentTxHash,
-        cardanoAddress: buyerAddr,
-        purchaseId:     intent.purchaseId,
-      })
-
-    let observed: Awaited<ReturnType<typeof callObserved>>
+    let confirmed: Awaited<ReturnType<typeof confirmCardanoMintTx>> | null = null
     try {
-      observed = await callObserved()
+      confirmed = await confirmCardanoMintTx({ purchaseId: prepared.purchaseId, txHash })
     } catch (err) {
-      if (err instanceof CardanoMintVerificationError && err.diagnostic === 'not_indexed') {
-        // Block confirmation usually completes within ~30s on preprod;
-        // give it one more shot before bothering the user.
-        await new Promise((r) => setTimeout(r, 30_000))
-        observed = await callObserved()
-      } else if (err instanceof CardanoMintVerificationError && err.diagnostic === 'underpaid') {
-        const paid = err.paidLovelace != null ? `${(err.paidLovelace / 1_000_000).toFixed(2)} ADA` : 'less than expected'
-        throw new Error(`Payment underpaid (${paid}). Contact support — your tx hash is ${paymentTxHash.slice(0, 12)}…`)
-      } else if (err instanceof CardanoMintVerificationError && err.diagnostic === 'no_treasury_output') {
-        throw new Error(`Your tx (${paymentTxHash.slice(0, 12)}…) was found on-chain but didn't pay the Mālama treasury. Please contact support before retrying.`)
-      } else {
-        throw err
-      }
+      console.warn('[cardano] confirm-tx failed — NFT is on-chain but Mongo not updated', err)
     }
 
     syncNodeToMap(hexId)
 
-    const mint = observed.cardano
+    const explorerUrl = confirmed?.cardano.explorerUrl
+      || (prepared.network === 'mainnet'
+          ? `https://cardanoscan.io/transaction/${txHash}`
+          : `https://preprod.cardanoscan.io/transaction/${txHash}`)
+
     return {
       claimId,
       editionNumber,
-      // Cardano lane has no EVM token id — the cnft asset is the receipt.
       evmTokenId:      undefined,
       contractAddress: undefined,
-      txHash:          mint.txHash || paymentTxHash,
+      txHash,
       chain:           'cardano' as const,
-      explorerUrl:     mint.explorerUrl || observed.payment?.explorerUrl || '',
-      // Per-hex SVG rendered by dagwelldev-api — flagged as chain=cardano so
-      // the badge on the NFT card matches.
+      explorerUrl,
       nftImageUrl: nftImageUrl({
         hexId,
         chain:   'cardano',
         claimId,
       }),
-      cnftUrl: mint.explorerUrl,
-      tokenName: mint.assetName ? `ref ${mint.assetName.slice(0, 16)}…` : undefined,
+      cnftUrl:   explorerUrl,
+      tokenName: `ref ${prepared.assetName.slice(0, 16)}…`,
     }
   }
 

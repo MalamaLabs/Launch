@@ -306,6 +306,76 @@ export async function reportCardanoMintObserved(args: {
   throw new Error(errMsg)
 }
 
+// ─── Atomic Cardano lane (single-tx mint) ────────────────────────────────
+//
+// New flow that replaces reserve-then-pay-then-mint-observed. Backend
+// builds a tx that pays treasury AND mints the CIP-68 pair AND delivers
+// the user token to the buyer in ONE settlement; partial-signs it with
+// the policy key; FE adds buyer witness via CIP-30 signTx(cbor, true)
+// and submits directly. No Kupo polling — if the tx settles, the buyer
+// owns the NFT (atomic guarantee).
+
+export interface CardanoPrepareTxResponse {
+  ok:               true
+  purchaseId:       string
+  txCbor:           string                    // policy-signed CBOR; FE adds buyer witness
+  assetName:        string
+  refUnit:          string
+  userUnit:         string
+  contractAddress:  string
+  treasuryAddress:  string
+  network:          'mainnet' | 'preprod'
+  priceLovelace:    number
+}
+
+export interface CardanoConfirmTxResponse {
+  ok:        true
+  hexId:     string
+  mintPath:  'cardano_primary'
+  cardano: {
+    txHash:           string
+    assetName:        string
+    explorerUrl:      string
+    alreadyConfirmed?: boolean
+  }
+  payment?: {
+    txHash:       string
+    explorerUrl:  string
+    paidLovelace: number
+  }
+}
+
+/**
+ * POST /hexes/cardano/prepare-tx — backend returns a partial-signed atomic
+ * mint tx. Buyer adds witness client-side via CIP-30 signTx(cbor, true) and
+ * submits via the wallet (no second backend round-trip needed for submit).
+ */
+export async function prepareCardanoMintTx(args: {
+  hexId:        string
+  buyerAddress: string
+}): Promise<CardanoPrepareTxResponse> {
+  return apiFetch<CardanoPrepareTxResponse>(`/hexes/cardano/prepare-tx`, {
+    method: 'POST',
+    body:   JSON.stringify(args),
+  })
+}
+
+/**
+ * POST /hexes/cardano/confirm-tx — bookkeeping only. Tells the backend the
+ * txHash so Mongo records flip (hex → sold, purchase → minted). Skipping
+ * this call doesn't lose the buyer's NFT — they hold it on-chain regardless
+ * — but the marketplace UI won't reflect the sale until confirm runs.
+ */
+export async function confirmCardanoMintTx(args: {
+  purchaseId: string
+  txHash:     string
+}): Promise<CardanoConfirmTxResponse> {
+  return apiFetch<CardanoConfirmTxResponse>(`/hexes/cardano/confirm-tx`, {
+    method: 'POST',
+    body:   JSON.stringify(args),
+  })
+}
+
 // ─── POST /hexes/events/mint-observed ─────────────────────────────────────
 export interface MintObservedResponse {
   ok:          true

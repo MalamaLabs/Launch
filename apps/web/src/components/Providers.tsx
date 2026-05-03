@@ -6,12 +6,21 @@ import { WagmiProvider, createConfig, http } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
 import { injected, coinbaseWallet } from "wagmi/connectors";
 
+// Use Alchemy/Infura for the publicClient transport so estimateContractGas /
+// getTransactionCount / estimateFeesPerGas hit a reliable RPC. The default
+// http() falls back to public sepolia.base.org which routinely 502s and is
+// the actual root cause of "Failed to fetch" before the wallet's second
+// popup. MetaMask still uses ITS OWN configured RPC for eth_sendTransaction
+// — the URL here only controls our reads.
+const baseSepoliaRpc = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL;
+const baseRpc        = process.env.NEXT_PUBLIC_BASE_MAINNET_RPC_URL;
+
 const wagmiConfig = createConfig({
   chains: [base, baseSepolia],
   connectors: [injected(), coinbaseWallet({ appName: "Mālama Labs" })],
   transports: {
-    [base.id]: http(),
-    [baseSepolia.id]: http(),
+    [base.id]:        baseRpc        ? http(baseRpc)        : http(),
+    [baseSepolia.id]: baseSepoliaRpc ? http(baseSepoliaRpc) : http(),
   },
 });
 
