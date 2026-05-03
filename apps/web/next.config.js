@@ -40,8 +40,14 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@meshsdk/react', '@meshsdk/core-cst', '@cardano-sdk/crypto', 'libsodium-wrappers-sumo', 'libsodium-sumo'],
   turbopack: {
+    // NOTE: dev/build scripts MUST pass --webpack so we use the webpack alias
+    // block below. Turbopack ignores webpack:(config) and that's where the
+    // libsodium dedupe (the .sodium UMD bug fix) lives. Keeping these aliases
+    // here only as a safety net if someone runs Turbopack accidentally.
     resolveAlias: {
       'mapbox-gl': 'mapbox-gl',
+      'libsodium-wrappers-sumo': '../../node_modules/libsodium-wrappers-sumo/dist/modules-sumo-esm/libsodium-wrappers.mjs',
+      'libsodium-sumo': '../../node_modules/libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs',
       './libsodium-sumo.mjs': '../../node_modules/libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs',
       '@react-native-async-storage/async-storage': './src/lib/stubs/async-storage-stub.js',
     },
@@ -79,9 +85,28 @@ const nextConfig = {
         module: true,
       },
     }
+    // ── Dedupe libsodium to a single copy ─────────────────────────────────────
+    // npm leaves a NESTED libsodium-wrappers-sumo at
+    //   node_modules/@meshsdk/core/node_modules/libsodium-wrappers-sumo (v0.7.10)
+    // alongside the top-level v0.7.16. The nested 0.7.10 ships only an ES5 UMD
+    // CJS file that starts with `!function(e){...}(this)`. Under webpack 5's
+    // strict-mode chunks `this === undefined`, so the very first reference
+    // `e.sodium.onload` throws "Cannot read properties of undefined (reading
+    // 'sodium')" — that's the error the user sees AFTER the wallet pops, when
+    // Mesh's transitive @cardano-sdk/crypto require()s the broken nested copy.
+    //
+    // Forcing the bare specifier (with $ = exact-match) to the root v0.7.16
+    // ESM build dedupes everything: one libsodium instance, one ready promise,
+    // no UMD `this` issue. Same for libsodium-sumo so we don't accidentally
+    // load two WASM modules.
+    const rootNm = path.resolve(__dirname, '../../node_modules')
     config.resolve.alias = {
       ...config.resolve.alias,
-      './libsodium-sumo.mjs': path.resolve(__dirname, '../../node_modules/libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs'),
+      'libsodium-wrappers-sumo$': path.join(rootNm, 'libsodium-wrappers-sumo/dist/modules-sumo-esm/libsodium-wrappers.mjs'),
+      'libsodium-sumo$':          path.join(rootNm, 'libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs'),
+      // Existing relative-path alias kept as belt-and-suspenders for the
+      // `import './libsodium-sumo.mjs'` line inside libsodium-wrappers.mjs.
+      './libsodium-sumo.mjs':     path.join(rootNm, 'libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs'),
       // MetaMask SDK references React Native async-storage in browser bundle; not needed on web.
       '@react-native-async-storage/async-storage': path.resolve(__dirname, 'src/lib/stubs/async-storage-stub.js'),
     };
