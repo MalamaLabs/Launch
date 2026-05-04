@@ -39,19 +39,6 @@ const nextConfig = {
   serverExternalPackages: ['@meshsdk/core', '@sidan-lab/sidan-csl-rs-nodejs', '@magic-sdk/admin'],
   reactStrictMode: true,
   transpilePackages: ['@meshsdk/react', '@meshsdk/core-cst', '@cardano-sdk/crypto', 'libsodium-wrappers-sumo', 'libsodium-sumo'],
-  turbopack: {
-    // NOTE: dev/build scripts MUST pass --webpack so we use the webpack alias
-    // block below. Turbopack ignores webpack:(config) and that's where the
-    // libsodium dedupe (the .sodium UMD bug fix) lives. Keeping these aliases
-    // here only as a safety net if someone runs Turbopack accidentally.
-    resolveAlias: {
-      'mapbox-gl': 'mapbox-gl',
-      'libsodium-wrappers-sumo': '../../node_modules/libsodium-wrappers-sumo/dist/modules-sumo-esm/libsodium-wrappers.mjs',
-      'libsodium-sumo': '../../node_modules/libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs',
-      './libsodium-sumo.mjs': '../../node_modules/libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs',
-      '@react-native-async-storage/async-storage': './src/lib/stubs/async-storage-stub.js',
-    },
-  },
   allowedDevOrigins: ['192.168.1.126'],
   images: {
     remotePatterns: [
