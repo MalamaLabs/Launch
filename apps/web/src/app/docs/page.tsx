@@ -8,15 +8,15 @@ const cards = [
   {
     href: '/docs/tokenomics',
     title: 'MLMA Tokenomics Whitepaper',
-    desc: 'Supply cap, Genesis 200 allocation, vesting mechanics, multipliers, and governance.',
+    desc: 'Supply cap, Mālama Genesis allocation, vesting mechanics, multipliers, and governance.',
     icon: BookOpen,
     color: 'from-malama-accent/20 to-malama-accent-dim/10',
     border: 'border-malama-accent/30',
   },
   {
     href: '/docs/pricing-roi',
-    title: 'Pricing & ROI Summary',
-    desc: 'Entry breakdown, interactive scenarios, and payback estimates across demand tiers.',
+    title: 'Genesis 200 · Pricing & Reward Mechanics',
+    desc: 'Capital requirement, MLMA allocation, full reward formula with GX multiplier, and hex demand tiers.',
     icon: Calculator,
     color: 'from-blue-500/20 to-cyan-500/10',
     border: 'border-blue-500/30',
@@ -24,7 +24,7 @@ const cards = [
   {
     href: '/docs/phase-1-timeline',
     title: 'Phase 1 Timeline',
-    desc: 'From pre-sale through first rewards — milestones, boot, and vesting checkpoints.',
+    desc: 'Six milestones from pre-sale through first validation rewards, including the Genesis Hex Sale Audit gate.',
     icon: CalendarRange,
     color: 'from-violet-500/20 to-purple-500/10',
     border: 'border-violet-500/30',
@@ -32,7 +32,7 @@ const cards = [
   {
     href: '/docs/operators',
     title: 'Operator Documentation',
-    desc: 'Onboarding, mounting, dApp sync, Indigenous Stewardship (ISDA), and support.',
+    desc: 'Deployment checklist, hardware BOM, node operation pipeline, PONO credential, and support FAQ.',
     icon: Hexagon,
     color: 'from-amber-500/20 to-orange-500/10',
     border: 'border-amber-500/30',
@@ -47,7 +47,7 @@ export default function DocsHubPage() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-12"
       >
-        <p className="text-xs font-black uppercase tracking-widest text-malama-accent mb-3">Genesis 200</p>
+        <p className="text-xs font-black uppercase tracking-widest text-malama-accent mb-3">Mālama Genesis</p>
         <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-4">
           Documentation Hub
         </h1>
