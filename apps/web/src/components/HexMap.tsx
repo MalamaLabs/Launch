@@ -3,9 +3,11 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { cellToLatLng } from 'h3-js'
 import GenesisHexDetail from './GenesisHexDetail'
-import { formatGenesisListingUsd } from '@/lib/h3'
+import { formatGenesisListingUsd, GENESIS_ENTRY_USD } from '@/lib/h3'
 import { Loader2, Navigation } from 'lucide-react'
+import { API_BASE } from '@/lib/api'
 import type { GenesisHexListItem } from '@/lib/genesis-hexes'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 
@@ -90,7 +92,7 @@ export default function HexMap() {
 
       m.on('load', async () => {
       try {
-        const res = await fetch('/api/hexes')
+        const res = await fetch(`${API_BASE}/hexes/geojson`)
         const data = await res.json()
 
         // Omnichain Local State Synchronization
@@ -231,18 +233,60 @@ export default function HexMap() {
       const feature = e.features[0]
       const props = feature.properties as Record<string, unknown>
       const id = String(props?.id ?? '')
+      if (!id) return
 
       m.setFilter('hex-highlight', ['==', 'id', id])
       setDetailLoading(true)
       try {
-        const res = await fetch(`/api/hexes/by-id/${encodeURIComponent(id)}`)
-        if (!res.ok) {
-          m.setFilter('hex-highlight', ['==', 'id', ''])
-          return
+        // Build GenesisHexListItem from GeoJSON feature props (already in memory)
+        const [lat, lng] = cellToLatLng(id)
+        const baseItem: GenesisHexListItem = {
+          hexId:          id,
+          region:         String(props.region ?? 'idaho') as GenesisHexListItem['region'],
+          regionLabel:    String(props.regionLabel ?? props.zoneName ?? ''),
+          lat,
+          lng,
+          status:         props.status === 'reserved' ? 'reserved' : 'available',
+          sold:           props.sold === true || props.sold === 'true',
+          chain:          String(props.chain ?? 'base') as 'base' | 'cardano',
+          isHQ:           props.isHQ === true || props.isHQ === 'true',
+          dataScore:      Number(props.dataScore ?? 0),
+          startingBid:    Number(props.startingBid ?? 0),
+          activeSensors:  Number(props.activeSensors ?? 0),
+          uptime:         Number(props.uptime ?? 0),
+          overlap:        props.overlap === true || props.overlap === 'true',
+          genesisEdition: true,
+          genesisPriceUsd: GENESIS_ENTRY_USD,
         }
-        const j = (await res.json()) as { item: GenesisHexListItem; claim: GenesisClaim | null }
-        setDetailItem(j.item)
-        setDetailClaim(j.claim)
+
+        // Fetch live claim status from BE; fall through gracefully on failure
+        let item = baseItem
+        let claim: GenesisClaim | null = null
+        try {
+          const res = await fetch(`${API_BASE}/hexes/${encodeURIComponent(id)}`)
+          if (res.ok) {
+            const detail = await res.json()
+            const isSold = detail.status === 'sold' || detail.status === 'bound'
+            if (isSold) {
+              item = { ...baseItem, status: 'reserved', sold: true }
+              claim = {
+                claimId:       `G200-${String(detail.editionNumber ?? 0).padStart(3, '0')}`,
+                editionNumber: detail.editionNumber ?? 0,
+                hexId:         id,
+                chain:         detail.cardanoTxHash ? 'cardano' : 'base',
+                buyerAddress:  detail.ownerEvmAddress ?? '',
+                claimedAt:     detail.mintedAt ?? new Date(0).toISOString(),
+                txHash:        detail.baseTxHash ?? detail.cardanoTxHash,
+                evmTokenId:    detail.baseTokenId,
+              }
+            }
+          }
+        } catch {
+          // BE unreachable — surface hex with GeoJSON static status; Reserve button still works
+        }
+
+        setDetailItem(item)
+        setDetailClaim(claim)
         setDetailOpen(true)
       } catch {
         m.setFilter('hex-highlight', ['==', 'id', ''])
