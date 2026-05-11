@@ -188,6 +188,44 @@ export default function GenesisHexDetail({
           </ul>
         </section>
 
+        {item.sold && claim?.txHash && (
+          <section>
+            <h3 className="mb-3 text-xs font-black uppercase tracking-widest text-gray-500">On-chain record</h3>
+            <div className="space-y-2">
+              {claim.chain === 'base' || claim.txHash?.startsWith('0x') ? (
+                <a
+                  href={`https://${
+                    (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '').toLowerCase() === '0x6056ce7fa7d4cdd0ae70e1798764d6e345f902be'
+                      ? 'sepolia.basescan.org'
+                      : 'basescan.org'
+                  }/tx/${claim.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-900/70 p-3 text-xs font-bold text-blue-400 hover:border-blue-500/50 hover:text-blue-300"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                  View Base mint on Basescan
+                </a>
+              ) : null}
+              {claim.chain === 'cardano' && !claim.txHash?.startsWith('0x') ? (
+                <a
+                  href={`https://${
+                    (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '').toLowerCase() === '0x6056ce7fa7d4cdd0ae70e1798764d6e345f902be'
+                      ? 'preprod.cardanoscan.io'
+                      : 'cardanoscan.io'
+                  }/transaction/${claim.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-900/70 p-3 text-xs font-bold text-malama-accent hover:border-malama-accent/50"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                  View Cardano mint on Cardanoscan
+                </a>
+              ) : null}
+            </div>
+          </section>
+        )}
+
         {item.sold && (
           <p className="rounded-xl border border-gray-600/80 bg-gray-900/70 p-4 text-sm text-gray-300">
             <span className="font-black uppercase tracking-wider text-gray-400">SOLD</span>
