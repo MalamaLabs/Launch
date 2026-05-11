@@ -156,10 +156,26 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
     const eth = (window as any).ethereum
     if (eth) {
-      const chainId: string = await eth.request({ method: 'eth_chainId' })
-      if (chainId !== '0x14a34') {
-        await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x14a34' }] })
-        await new Promise(r => setTimeout(r, 1000))
+      const currentChain: string = await eth.request({ method: 'eth_chainId' })
+      if (currentChain !== '0x14a34') {
+        try {
+          await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x14a34' }] })
+        } catch (switchErr: any) {
+          if (switchErr.code === 4902) {
+            await eth.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x14a34',
+                chainName: 'Base Sepolia',
+                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://sepolia.base.org'],
+                blockExplorerUrls: ['https://sepolia.basescan.org'],
+              }],
+            })
+          } else {
+            throw new Error('Please switch to Base Sepolia in your wallet')
+          }
+        }
       }
     }
 
@@ -172,23 +188,31 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     const claimId          = `G200-${String(editionNumber).padStart(3, '0')}`
 
     setEvmTxStatus('approving')
-    const approveHash = await writeContractAsync({
-      address: USDC_CONTRACT,
-      abi: USDC_ABI,
-      functionName: 'approve',
-      args: [GENESIS_CONTRACT, priceRaw],
-      account: evmAddress,
-    })
+    let approveHash: `0x${string}`
+    try {
+      approveHash = await writeContractAsync({
+        address: USDC_CONTRACT,
+        abi: USDC_ABI,
+        functionName: 'approve',
+        args: [GENESIS_CONTRACT, priceRaw],
+      })
+    } catch (e: any) {
+      throw new Error('USDC approval rejected — please approve in your wallet')
+    }
     await publicClient.waitForTransactionReceipt({ hash: approveHash })
 
     setEvmTxStatus('minting')
-    const mintHash = await writeContractAsync({
-      address: GENESIS_CONTRACT,
-      abi: MHNL_ABI,
-      functionName: 'secureNode',
-      args: [hexId],
-      account: evmAddress,
-    })
+    let mintHash: `0x${string}`
+    try {
+      mintHash = await writeContractAsync({
+        address: GENESIS_CONTRACT,
+        abi: MHNL_ABI,
+        functionName: 'secureNode',
+        args: [hexId],
+      })
+    } catch (e: any) {
+      throw new Error('Mint transaction rejected or hex already taken on-chain')
+    }
     const receipt = await publicClient.waitForTransactionReceipt({ hash: mintHash })
 
     let evmTokenId = editionNumber
