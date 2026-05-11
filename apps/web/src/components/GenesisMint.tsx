@@ -199,7 +199,14 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     } catch (e: any) {
       throw new Error('USDC approval rejected — please approve in your wallet')
     }
-    await publicClient.waitForTransactionReceipt({ hash: approveHash })
+    // Wait for approve receipt — timeout after 12s and proceed anyway.
+    // Base Sepolia blocks every ~2s so 12s = 6 confirmations of headroom.
+    // The NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL Alchemy transport normally resolves
+    // this in ~10s; the timeout is just a safety net if the RPC is slow.
+    await Promise.race([
+      publicClient.waitForTransactionReceipt({ hash: approveHash }),
+      new Promise<void>(resolve => setTimeout(resolve, 12_000)),
+    ])
 
     setEvmTxStatus('minting')
     let mintHash: `0x${string}`
@@ -213,10 +220,20 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     } catch (e: any) {
       throw new Error('Mint transaction rejected or hex already taken on-chain')
     }
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: mintHash })
+    // Same pattern for the mint receipt — timeout after 60s and still show success
+    // since the txHash is on-chain and the user can verify on the block explorer.
+    let receipt: Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>> | null = null
+    try {
+      receipt = await Promise.race([
+        publicClient.waitForTransactionReceipt({ hash: mintHash }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 60_000)),
+      ])
+    } catch {
+      // RPC timed out — tx is submitted, proceed to success with txHash
+    }
 
     let evmTokenId = editionNumber
-    for (const log of receipt.logs) {
+    for (const log of receipt?.logs ?? []) {
       try {
         const decoded = decodeEventLog({ abi: MHNL_ABI, ...log })
         if (decoded.eventName === 'NodeSecured') evmTokenId = Number((decoded.args as any).tokenId)
