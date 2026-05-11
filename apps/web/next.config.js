@@ -39,7 +39,7 @@ const nextConfig = {
   serverExternalPackages: ['@meshsdk/core', '@sidan-lab/sidan-csl-rs-nodejs', '@magic-sdk/admin'],
   reactStrictMode: true,
   transpilePackages: ['@meshsdk/react', '@meshsdk/core-cst', '@cardano-sdk/crypto', 'libsodium-wrappers-sumo', 'libsodium-sumo'],
-  allowedDevOrigins: ['192.168.1.126'],
+  allowedDevOrigins: ['192.168.1.126','dev.dagwelldev.com'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'ipfs.io' },

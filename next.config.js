@@ -6,7 +6,7 @@ const nextConfig = {
       'mapbox-gl': 'mapbox-gl',
     },
   },
-  allowedDevOrigins: ['192.168.1.126'],
+  allowedDevOrigins: ['192.168.1.126, dev.dagwelldev.com']
   serverExternalPackages: [
     '@meshsdk/react',
     '@meshsdk/core',
