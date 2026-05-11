@@ -97,7 +97,7 @@ export function TokenomicsInteractive() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#0d1e35', border: '1px solid #374151', borderRadius: '12px' }}
                 labelStyle={{ color: '#e5e7eb' }}
-                formatter={(value: number | string | undefined) => [`${value ?? ''}M MLMA`, 'Emission']}
+                formatter={((value: unknown) => [`${value ?? ''}M MLMA`, 'Emission']) as any}
               />
               <Bar dataKey="mlma" fill="#c4f061" radius={[6, 6, 0, 0]} name="Annual emission" />
             </BarChart>
