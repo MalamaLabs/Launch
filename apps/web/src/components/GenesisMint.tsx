@@ -104,8 +104,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
   const cardanoReady = cardanoConnected || !!cardanoCip30Api
   const isSetupComplete = !!hexId && (
-    paymentMode === 'base' ? evmConnected :
+    paymentMode === 'base'    ? evmConnected :
     paymentMode === 'cardano' ? cardanoConnected :
+    // Stripe: needs a wallet address for NFT delivery + valid email for receipt
     evmConnected && cardEmailOk
   )
 
@@ -278,9 +279,29 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     }
   }
 
+  // ── Stripe Payment ──────────────────────────────────────────────────────
+  const handleStripePayment = async () => {
+    if (!hexId || !evmAddress) throw new Error('Connect wallet first')
+    if (!cardEmailOk) throw new Error('Enter a valid email address')
+    const origin = window.location.origin
+    const intent = await createStripeCheckout(hexId, evmAddress, cardEmail.trim(), {
+      successUrl: `${origin}/presale?stripe=success&session={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}`,
+      cancelUrl:  `${origin}/presale?stripe=cancel&hex=${encodeURIComponent(hexId)}`,
+    })
+    if (!intent.url) throw new Error('Stripe session creation failed')
+    window.location.href = intent.url
+    // Stripe redirects away — no successData to set here
+    return null
+  }
+
   const handlePayment = async () => {
     setLoading(true); setError('')
     try {
+      if (paymentMode === 'stripe') {
+        await handleStripePayment()
+        // handleStripePayment redirects to Stripe — execution stops here
+        return
+      }
       const result = paymentMode === 'cardano' ? await handleCardanoPayment() : await handleBasePayment()
       setSuccessData(result); setStep(5)
     } catch (err: any) { setError(err.message || 'Payment failed') } finally { setLoading(false); setEvmTxStatus('') }
@@ -354,6 +375,21 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   </button>
                 </div>
               </div>
+              {paymentMode === 'stripe' && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Email for receipt</p>
+                  <input
+                    type="email"
+                    value={cardEmail}
+                    onChange={e => setCardEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-malama-accent focus:outline-none"
+                  />
+                  <p className="text-[11px] text-gray-500">
+                    Your NFT will be minted to the connected Base wallet above after payment clears.
+                  </p>
+                </div>
+              )}
               <button onClick={() => setStep(3)} disabled={!isSetupComplete} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl disabled:opacity-50">Review Order</button>
             </motion.div>
           )}
