@@ -49,19 +49,19 @@ const nextConfig = {
   // `turbopack: {}` acknowledges Turbopack so Next.js 16 doesn't throw its
   // "Turbopack does not support custom webpack config" guard.
   //
-  // `resolveAlias` mirrors the webpack resolve.alias below so Turbopack can
-  // find the same deduplicated libsodium ESM builds.  The critical alias is
-  // './libsodium-sumo.mjs': the ESM build of libsodium-wrappers-sumo does
-  //   `import "./libsodium-sumo.mjs"`
-  // but that file doesn't exist inside libsodium-wrappers-sumo — it lives in
-  // the separate libsodium-sumo package.  Without this alias Turbopack fails
-  // the build with "Module not found: Can't resolve './libsodium-sumo.mjs'".
+  // `resolveAlias` dedupes libsodium to the root ESM builds for the BROWSER
+  // bundle (same role as the webpack resolve.alias below).
+  //
+  // NOTE: Turbopack's resolveAlias does NOT support relative-path keys for
+  // imports originating from inside node_modules (unlike webpack's global
+  // resolve.alias). The cross-package `import "./libsodium-sumo.mjs"` inside
+  // libsodium-wrappers.mjs is fixed instead by scripts/patch-libsodium.js,
+  // which creates a re-export bridge file at the missing path before each
+  // turbopack build. See the "build" script in package.json.
   turbopack: {
     resolveAlias: {
       'libsodium-wrappers-sumo': libsodiumWrappersEsm,
       'libsodium-sumo':          libsodiumSumoEsm,
-      // Relative-path alias for the cross-package import inside libsodium-wrappers.mjs
-      './libsodium-sumo.mjs':    libsodiumSumoEsm,
     },
   },
   allowedDevOrigins: ['192.168.1.126','dev.dagwelldev.com'],
