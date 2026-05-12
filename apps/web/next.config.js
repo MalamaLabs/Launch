@@ -78,7 +78,8 @@ const nextConfig = {
   // implemented yet".
   turbopack: {
     resolveAlias: {
-      '@cardano-sdk/core': '@cardano-sdk/core/dist/cjs/index.js',
+      // MetaMask SDK's browser bundle has a transitive import for the React Native
+      // async-storage module.  Stub it so the import resolves without error.
       '@react-native-async-storage/async-storage': './src/lib/stubs/async-storage-stub.js',
     },
   },
