@@ -1,6 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
@@ -27,15 +27,25 @@ const wagmiConfig = createConfig({
 const queryClient = new QueryClient();
 
 // ── Cardano / Mesh ─────────────────────────────────────────────────────────
-// ssr:false keeps libsodium / WASM out of the server bundler entirely.
-// This is what allows `next dev --turbopack` to work alongside the webpack
-// config — Turbopack never touches the WASM chunks.
-// The loading spinner is shown while the dynamic import resolves on the client.
-const MeshProviderDynamic = dynamic(
-  () => import("@meshsdk/react").then((m) => m.MeshProvider),
-  {
-    ssr: false,
-    loading: () => (
+// useEffect + import() keeps @meshsdk/react (and its libsodium/WASM chain)
+// out of the initial client bundle that Turbopack traces at build time.
+// next/dynamic with ssr:false is NOT sufficient — Turbopack still statically
+// resolves the component's full import graph when building the dynamic chunk.
+// The useEffect pattern defers the import until after hydration, so the
+// bundler never needs to resolve the cross-package relative libsodium import
+// (./libsodium-sumo.mjs) at build time.
+function CardanoProvider({ children }: { children: React.ReactNode }) {
+  const [MeshProvider, setMeshProvider] =
+    useState<React.ComponentType<{ children: React.ReactNode }> | null>(null);
+
+  useEffect(() => {
+    import("@meshsdk/react").then((m) => {
+      setMeshProvider(() => m.MeshProvider as React.ComponentType<{ children: React.ReactNode }>);
+    });
+  }, []);
+
+  if (!MeshProvider) {
+    return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center space-y-6 bg-malama-bg">
         <div className="h-16 w-16 animate-spin rounded-full border-4 border-malama-accent border-t-transparent shadow-[0_0_30px_rgba(196,240,97,0.2)]" />
         <div className="text-center">
@@ -47,15 +57,17 @@ const MeshProviderDynamic = dynamic(
           </p>
         </div>
       </div>
-    ),
-  },
-);
+    );
+  }
+
+  return <MeshProvider>{children}</MeshProvider>;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <MeshProviderDynamic>{children}</MeshProviderDynamic>
+        <CardanoProvider>{children}</CardanoProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
