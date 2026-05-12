@@ -59,9 +59,19 @@ const nextConfig = {
   // which creates a re-export bridge file at the missing path before each
   // turbopack build. See the "build" script in package.json.
   turbopack: {
+    // resolveAlias values must be MODULE SPECIFIERS, not absolute filesystem paths.
+    // Turbopack treats a leading "/" as a server-relative URL — passing path.join()
+    // absolute paths triggers "server relative imports are not implemented yet".
+    //
+    // These specifiers point to the same root ESM builds as the webpack alias below,
+    // but use the package-name/subpath form that Turbopack can resolve via node_modules.
+    //
+    // The cross-package "./libsodium-sumo.mjs" relative import inside
+    // libsodium-wrappers.mjs is handled separately by scripts/patch-libsodium.js
+    // (creates a bridge file at the expected path before each turbopack build).
     resolveAlias: {
-      'libsodium-wrappers-sumo': libsodiumWrappersEsm,
-      'libsodium-sumo':          libsodiumSumoEsm,
+      'libsodium-wrappers-sumo': 'libsodium-wrappers-sumo/dist/modules-sumo-esm/libsodium-wrappers.mjs',
+      'libsodium-sumo':          'libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs',
     },
   },
   allowedDevOrigins: ['192.168.1.126','dev.dagwelldev.com'],
