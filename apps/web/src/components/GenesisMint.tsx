@@ -86,10 +86,6 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
   const legalComplete = allLegalAcknowledged(legalAck)
   const cardEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cardEmail.trim())
-  // For Stripe: use the manually typed address, or fall back to connected MetaMask address.
-  // MetaMask connection is NOT required — a pasted Base address is sufficient.
-  const stripeEvmAddr = (stripeDeliveryAddress.trim() || evmAddress || '') as string
-  const stripeEvmOk   = /^0x[0-9a-fA-F]{40}$/.test(stripeEvmAddr)
 
   // ── Cardano Wallet Logic (Restored) ──────────────────────────────────────
   const { connected: cardanoConnected, wallet: cardanoWallet, name: cardanoWalletName, connect: connectCardano } = useCardanoWallet()
@@ -102,6 +98,11 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   } | null>(null)
 
   const { address: evmAddress, isConnected: evmConnected } = useEVMWallet()
+
+  // For Stripe: use the manually typed address, or fall back to connected MetaMask address.
+  // MetaMask connection is NOT required — a pasted Base address is sufficient.
+  const stripeEvmAddr = (stripeDeliveryAddress.trim() || evmAddress || '') as string
+  const stripeEvmOk   = /^0x[0-9a-fA-F]{40}$/.test(stripeEvmAddr)
   const { connect: connectEVM }    = useEVMConnect()
   const { disconnect: disconnectEVM } = useEVMDisconnect()
   const publicClient = usePublicClient()
