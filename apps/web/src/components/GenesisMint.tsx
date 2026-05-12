@@ -333,12 +333,56 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       <div className="p-8 md:p-12 min-h-[500px] relative flex flex-col justify-center text-left">
         <AnimatePresence mode="wait">
           {step === 1 && (
-            <motion.div key="step1" className="space-y-8">
-              <h2 className="text-4xl font-black text-white flex items-center gap-2"><MapPin className="text-malama-accent" /> Locate your HEX</h2>
-              <div className="p-8 border border-gray-800 bg-malama-deep rounded-2xl text-center">
-                <p className="font-mono text-amber-400">{hexId ?? 'None Selected'}</p>
+            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
+              <div className="mb-10 text-center">
+                <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-malama-accent">Step 1</p>
+                <h2 className="flex flex-wrap items-center justify-center gap-2 text-4xl font-black text-white">
+                  <MapPin className="h-10 w-10 shrink-0 text-malama-accent" />
+                  Locate your HEX
+                </h2>
+                <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-400">
+                  Choose one of the 200 Genesis hex territories on the live map. You need a hex selected before you can pay with crypto or card.
+                </p>
               </div>
-              <button onClick={() => setStep(2)} disabled={!hexId} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl">Continue</button>
+
+              <div className={`mx-auto grid max-w-xl gap-4 rounded-2xl border p-8 text-center transition-all ${hexId ? 'border-amber-500/40 bg-amber-500/10' : 'border-gray-800 bg-malama-deep'}`}>
+                <div className="flex justify-center">
+                  <div className={`flex h-16 w-16 items-center justify-center rounded-full ${hexId ? 'bg-amber-500/20' : 'bg-gray-800'}`}>
+                    <MapPin className={`h-8 w-8 ${hexId ? 'text-amber-400' : 'text-gray-500'}`} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Selected hex</h3>
+                  <p className={`mt-2 break-all font-mono text-sm ${hexId ? 'text-amber-400' : 'text-gray-500'}`}>
+                    {hexId ?? 'None yet — open the map to pick a territory'}
+                  </p>
+                </div>
+                <Link
+                  href="/map"
+                  className={`flex w-full items-center justify-center rounded-xl px-4 py-3 text-xs font-black transition-all ${
+                    hexId
+                      ? 'border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                      : 'bg-amber-500 text-black shadow-lg hover:scale-[1.02]'
+                  }`}
+                >
+                  {hexId ? 'Change hex on map →' : 'Open map to choose hex →'}
+                </Link>
+              </div>
+
+              <div className="flex flex-col items-center pt-4">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  disabled={!hexId}
+                  className={`w-full max-w-lg rounded-2xl py-5 text-xl font-black shadow-xl transition-all ${
+                    hexId
+                      ? 'bg-malama-accent text-black shadow-malama-accent/30 hover:scale-[1.02]'
+                      : 'cursor-not-allowed bg-gray-800 text-gray-600 opacity-50'
+                  }`}
+                >
+                  Continue
+                </button>
+              </div>
             </motion.div>
           )}
 
