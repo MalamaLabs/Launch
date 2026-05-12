@@ -34,21 +34,61 @@ function mergeRootEnv() {
 
 mergeRootEnv()
 
-const rootNm = path.resolve(__dirname, '../../node_modules')
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['@meshsdk/core', '@sidan-lab/sidan-csl-rs-nodejs', '@magic-sdk/admin'],
+  // @meshsdk/react and @meshsdk/core contain WASM and Node-specific paths;
+  // keep them out of the server bundle so Next.js loads them via native
+  // require() on the server side.  The client bundle is unaffected —
+  // Providers.tsx lazy-loads @meshsdk/react via useEffect so it only ever
+  // runs in the browser.
+  serverExternalPackages: [
+    '@meshsdk/core',
+    '@meshsdk/react',
+    '@sidan-lab/sidan-csl-rs-nodejs',
+    '@magic-sdk/admin',
+  ],
+
   reactStrictMode: true,
 
-  // ── Turbopack ─────────────────────────────────────────────────────────────
-  // turbopack: {} is required by Next.js 16 to acknowledge that a webpack hook
-  // exists alongside Turbopack.  No resolveAlias or transpilePackages needed —
-  // adding transpilePackages for the mesh/libsodium chain causes Turbopack to
-  // trace into package internals and trip over the cross-package relative import
-  // inside libsodium-wrappers-sumo's ESM build.  Without transpilePackages,
-  // Turbopack uses each package's declared exports entry and doesn't dig deeper.
-  turbopack: {},
+  // ── Turbopack ──────────────────────────────────────────────────────────────
+  //
+  // turbopack:{} is required by Next.js 16 when a webpack hook also exists.
+  //
+  // resolveAlias fixes:
+  //
+  // 1. @cardano-sdk/core — ESM circular dependency.
+  //    The ESM entry (dist/esm/index.js) has an internal circular dep:
+  //      index → Serialization → Scripts/NativeScript → Cardano → types/Script
+  //    Under Turbopack's strict ESM evaluation, this leaves Cardano.NativeScriptKind
+  //    undefined when @meshsdk/core-cst accesses it at module-evaluation time,
+  //    throwing "Cannot read properties of undefined (reading 'RequireAllOf')".
+  //    The CJS entry (dist/cjs/index.js) evaluates exports.Cardano at line 31
+  //    *before* exports.Serialization at line 38, so require() returns a fully-
+  //    populated exports object.  Turbopack's CJS-ESM interop exposes
+  //    exports.Cardano as a named export, so `import { Cardano } from
+  //    "@cardano-sdk/core"` continues to work correctly.
+  //
+  // 2. @react-native-async-storage/async-storage — MetaMask SDK browser bundle
+  //    has a transitive import for the RN async-storage module.  Stub it with a
+  //    no-op shim so the import resolves without pulling in React Native.
+  //
+  // NOTE: resolveAlias values must be module specifiers or relative paths —
+  // NOT absolute filesystem paths.  Turbopack treats a leading "/" as a
+  // server-relative URL and will throw "server relative imports are not
+  // implemented yet".
+  turbopack: {
+    resolveAlias: {
+      '@cardano-sdk/core': '@cardano-sdk/core/dist/cjs/index.js',
+      '@react-native-async-storage/async-storage': './src/lib/stubs/async-storage-stub.js',
+    },
+  },
+
+  // ── webpack (ghost hook) ───────────────────────────────────────────────────
+  // Next.js 16 requires a webpack hook to be present when turbopack:{} is
+  // declared, even though Turbopack is used for both dev and build.
+  // The hook is never invoked in normal operation — it exists solely to
+  // satisfy the Next.js 16 coexistence guard.
+  webpack: (config) => config,
 
   allowedDevOrigins: ['192.168.1.126', 'dev.dagwelldev.com'],
   images: {
@@ -58,43 +98,11 @@ const nextConfig = {
     ],
   },
   env: {
-    NEXT_PUBLIC_MAPBOX_TOKEN:          process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-    NEXT_PUBLIC_APP_URL:               process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_MAPBOX_TOKEN:           process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+    NEXT_PUBLIC_APP_URL:                process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_MAGIC_API_KEY:         process.env.NEXT_PUBLIC_MAGIC_API_KEY,
-    NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL:  process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL,
-  },
-
-  // ── webpack (used for `next dev --webpack` only) ───────────────────────────
-  // Ghost hook required: Next.js 16 throws "Turbopack does not support custom
-  // webpack config" unless turbopack:{} is also present.  The aliases below are
-  // only active when running with --webpack (local dev).  They dedupe libsodium
-  // to a single ESM copy so the nested UMD v0.7.10 inside @meshsdk/core doesn't
-  // shadow the root v0.7.16 and break wallet signing under strict-mode chunks.
-  webpack: (config) => {
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-      topLevelAwait: true,
-      layers: true,
-    }
-    config.output = {
-      ...config.output,
-      environment: {
-        ...config.output.environment,
-        asyncFunction: true,
-        dynamicImport: true,
-        module: true,
-      },
-    }
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'libsodium-wrappers-sumo$': path.join(rootNm, 'libsodium-wrappers-sumo/dist/modules-sumo-esm/libsodium-wrappers.mjs'),
-      'libsodium-sumo$':          path.join(rootNm, 'libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs'),
-      './libsodium-sumo.mjs':     path.join(rootNm, 'libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs'),
-      '@react-native-async-storage/async-storage': path.resolve(__dirname, 'src/lib/stubs/async-storage-stub.js'),
-    }
-    return config
+    NEXT_PUBLIC_MAGIC_API_KEY:          process.env.NEXT_PUBLIC_MAGIC_API_KEY,
+    NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL:   process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL,
   },
 }
 
