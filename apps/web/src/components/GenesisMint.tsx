@@ -80,11 +80,16 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [legalAck, setLegalAck]     = useState(initialLegalAck)
   const [paymentMode, setPaymentMode] = useState<PaymentLane>('base')
   const [cardEmail, setCardEmail]   = useState('')
+  const [stripeDeliveryAddress, setStripeDeliveryAddress] = useState('')
   const [mmImportOpen, setMmImportOpen] = useState(false)
   const [mmCopied, setMmCopied]     = useState<'address' | 'tokenId' | null>(null)
 
   const legalComplete = allLegalAcknowledged(legalAck)
   const cardEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cardEmail.trim())
+  // For Stripe: use the manually typed address, or fall back to connected MetaMask address.
+  // MetaMask connection is NOT required — a pasted Base address is sufficient.
+  const stripeEvmAddr = (stripeDeliveryAddress.trim() || evmAddress || '') as string
+  const stripeEvmOk   = /^0x[0-9a-fA-F]{40}$/.test(stripeEvmAddr)
 
   // ── Cardano Wallet Logic (Restored) ──────────────────────────────────────
   const { connected: cardanoConnected, wallet: cardanoWallet, name: cardanoWalletName, connect: connectCardano } = useCardanoWallet()
@@ -106,8 +111,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const isSetupComplete = !!hexId && (
     paymentMode === 'base'    ? evmConnected :
     paymentMode === 'cardano' ? cardanoConnected :
-    // Stripe: needs a wallet address for NFT delivery + valid email for receipt
-    evmConnected && cardEmailOk
+    // Stripe: valid email + valid EVM delivery address (MetaMask not required —
+    // buyer can paste any Base address, or connect MetaMask to auto-fill it).
+    cardEmailOk && stripeEvmOk
   )
 
   const syncNodeToMap = (id: string | null) => {
@@ -281,10 +287,11 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
   // ── Stripe Payment ──────────────────────────────────────────────────────
   const handleStripePayment = async () => {
-    if (!hexId || !evmAddress) throw new Error('Connect wallet first')
+    if (!hexId) throw new Error('No hex selected')
     if (!cardEmailOk) throw new Error('Enter a valid email address')
+    if (!stripeEvmOk) throw new Error('Enter a valid Base wallet address for NFT delivery')
     const origin = window.location.origin
-    const intent = await createStripeCheckout(hexId, evmAddress, cardEmail.trim(), {
+    const intent = await createStripeCheckout(hexId, stripeEvmAddr, cardEmail.trim(), {
       successUrl: `${origin}/presale?stripe=success&session={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}`,
       cancelUrl:  `${origin}/presale?stripe=cancel&hex=${encodeURIComponent(hexId)}`,
     })
@@ -308,8 +315,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   }
 
   const submitLabel = () => {
-    if (!loading) return `Confirm & Mint on ${paymentMode === 'base' ? 'Base' : 'Cardano'}`
-    return `${evmTxStatus}...`
+    if (loading) return `${evmTxStatus || 'Processing'}...`
+    if (paymentMode === 'stripe')  return 'Pay with Card →'
+    if (paymentMode === 'cardano') return 'Confirm & Mint on Cardano'
+    return 'Confirm & Mint on Base'
   }
 
   return (
@@ -376,18 +385,36 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 </div>
               </div>
               {paymentMode === 'stripe' && (
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Email for receipt</p>
-                  <input
-                    type="email"
-                    value={cardEmail}
-                    onChange={e => setCardEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-malama-accent focus:outline-none"
-                  />
-                  <p className="text-[11px] text-gray-500">
-                    Your NFT will be minted to the connected Base wallet above after payment clears.
-                  </p>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Email for receipt</p>
+                    <input
+                      type="email"
+                      value={cardEmail}
+                      onChange={e => setCardEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-malama-accent focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Base wallet for NFT delivery</p>
+                    <input
+                      type="text"
+                      value={stripeDeliveryAddress}
+                      onChange={e => setStripeDeliveryAddress(e.target.value)}
+                      placeholder={evmAddress ?? '0x…'}
+                      className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-malama-accent focus:outline-none font-mono"
+                    />
+                    {evmConnected && !stripeDeliveryAddress ? (
+                      <p className="text-[11px] text-malama-accent">
+                        Using connected wallet: {evmAddress?.slice(0, 8)}…{evmAddress?.slice(-6)}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-gray-500">
+                        Paste your Base (or Ethereum) address — your NFT mints here after payment clears. MetaMask not required.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
               <button onClick={() => setStep(3)} disabled={!isSetupComplete} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl disabled:opacity-50">Review Order</button>
