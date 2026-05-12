@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/patch-cardano-sdk.js && next dev",
+    "dev": "node scripts/patch-cardano-sdk.js && next dev --webpack",
     "build": "node scripts/patch-cardano-sdk.js && next build --turbopack",
     "start": "next start",
     "lint": "next lint"

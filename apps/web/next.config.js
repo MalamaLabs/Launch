@@ -36,59 +36,11 @@ mergeRootEnv()
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // @meshsdk/react and @meshsdk/core contain WASM and Node-specific paths;
-  // keep them out of the server bundle so Next.js loads them via native
-  // require() on the server side.  The client bundle is unaffected —
-  // Providers.tsx lazy-loads @meshsdk/react via useEffect so it only ever
-  // runs in the browser.
-  serverExternalPackages: [
-    '@meshsdk/core',
-    '@meshsdk/react',
-    '@sidan-lab/sidan-csl-rs-nodejs',
-    '@magic-sdk/admin',
-  ],
-
   reactStrictMode: true,
 
-  // ── Turbopack ──────────────────────────────────────────────────────────────
-  //
-  // turbopack:{} is required by Next.js 16 when a webpack hook also exists.
-  //
-  // resolveAlias fixes:
-  //
-  // 1. @cardano-sdk/core — ESM circular dependency.
-  //    The ESM entry (dist/esm/index.js) has an internal circular dep:
-  //      index → Serialization → Scripts/NativeScript → Cardano → types/Script
-  //    Under Turbopack's strict ESM evaluation, this leaves Cardano.NativeScriptKind
-  //    undefined when @meshsdk/core-cst accesses it at module-evaluation time,
-  //    throwing "Cannot read properties of undefined (reading 'RequireAllOf')".
-  //    The CJS entry (dist/cjs/index.js) evaluates exports.Cardano at line 31
-  //    *before* exports.Serialization at line 38, so require() returns a fully-
-  //    populated exports object.  Turbopack's CJS-ESM interop exposes
-  //    exports.Cardano as a named export, so `import { Cardano } from
-  //    "@cardano-sdk/core"` continues to work correctly.
-  //
-  // 2. @react-native-async-storage/async-storage — MetaMask SDK browser bundle
-  //    has a transitive import for the RN async-storage module.  Stub it with a
-  //    no-op shim so the import resolves without pulling in React Native.
-  //
-  // NOTE: resolveAlias values must be module specifiers or relative paths —
-  // NOT absolute filesystem paths.  Turbopack treats a leading "/" as a
-  // server-relative URL and will throw "server relative imports are not
-  // implemented yet".
-  turbopack: {
-    resolveAlias: {
-      // MetaMask SDK's browser bundle has a transitive import for the React Native
-      // async-storage module.  Stub it so the import resolves without error.
-      '@react-native-async-storage/async-storage': './src/lib/stubs/async-storage-stub.js',
-    },
-  },
-
-  // ── webpack (ghost hook) ───────────────────────────────────────────────────
-  // Next.js 16 requires a webpack hook to be present when turbopack:{} is
-  // declared, even though Turbopack is used for both dev and build.
-  // The hook is never invoked in normal operation — it exists solely to
-  // satisfy the Next.js 16 coexistence guard.
+  // turbopack:{} enables Turbopack for dev and build.
+  // webpack ghost hook is required by Next.js 16 when turbopack:{} is declared.
+  turbopack: {},
   webpack: (config) => config,
 
   allowedDevOrigins: ['192.168.1.126', 'dev.dagwelldev.com'],
