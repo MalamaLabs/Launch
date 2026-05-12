@@ -39,6 +39,13 @@ const nextConfig = {
   serverExternalPackages: ['@meshsdk/core', '@sidan-lab/sidan-csl-rs-nodejs', '@magic-sdk/admin'],
   reactStrictMode: true,
   transpilePackages: ['@meshsdk/react', '@meshsdk/core-cst', '@cardano-sdk/crypto', 'libsodium-wrappers-sumo', 'libsodium-sumo'],
+  // Acknowledge Turbopack so Next.js 16 doesn't throw the "Turbopack does not
+  // support custom webpack config" guard. The webpack hook below is still used
+  // for production builds (`next build --webpack`) and local dev
+  // (`next dev --webpack`). For Turbopack dev (`next dev --turbopack`) the
+  // dynamic ssr:false imports in Providers.tsx / GenesisMintDynamic.tsx prevent
+  // WASM from ever reaching the server bundler, which is what used to explode.
+  turbopack: {},
   allowedDevOrigins: ['192.168.1.126','dev.dagwelldev.com'],
   images: {
     remotePatterns: [
