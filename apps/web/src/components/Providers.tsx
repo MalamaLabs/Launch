@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
@@ -27,25 +27,23 @@ const wagmiConfig = createConfig({
 const queryClient = new QueryClient();
 
 // ── Cardano / Mesh ─────────────────────────────────────────────────────────
-// useEffect + import() keeps @meshsdk/react (and its libsodium/WASM chain)
-// out of the initial client bundle that Turbopack traces at build time.
-// next/dynamic with ssr:false is NOT sufficient — Turbopack still statically
-// resolves the component's full import graph when building the dynamic chunk.
-// The useEffect pattern defers the import until after hydration, so the
-// bundler never needs to resolve the cross-package relative libsodium import
-// (./libsodium-sumo.mjs) at build time.
-function CardanoProvider({ children }: { children: React.ReactNode }) {
-  const [MeshProvider, setMeshProvider] =
-    useState<React.ComponentType<{ children: React.ReactNode }> | null>(null);
-
-  useEffect(() => {
-    import("@meshsdk/react").then((m) => {
-      setMeshProvider(() => m.MeshProvider as React.ComponentType<{ children: React.ReactNode }>);
-    });
-  }, []);
-
-  if (!MeshProvider) {
-    return (
+// next/dynamic with ssr:false keeps @meshsdk/react (and its libsodium/WASM
+// chain) out of the SSR render entirely.
+//
+// The Turbopack BUILD works because:
+//   1. scripts/patch-libsodium.js creates the missing bridge file before build
+//      (libsodium-wrappers.mjs does `import "./libsodium-sumo.mjs"` — that file
+//       doesn't exist in its own package, so the script creates a re-export shim)
+//   2. turbopack.resolveAlias uses module-specifier values (NOT absolute paths —
+//       Turbopack treats leading "/" as a server-relative URL, which it rejects)
+//
+// The useEffect + import() pattern was a failed workaround (Turbopack statically
+// traces all import() calls regardless). next/dynamic is the correct pattern.
+const MeshProviderDynamic = dynamic(
+  () => import("@meshsdk/react").then((m) => m.MeshProvider),
+  {
+    ssr: false,
+    loading: () => (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center space-y-6 bg-malama-bg">
         <div className="h-16 w-16 animate-spin rounded-full border-4 border-malama-accent border-t-transparent shadow-[0_0_30px_rgba(196,240,97,0.2)]" />
         <div className="text-center">
@@ -57,17 +55,15 @@ function CardanoProvider({ children }: { children: React.ReactNode }) {
           </p>
         </div>
       </div>
-    );
-  }
-
-  return <MeshProvider>{children}</MeshProvider>;
-}
+    ),
+  },
+);
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <CardanoProvider>{children}</CardanoProvider>
+        <MeshProviderDynamic>{children}</MeshProviderDynamic>
       </QueryClientProvider>
     </WagmiProvider>
   );
