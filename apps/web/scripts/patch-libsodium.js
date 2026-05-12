@@ -65,12 +65,6 @@ const wrappersSumoEsmDir = resolve(rootNm, 'libsodium-wrappers-sumo/dist/modules
 const bridgeFile         = resolve(wrappersSumoEsmDir, 'libsodium-sumo.mjs')
 const sumoEsm            = resolve(rootNm, 'libsodium-sumo/dist/modules-sumo-esm/libsodium-sumo.mjs')
 
-// Already patched
-if (existsSync(bridgeFile)) {
-  console.log('[patch-libsodium] Bridge file already in place — nothing to do.')
-  process.exit(0)
-}
-
 // Source file must exist
 if (!existsSync(sumoEsm)) {
   console.error('[patch-libsodium] ERROR: libsodium-sumo ESM not found at:', sumoEsm)
@@ -83,6 +77,15 @@ if (!existsSync(sumoEsm)) {
 //  in a hoisted monorepo, but we compute it to be safe).
 const relPath = relative(wrappersSumoEsmDir, sumoEsm).replace(/\\/g, '/')
 
+// Always overwrite — ensures the correct import form is used even if a stale
+// bridge exists from a previous build.
+//
+// Use `import mod from '...'; export default mod;` rather than the re-export
+// shorthand `export { default } from '...'`.  The shorthand can silently
+// produce `undefined` for WASM modules that don't declare a named `default`
+// export in their module record — the direct import form binds the live
+// namespace object instead and guarantees libsodium-wrappers.mjs receives a
+// non-null value for `e` in `import e from "./libsodium-sumo.mjs"`.
 writeFileSync(
   bridgeFile,
   `// Auto-generated bridge — do not edit by hand.\n` +
@@ -92,12 +95,20 @@ writeFileSync(
   `// own dist directory, but the actual module lives in the separate libsodium-sumo\n` +
   `// package.  webpack handles this via a global resolve.alias; Turbopack does not\n` +
   `// support relative-path alias keys for imports from within node_modules.\n` +
-  `// This bridge file provides the expected export so both bundlers can find it.\n` +
-  `export { default } from '${relPath}';\n` +
-  `export * from '${relPath}';\n`,
+  `// This bridge file provides the expected binding so both bundlers can find it.\n` +
+  `//\n` +
+  `// Direct import + re-export (not shorthand) so WASM module namespace is\n` +
+  `// correctly bound as the default export even if the module has no explicit\n` +
+  `// "export default" declaration.\n` +
+  `import libsodiumModule from '${relPath}';\n` +
+  `export default libsodiumModule;\n`,
   'utf8'
 )
 
-console.log('[patch-libsodium] ✓ Created bridge file:')
+if (existsSync(bridgeFile)) {
+  console.log('[patch-libsodium] ✓ Updated bridge file:')
+} else {
+  console.log('[patch-libsodium] ✓ Created bridge file:')
+}
 console.log('  ', bridgeFile)
 console.log('  → re-exports from', sumoEsm)
