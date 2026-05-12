@@ -43,8 +43,8 @@
 const fs   = require('fs')
 const path = require('path')
 
-// Resolve from workspace root so this works from any cwd
-const ROOT = path.resolve(__dirname, '../../../..')
+// Resolve monorepo root: __dirname = apps/web/scripts, so ../../.. = repo root
+const ROOT = path.resolve(__dirname, '../../..')
 
 function findPkg(pkgPath) {
   // Try workspace root node_modules first, then local node_modules
