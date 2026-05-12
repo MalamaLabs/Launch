@@ -56,15 +56,41 @@ export function nftImageUrl(args: {
 
 type Json = Record<string, unknown>
 
-/** Thin fetch wrapper that throws on non-ok responses with a useful message. */
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  })
+/**
+ * Thin fetch wrapper that throws on non-ok responses with a useful message.
+ *
+ * Always applies a timeout (default 8 s) so server-component calls on pages
+ * like /presale never hang indefinitely when the backend is slow/unreachable.
+ * The timeout is intentionally generous enough to survive a cold NAS wake but
+ * short enough that the page fails fast rather than blocking the Node.js
+ * render pipeline.
+ *
+ * Callers that need Next.js ISR caching can pass `next: { revalidate: N }` in
+ * `init` — Next.js extends RequestInit with this non-standard field.
+ */
+async function apiFetch<T>(path: string, init: RequestInit = {}, timeoutMs = 8_000): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      // Caller may supply their own signal (e.g. for request cancellation);
+      // if so, respect it but also apply our own timeout via abort().
+      signal: (init as RequestInit & { signal?: AbortSignal }).signal ?? controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init.headers ?? {}),
+      },
+    })
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') {
+      throw new Error(`API request to ${path} timed out after ${timeoutMs}ms`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   const text = await res.text()
   let body: Json | string
   try { body = text ? JSON.parse(text) : {} } catch { body = text }
@@ -505,5 +531,12 @@ export interface SaleState {
 }
 
 export async function getSaleState(): Promise<SaleState> {
-  return apiFetch<SaleState>(`/hexes/sale-state`)
+  // Cache at the Next.js ISR layer for 30 s so the /presale server component
+  // doesn't fire a fresh backend fetch on every page load.  The 8 s apiFetch
+  // timeout still applies on cache-miss / revalidation so a slow backend
+  // never blocks the render for longer than that.
+  return apiFetch<SaleState>(`/hexes/sale-state`, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    next: { revalidate: 30 },
+  } as any)
 }
