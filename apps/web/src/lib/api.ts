@@ -160,20 +160,24 @@ export interface StripePurchaseIntent {
  */
 export async function createStripeCheckout(
   hexId: string,
-  evmAddress: string,
+  /** Base/EVM address for NFT delivery. Optional — backend holds NFT in custody if omitted. */
+  evmAddress: string | undefined,
   email: string,
   redirects: { successUrl: string; cancelUrl: string },
+  /** Cardano address for CIP-68 delivery. If set and evmAddress is absent, mints on Cardano. */
+  cardanoAddress?: string,
 ): Promise<StripePurchaseIntent> {
   return apiFetch<StripePurchaseIntent>(
     `/hexes/${encodeURIComponent(hexId)}/purchase-intent`,
     {
       method: 'POST',
       body: JSON.stringify({
-        method:     'stripe',
-        evmAddress,
+        method:         'stripe',
+        evmAddress:     evmAddress || undefined,
+        cardanoAddress: cardanoAddress || undefined,
         email,
-        successUrl: redirects.successUrl,
-        cancelUrl:  redirects.cancelUrl,
+        successUrl:     redirects.successUrl,
+        cancelUrl:      redirects.cancelUrl,
       }),
     },
   )

@@ -51,11 +51,16 @@ const nextConfig = {
     ],
   },
   env: {
-    NEXT_PUBLIC_MAPBOX_TOKEN:           process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-    NEXT_PUBLIC_APP_URL:                process.env.NEXT_PUBLIC_APP_URL,
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_MAGIC_API_KEY:          process.env.NEXT_PUBLIC_MAGIC_API_KEY,
-    NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL:   process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL,
+    NEXT_PUBLIC_MAPBOX_TOKEN:                        process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+    NEXT_PUBLIC_APP_URL:                             process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:              process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_MAGIC_API_KEY:                       process.env.NEXT_PUBLIC_MAGIC_API_KEY,
+    NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL:                process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL,
+    // GenesisValidator contract addresses — used for OpenSea asset deep-links
+    NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_SEPOLIA:   process.env.GENESIS_VALIDATOR_ADDRESS_SEPOLIA,
+    NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_MAINNET:   process.env.GENESIS_VALIDATOR_ADDRESS_MAINNET,
+    // Discord invite for operator community
+    NEXT_PUBLIC_DISCORD_INVITE:                      process.env.NEXT_PUBLIC_DISCORD_INVITE,
   },
 }
 
