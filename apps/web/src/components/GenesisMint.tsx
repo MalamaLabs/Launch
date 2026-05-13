@@ -112,9 +112,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const isSetupComplete = !!hexId && (
     paymentMode === 'base'    ? evmConnected :
     paymentMode === 'cardano' ? cardanoConnected :
-    // Stripe: valid email + valid EVM delivery address (MetaMask not required —
-    // buyer can paste any Base address, or connect MetaMask to auto-fill it).
-    cardEmailOk && stripeEvmOk
+    // Stripe: only a valid email is required. Delivery address is optional —
+    // the backend will hold the NFT in custody when none is provided.
+    cardEmailOk
   )
 
   const syncNodeToMap = (id: string | null) => {
@@ -290,15 +290,28 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const handleStripePayment = async () => {
     if (!hexId) throw new Error('No hex selected')
     if (!cardEmailOk) throw new Error('Enter a valid email address')
-    if (!stripeEvmOk) throw new Error('Enter a valid Base wallet address for NFT delivery')
+
     const origin = window.location.origin
-    const intent = await createStripeCheckout(hexId, stripeEvmAddr, cardEmail.trim(), {
-      successUrl: `${origin}/presale?stripe=success&session={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}`,
-      cancelUrl:  `${origin}/presale?stripe=cancel&hex=${encodeURIComponent(hexId)}`,
-    })
+
+    // Resolve delivery address: connected Cardano → Cardano chain.
+    // Connected/typed EVM → Base chain. Neither → bank wallet custody.
+    const deliveryEvm      = stripeEvmOk ? stripeEvmAddr : undefined
+    const deliveryCardano  = cardanoConnected
+      ? await cardanoWallet?.getChangeAddress().catch(() => undefined)
+      : undefined
+
+    const intent = await createStripeCheckout(
+      hexId,
+      deliveryEvm,
+      cardEmail.trim(),
+      {
+        successUrl: `${origin}/presale/card-complete?session_id={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}`,
+        cancelUrl:  `${origin}/presale?stripe=cancel&hex=${encodeURIComponent(hexId)}`,
+      },
+      deliveryCardano,
+    )
     if (!intent.url) throw new Error('Stripe session creation failed')
     window.location.href = intent.url
-    // Stripe redirects away — no successData to set here
     return null
   }
 
@@ -432,7 +445,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               {paymentMode === 'stripe' && (
                 <div className="space-y-5">
                   <div className="space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Email for receipt</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Email for receipt *</p>
                     <input
                       type="email"
                       value={cardEmail}
@@ -441,22 +454,49 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                       className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-malama-accent focus:outline-none"
                     />
                   </div>
+
+                  {/* Delivery address — optional */}
                   <div className="space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Base wallet for NFT delivery</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                      NFT delivery address <span className="text-gray-600 normal-case font-normal">(optional)</span>
+                    </p>
+
+                    {/* Show Cardano wallet if connected */}
+                    {cardanoConnected && (
+                      <div className="flex items-center gap-3 rounded-xl border border-malama-accent/30 bg-malama-accent/5 px-4 py-3">
+                        <span className="text-malama-accent text-lg">₳</span>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-bold text-malama-accent uppercase tracking-wider">Cardano wallet connected</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">NFT will mint as CIP-68 to your {cardanoWalletName} wallet</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* EVM address input */}
                     <input
                       type="text"
                       value={stripeDeliveryAddress}
                       onChange={e => setStripeDeliveryAddress(e.target.value)}
-                      placeholder={evmAddress ?? '0x…'}
+                      placeholder={evmAddress ?? '0x… Base wallet address'}
                       className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-malama-accent focus:outline-none font-mono"
                     />
-                    {evmConnected && !stripeDeliveryAddress ? (
+
+                    {/* Status hint */}
+                    {cardanoConnected ? (
+                      <p className="text-[11px] text-gray-500">
+                        Leave blank to use your Cardano wallet above. Paste a Base address to override and mint on Base instead.
+                      </p>
+                    ) : stripeEvmOk ? (
+                      <p className="text-[11px] text-malama-accent">
+                        ✓ NFT mints on Base to {stripeEvmAddr.slice(0, 8)}…{stripeEvmAddr.slice(-6)}
+                      </p>
+                    ) : evmConnected ? (
                       <p className="text-[11px] text-malama-accent">
                         Using connected wallet: {evmAddress?.slice(0, 8)}…{evmAddress?.slice(-6)}
                       </p>
                     ) : (
                       <p className="text-[11px] text-gray-500">
-                        Paste your Base (or Ethereum) address — your NFT mints here after payment clears. MetaMask not required.
+                        Paste a Base wallet address to receive the NFT directly. Leave blank and we'll hold it in custody — you can claim it later.
                       </p>
                     )}
                   </div>
