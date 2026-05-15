@@ -24,6 +24,7 @@
     "react-dom": "^18",
     "tailwind-merge": "^2.2.0",
     "viem": "^2.9.0",
+    "magic-sdk": "^33.6.3",
     "wagmi": "^2.5.0"
   },
   "devDependencies": {

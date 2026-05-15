@@ -5,6 +5,7 @@ import { WagmiProvider, createConfig, http } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
 import { injected, coinbaseWallet } from "wagmi/connectors";
 import dynamic from "next/dynamic";
+import { MagicProvider } from "@/components/magic/MagicProvider";
 
 const baseSepoliaRpc = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL;
 const baseRpc        = process.env.NEXT_PUBLIC_BASE_MAINNET_RPC_URL;
@@ -57,7 +58,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <CardanoProvider>{children}</CardanoProvider>
+        <MagicProvider>
+          <CardanoProvider>{children}</CardanoProvider>
+        </MagicProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )

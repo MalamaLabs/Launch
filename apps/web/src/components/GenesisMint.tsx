@@ -36,6 +36,7 @@ import {
   initialLegalAck,
   allLegalAcknowledged,
 } from '@/components/legal/PurchaseLegalAcknowledgement'
+import { useMagic } from '@/components/magic/MagicProvider'
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
 const GENESIS_CONTRACT_FALLBACK = (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '0x2222222222222222222222222222222222222222') as `0x${string}`
@@ -98,6 +99,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   } | null>(null)
 
   const { address: evmAddress, isConnected: evmConnected } = useEVMWallet()
+  const { magic } = useMagic()
 
   // For Stripe: use the manually typed address, or fall back to connected MetaMask address.
   // MetaMask connection is NOT required — a pasted Base address is sufficient.
@@ -294,18 +296,36 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     const origin = window.location.origin
 
     // Resolve delivery address: connected Cardano → Cardano chain.
-    // Connected/typed EVM → Base chain. Neither → bank wallet custody.
-    const deliveryEvm      = stripeEvmOk ? stripeEvmAddr : undefined
-    const deliveryCardano  = cardanoConnected
+    // Connected/typed EVM → Base chain. Neither → try Magic OTP.
+    let deliveryEvm: string | undefined = stripeEvmOk ? stripeEvmAddr : undefined
+    const deliveryCardano = cardanoConnected
       ? await cardanoWallet?.getChangeAddress().catch(() => undefined)
       : undefined
+
+    // No wallet connected and no address typed → prompt Magic Email OTP
+    // so the buyer gets an embedded Base wallet without needing MetaMask.
+    // If Magic isn't configured or the buyer dismisses the modal, fall
+    // through to bank-wallet custody (same behaviour as before this patch).
+    let usedMagic = false
+    if (!deliveryEvm && !deliveryCardano && magic) {
+      try {
+        await magic.auth.loginWithEmailOTP({ email: cardEmail.trim() })
+        const info = await magic.user.getInfo()
+        if (info.publicAddress) {
+          deliveryEvm = info.publicAddress
+          usedMagic = true
+        }
+      } catch {
+        // User dismissed OTP modal or Magic errored — continue custodial
+      }
+    }
 
     const intent = await createStripeCheckout(
       hexId,
       deliveryEvm,
       cardEmail.trim(),
       {
-        successUrl: `${origin}/presale/card-complete?session_id={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}`,
+        successUrl: `${origin}/presale/card-complete?session_id={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}${usedMagic ? '&magic=1' : ''}`,
         cancelUrl:  `${origin}/presale?stripe=cancel&hex=${encodeURIComponent(hexId)}`,
       },
       deliveryCardano,
@@ -493,6 +513,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     ) : evmConnected ? (
                       <p className="text-[11px] text-malama-accent">
                         Using connected wallet: {evmAddress?.slice(0, 8)}…{evmAddress?.slice(-6)}
+                      </p>
+                    ) : magic ? (
+                      <p className="text-[11px] text-gray-500">
+                        Paste a Base address, or leave blank — we'll create a free wallet for your email when you click Pay.
                       </p>
                     ) : (
                       <p className="text-[11px] text-gray-500">

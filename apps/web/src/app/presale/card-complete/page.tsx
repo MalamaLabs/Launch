@@ -21,6 +21,7 @@ import {
   ExternalLink,
   Loader2,
   MessageCircle,
+  Sparkles,
   Wallet,
   ArrowLeft,
 } from 'lucide-react'
@@ -107,7 +108,15 @@ function ExternalButton({
 
 // ─── confirmed state ─────────────────────────────────────────────────────────
 
-function ConfirmedView({ detail, sessionId }: { detail: HexDetail; sessionId: string | null }) {
+function ConfirmedView({
+  detail,
+  sessionId,
+  isMagic,
+}: {
+  detail: HexDetail
+  sessionId: string | null
+  isMagic: boolean
+}) {
   const openSeaUrl = buildOpenSeaUrl(detail)
   const hasBase = !!detail.baseExplorerUrl
   const hasCardano = !!detail.cardanoExplorerUrl
@@ -162,6 +171,28 @@ function ConfirmedView({ detail, sessionId }: { detail: HexDetail; sessionId: st
           {detail.cardanoMirrorStatus === 'minted' ? ' and anchored to Cardano' : ''}.
           The full NFT card and metadata live on the detail page.
         </p>
+
+        {/* ── Magic wallet notice ── */}
+        {isMagic && (
+          <div className="w-full flex items-start gap-3 rounded-xl border border-violet-700/40 bg-violet-950/30 px-4 py-3.5 mb-6 text-left">
+            <Sparkles className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[13px] font-bold text-violet-300 mb-0.5">NFT is in your Magic wallet</p>
+              <p className="text-[11px] text-violet-400/80 leading-relaxed">
+                Sign in at{' '}
+                <a
+                  href="https://wallet.magic.link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-violet-300"
+                >
+                  wallet.magic.link
+                </a>{' '}
+                with the same email address to access your NFT, or import the private key into MetaMask.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── primary CTA ── */}
         <Link
@@ -250,6 +281,7 @@ function CardCompleteInner() {
   const params = useSearchParams()
   const hexId = params.get('hex')
   const sessionId = params.get('session_id')
+  const isMagic = params.get('magic') === '1'
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' })
 
   useEffect(() => {
@@ -349,7 +381,7 @@ function CardCompleteInner() {
   }
 
   // ── confirmed ──
-  return <ConfirmedView detail={phase.detail} sessionId={sessionId} />
+  return <ConfirmedView detail={phase.detail} sessionId={sessionId} isMagic={isMagic} />
 }
 
 // ─── page export ─────────────────────────────────────────────────────────────
