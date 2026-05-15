@@ -310,7 +310,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     if (!deliveryEvm && !deliveryCardano && magic) {
       try {
         await magic.auth.loginWithEmailOTP({ email: cardEmail.trim() })
-        const info = await magic.user.getInfo()
+        const info = await magic.user.getInfo() as { publicAddress?: string | null }
         if (info.publicAddress) {
           deliveryEvm = info.publicAddress
           usedMagic = true
