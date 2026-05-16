@@ -34,9 +34,25 @@ function getContractAddress(network: string | undefined): string | undefined {
   return process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_SEPOLIA
 }
 
-/** Infer Cardano network from the cardanoscan explorer URL the backend returns. */
+/**
+ * Infer Cardano network. Prefer the stored cardanoExplorerUrl (contains "preprod"
+ * for testnet). Fall back to baseNetwork: sepolia → preprod, mainnet → mainnet.
+ */
 function cardanoNetFromDetail(detail: HexDetail): 'preprod' | 'mainnet' {
-  return detail.cardanoExplorerUrl?.includes('preprod') ? 'preprod' : 'mainnet'
+  if (detail.cardanoExplorerUrl) {
+    return detail.cardanoExplorerUrl.includes('preprod') ? 'preprod' : 'mainnet'
+  }
+  return detail.baseNetwork === 'mainnet' ? 'mainnet' : 'preprod'
+}
+
+/** CardanoScan URL — stored value preferred, derived from txHash when absent. */
+function buildCardanoScanUrl(detail: HexDetail): string | null {
+  if (detail.cardanoExplorerUrl) return detail.cardanoExplorerUrl
+  if (!detail.cardanoTxHash) return null
+  const net = cardanoNetFromDetail(detail)
+  return net === 'mainnet'
+    ? `https://cardanoscan.io/tx/${detail.cardanoTxHash}`
+    : `https://preprod.cardanoscan.io/tx/${detail.cardanoTxHash}`
 }
 
 /** Dagwelldev explorer URL for the Cardano mint tx. Null when no Cardano tx yet. */
@@ -130,9 +146,10 @@ function ConfirmedView({
   isMagic: boolean
 }) {
   const openSeaUrl = buildOpenSeaUrl(detail)
+  const cardanoScanUrl = buildCardanoScanUrl(detail)
   const dagwelldevUrl = buildDagwelldevUrl(detail)
   const hasBase = !!detail.baseExplorerUrl
-  const hasCardano = !!detail.cardanoExplorerUrl
+  const hasCardano = !!cardanoScanUrl
   const hasMetaMask = !!(getContractAddress(detail.baseNetwork) && detail.baseTokenId != null)
   const discordUrl = process.env.NEXT_PUBLIC_DISCORD_INVITE || 'https://discord.gg/malamalabs'
 
@@ -229,11 +246,11 @@ function ConfirmedView({
             )}
             {hasCardano && (
               <ExternalButton
-                href={detail.cardanoExplorerUrl!}
+                href={cardanoScanUrl!}
                 className="flex-1 border border-zinc-700 bg-zinc-900 text-gray-200 hover:border-zinc-500 hover:bg-zinc-800"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                Cardano tx
+                CardanoScan
               </ExternalButton>
             )}
             {dagwelldevUrl && (
