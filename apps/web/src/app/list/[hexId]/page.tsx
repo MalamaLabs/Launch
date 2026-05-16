@@ -72,7 +72,7 @@ export default async function GenesisHexDetailPage({ params }: Props) {
     return {
       hexId,
       region: 'dallas' as const,
-      regionLabel: detail?.zone ?? 'Unknown',
+      regionLabel: 'Unknown',
       lat,
       lng,
       status: 'reserved' as const,
