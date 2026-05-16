@@ -48,17 +48,45 @@ export default async function GenesisHexDetailPage({ params }: Props) {
   const hexId = decodeURIComponent(raw)
   const items = buildGenesisHexListItems(regionsData)
   const item = items.find((i) => i.hexId === hexId)
-  if (!item) notFound()
 
   // Fetch sold/available state from dagwelldev-api. Failure → render as
   // unclaimed so the page still works if the backend is briefly unreachable.
   let claim: GenesisClaim | null = null
+  let detail: Awaited<ReturnType<typeof getHexDetail>> | null = null
   try {
-    const detail = await getHexDetail(hexId)
+    detail = await getHexDetail(hexId)
     claim = detailToClaim(hexId, detail)
   } catch (err) {
     console.warn('[detail] getHexDetail failed — rendering as unclaimed', err)
   }
+
+  // Only 404 if the hex is in neither the genesis list nor Mongo.
+  // Minted hexes that fall outside the curated list still deserve a detail page.
+  if (!item && !detail) notFound()
+
+  // Build a minimal list item for hexes not in the genesis pool so the
+  // detail component always receives a non-null item prop.
+  const { cellToLatLng } = await import('h3-js')
+  const resolvedItem = item ?? (() => {
+    const [lat, lng] = cellToLatLng(hexId)
+    return {
+      hexId,
+      region: 'dallas' as const,
+      regionLabel: detail?.zone ?? 'Unknown',
+      lat,
+      lng,
+      status: 'reserved' as const,
+      sold: true,
+      chain: 'base' as const,
+      dataScore: 0,
+      startingBid: 2000,
+      activeSensors: 0,
+      uptime: 0,
+      overlap: false,
+      genesisEdition: true as const,
+      genesisPriceUsd: 2000,
+    }
+  })()
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-malama-deep">
@@ -71,7 +99,7 @@ export default async function GenesisHexDetailPage({ params }: Props) {
         </Link>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-6">
-        <GenesisHexDetail variant="page" item={item} claim={claim} />
+        <GenesisHexDetail variant="page" item={resolvedItem} claim={claim} />
       </div>
     </div>
   )
