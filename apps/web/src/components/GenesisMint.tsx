@@ -22,6 +22,7 @@ import regionsData from '@/data/regions.json'
 import { getGenesisPoolSlot } from '@/lib/genesis-hexes'
 import {
   API_BASE,
+  EXPLORER_BASE,
   reserveHexOnChain,
   reportMintObserved,
   createStripeCheckout,
@@ -267,7 +268,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
     const explorerHost = intent.network === 'mainnet' ? 'basescan.org' : 'sepolia.basescan.org'
     const dagwelldevExplorerUrl = cardanoMirror.txHash
-      ? `${API_BASE}/explorer/${cardanoMirror.explorerUrl?.includes('preprod') ? 'preprod' : 'mainnet'}/tx/${cardanoMirror.txHash}`
+      ? `${EXPLORER_BASE}/explorer/${cardanoMirror.explorerUrl?.includes('preprod') ? 'preprod' : 'mainnet'}/tx/${cardanoMirror.txHash}`
       : undefined
 
     return {
@@ -298,7 +299,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     syncNodeToMap(hexId)
     const cardanoNet = prepared.network === 'mainnet' ? 'mainnet' : 'preprod'
     const explorerUrl = cardanoNet === 'mainnet' ? `https://cardanoscan.io/tx/${txHash}` : `https://preprod.cardanoscan.io/tx/${txHash}`
-    const dagwelldevExplorerUrl = `${API_BASE}/explorer/${cardanoNet}/tx/${txHash}`
+    const dagwelldevExplorerUrl = `${EXPLORER_BASE}/explorer/${cardanoNet}/tx/${txHash}`
 
     return {
       claimId: `G200-${String(getGenesisPoolSlot(hexId, regionsData)).padStart(3, '0')}`,

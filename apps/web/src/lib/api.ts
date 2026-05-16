@@ -13,6 +13,18 @@ export const API_BASE = (
   process.env.NEXT_PUBLIC_DAGWELLDEV_API_BASE?.trim() || 'https://api.dagwelldev.com'
 ).replace(/\/$/, '')
 
+/**
+ * Base URL for the Dagwelldev block explorer frontend (the actual UI page,
+ * not the JSON API). Explorer pages live at:
+ *   ${EXPLORER_BASE}/explorer/preprod/tx/{txHash}
+ *   ${EXPLORER_BASE}/explorer/mainnet/tx/{txHash}
+ *
+ * Override with NEXT_PUBLIC_DAGWELLDEV_EXPLORER_BASE for local dev.
+ */
+export const EXPLORER_BASE = (
+  process.env.NEXT_PUBLIC_DAGWELLDEV_EXPLORER_BASE?.trim() || 'https://dagwelldev.com'
+).replace(/\/$/, '')
+
 // ─── Backend-served brand images ──────────────────────────────────────────
 // Static brand assets live on dagwelldev-api under /static/images/ with a
 // year-long immutable cache header. Every component that renders these

@@ -25,7 +25,7 @@ import {
   Wallet,
   ArrowLeft,
 } from 'lucide-react'
-import { API_BASE, getHexDetail, HexDetail } from '@/lib/api'
+import { EXPLORER_BASE, getHexDetail, HexDetail } from '@/lib/api'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ function cardanoNetFromDetail(detail: HexDetail): 'preprod' | 'mainnet' {
 function buildDagwelldevUrl(detail: HexDetail): string | null {
   if (!detail.cardanoTxHash) return null
   const net = cardanoNetFromDetail(detail)
-  return `${API_BASE}/explorer/${net}/tx/${detail.cardanoTxHash}`
+  return `${EXPLORER_BASE}/explorer/${net}/tx/${detail.cardanoTxHash}`
 }
 
 function buildOpenSeaUrl(detail: HexDetail): string | null {
