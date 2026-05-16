@@ -253,14 +253,28 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       } catch {}
     }
 
-    await reportMintObserved({ hexId, txHash: mintHash, cardanoAddress: undefined }).catch(() => null)
+    // Capture the mirror response — backend mints the Cardano ref token inline
+    // and returns cardano.txHash + cardano.explorerUrl in the same response.
+    let cardanoMirror: { txHash?: string; explorerUrl?: string } = {}
+    try {
+      const mirrorRes = await reportMintObserved({ hexId, txHash: mintHash })
+      cardanoMirror = mirrorRes.cardano ?? {}
+    } catch {
+      // Non-blocking — Base NFT is already minted on-chain; Cardano mirror will
+      // be retried by the backend on the next poll, or visible on the detail page.
+    }
     syncNodeToMap(hexId)
 
     const explorerHost = intent.network === 'mainnet' ? 'basescan.org' : 'sepolia.basescan.org'
+    const dagwelldevExplorerUrl = cardanoMirror.txHash
+      ? `${API_BASE}/explorer/${cardanoMirror.explorerUrl?.includes('preprod') ? 'preprod' : 'mainnet'}/tx/${cardanoMirror.txHash}`
+      : undefined
+
     return {
       claimId, editionNumber, evmTokenId, contractAddress: GENESIS_CONTRACT,
       txHash: mintHash, chain: 'base' as const,
       explorerUrl: `https://${explorerHost}/tx/${mintHash}`,
+      dagwelldevExplorerUrl,
       nftImageUrl: nftImageUrl({ hexId, tokenId: evmTokenId, chain: 'base', claimId }),
     }
   }
