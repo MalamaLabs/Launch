@@ -15,12 +15,13 @@ import { parseAbi, parseUnits, decodeEventLog } from 'viem'
 import {
   MapPin, ShoppingCart, Wallet, Globe,
   ChevronRight, CheckCircle2, AlertCircle, ExternalLink, Copy,
-  CreditCard,
+  CreditCard, MessageCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 import regionsData from '@/data/regions.json'
 import { getGenesisPoolSlot } from '@/lib/genesis-hexes'
 import {
+  API_BASE,
   reserveHexOnChain,
   reportMintObserved,
   createStripeCheckout,
@@ -54,6 +55,8 @@ interface SuccessData {
   claimId: string; editionNumber: number; evmTokenId?: number; contractAddress?: `0x${string}`;
   txHash: string; chain: 'base' | 'cardano'; explorerUrl: string; nftImageUrl: string;
   openSeaUrl?: string; cnftUrl?: string; tokenName?: string; simulated?: boolean;
+  /** Dagwelldev explorer URL — only set for Cardano txs (queries local db-sync). */
+  dagwelldevExplorerUrl?: string;
 }
 
 const shortHash = (h: string) => `${h.slice(0, 8)}...${h.slice(-6)}`
@@ -279,11 +282,14 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     await confirmCardanoMintTx({ purchaseId: prepared.purchaseId, txHash }).catch(() => {})
     
     syncNodeToMap(hexId)
-    const explorerUrl = prepared.network === 'mainnet' ? `https://cardanoscan.io/tx/${txHash}` : `https://preprod.cardanoscan.io/tx/${txHash}`
+    const cardanoNet = prepared.network === 'mainnet' ? 'mainnet' : 'preprod'
+    const explorerUrl = cardanoNet === 'mainnet' ? `https://cardanoscan.io/tx/${txHash}` : `https://preprod.cardanoscan.io/tx/${txHash}`
+    const dagwelldevExplorerUrl = `${API_BASE}/explorer/${cardanoNet}/tx/${txHash}`
 
     return {
       claimId: `G200-${String(getGenesisPoolSlot(hexId, regionsData)).padStart(3, '0')}`,
       editionNumber: 0, txHash, chain: 'cardano' as const, explorerUrl, cnftUrl: explorerUrl,
+      dagwelldevExplorerUrl,
       nftImageUrl: nftImageUrl({ hexId, chain: 'cardano', claimId: 'G200' }),
     }
   }
@@ -557,6 +563,52 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               <CheckCircle2 className="w-20 h-20 text-malama-accent mx-auto" />
               <h2 className="text-5xl font-black text-white">{successData.claimId}</h2>
               <NftCard data={successData} hexId={hexId} />
+
+              {/* ── explorer + discord buttons ─────────────────────────── */}
+              <div className="flex flex-col gap-3 w-full max-w-sm mx-auto">
+
+                {/* chain tx links */}
+                <div className="flex gap-2">
+                  <a
+                    href={successData.explorerUrl}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-[13px] font-bold text-gray-200 transition-all hover:border-zinc-500 hover:bg-zinc-800"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    {successData.chain === 'cardano' ? 'CardanoScan' : 'BaseScan'}
+                  </a>
+                  {successData.dagwelldevExplorerUrl && (
+                    <a
+                      href={successData.dagwelldevExplorerUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-malama-teal/40 bg-malama-teal/5 px-4 py-3 text-[13px] font-bold text-malama-teal transition-all hover:border-malama-teal/70 hover:bg-malama-teal/10"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Dagwell Explorer
+                    </a>
+                  )}
+                </div>
+
+                {/* discord */}
+                <a
+                  href={process.env.NEXT_PUBLIC_DISCORD_INVITE || 'https://discord.gg/malamalabs'}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-800/50 bg-indigo-950/40 px-4 py-3 text-[13px] font-bold text-indigo-300 transition-all hover:border-indigo-600 hover:bg-indigo-950/70"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Join Operator Discord
+                </a>
+
+                {/* hex detail link */}
+                {hexId && (
+                  <Link
+                    href={`/list/${encodeURIComponent(hexId)}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-malama-accent/10 border border-malama-accent/30 px-4 py-3 font-mono text-sm font-bold text-malama-accent transition-all hover:bg-malama-accent/20"
+                  >
+                    View your hex →
+                  </Link>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

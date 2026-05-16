@@ -25,13 +25,25 @@ import {
   Wallet,
   ArrowLeft,
 } from 'lucide-react'
-import { getHexDetail, HexDetail } from '@/lib/api'
+import { API_BASE, getHexDetail, HexDetail } from '@/lib/api'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function getContractAddress(network: string | undefined): string | undefined {
   if (network === 'mainnet') return process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_MAINNET
   return process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_SEPOLIA
+}
+
+/** Infer Cardano network from the cardanoscan explorer URL the backend returns. */
+function cardanoNetFromDetail(detail: HexDetail): 'preprod' | 'mainnet' {
+  return detail.cardanoExplorerUrl?.includes('preprod') ? 'preprod' : 'mainnet'
+}
+
+/** Dagwelldev explorer URL for the Cardano mint tx. Null when no Cardano tx yet. */
+function buildDagwelldevUrl(detail: HexDetail): string | null {
+  if (!detail.cardanoTxHash) return null
+  const net = cardanoNetFromDetail(detail)
+  return `${API_BASE}/explorer/${net}/tx/${detail.cardanoTxHash}`
 }
 
 function buildOpenSeaUrl(detail: HexDetail): string | null {
@@ -118,6 +130,7 @@ function ConfirmedView({
   isMagic: boolean
 }) {
   const openSeaUrl = buildOpenSeaUrl(detail)
+  const dagwelldevUrl = buildDagwelldevUrl(detail)
   const hasBase = !!detail.baseExplorerUrl
   const hasCardano = !!detail.cardanoExplorerUrl
   const hasMetaMask = !!(getContractAddress(detail.baseNetwork) && detail.baseTokenId != null)
@@ -203,7 +216,7 @@ function ConfirmedView({
         </Link>
 
         {/* ── transaction links row ── */}
-        {(hasBase || hasCardano) && (
+        {(hasBase || hasCardano || dagwelldevUrl) && (
           <div className="w-full flex gap-3 mb-3">
             {hasBase && (
               <ExternalButton
@@ -221,6 +234,15 @@ function ConfirmedView({
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 Cardano tx
+              </ExternalButton>
+            )}
+            {dagwelldevUrl && (
+              <ExternalButton
+                href={dagwelldevUrl}
+                className="flex-1 border border-malama-teal/40 bg-malama-teal/5 text-malama-teal hover:border-malama-teal/70 hover:bg-malama-teal/10"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Dagwell
               </ExternalButton>
             )}
           </div>
