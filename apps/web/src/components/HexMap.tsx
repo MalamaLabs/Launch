@@ -56,11 +56,16 @@ export default function HexMap() {
       const m = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/dark-v11',
-        center: [-112.5, 43.5], 
+        center: [-112.5, 43.5],
         zoom: 6,
         pitch: 0,
         bearing: 0,
-        attributionControl: false
+        attributionControl: false,
+        // Globe projection — renders hex polygons on a spherical surface so
+        // H3 cells appear the same physical size regardless of latitude.
+        // Without this, Mercator distortion makes London hexes (~51°N) look
+        // significantly larger than Dallas hexes (~33°N) on screen.
+        projection: 'globe' as any,
       })
 
       map.current = m
