@@ -1,23 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-/// @title  Mālama Labs Hex Node License — Genesis 200
+/// @title  Malama Labs Hex Node License - Genesis 200
 /// @notice ERC-721 NFT representing exclusive geographic hex territory rights
-///         on the Mālama DePIN network. 200 total supply, one per hex cell.
-contract GenesisValidator is ERC721, Ownable {
+///         on the Malama DePIN network. 200 total supply, one per hex cell.
+///
+/// @dev    Inherits ERC721URIStorage (OZ v5) so every token can carry a per-token
+///         IPFS URI pinned at mint-time or assigned later by the owner.
+///
+///         URI resolution priority:
+///           1. Per-token IPFS URI  -- set via setTokenURI / adminSecureNodeWithURI
+///           2. Base-URI fallback   -- _baseTokenURI + tokenId  (existing behaviour)
+///
+///         OZ v5 note: ERC721URIStorage concatenates base+perToken when both are set,
+///         which would corrupt an absolute ipfs:// URI. We sidestep this by keeping
+///         _baseURI() returning "" so OZ stores per-token URIs raw, then handle the
+///         fallback to _baseTokenURI ourselves inside tokenURI().
+contract GenesisValidator is ERC721URIStorage, Ownable {
     using SafeERC20 for IERC20;
     using Strings for uint256;
 
-    // ─── Constants ──────────────────────────────────────────────────────────
+    // --- Constants -----------------------------------------------------------
     uint256 public constant MAX_GENESIS_SUPPLY = 200;
 
-    // ─── State ───────────────────────────────────────────────────────────────
+    // --- State ---------------------------------------------------------------
     IERC20  public immutable paymentToken;
     address public treasury;
     uint256 public mintPrice;
@@ -26,21 +38,19 @@ contract GenesisValidator is ERC721, Ownable {
     uint256 private _currentSupply;
 
     // Geographic Spatial Storage
-    mapping(uint256 => string) private _tokenHexBoundaries;
-    mapping(string  => bool)   private _hexClaimed;
+    mapping(uint256 => string)  private _tokenHexBoundaries;
+    mapping(string  => bool)    private _hexClaimed;
     mapping(string  => uint256) private _hexToTokenId;
 
-    // ─── Events ──────────────────────────────────────────────────────────────
+    // --- Events --------------------------------------------------------------
     event NodeSecured(address indexed operator, uint256 indexed tokenId, string hexId);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event PriceUpdated(uint256 oldPrice, uint256 newPrice);
     event BaseURIUpdated(string newBaseURI);
+    // Note: per-token URI changes also emit ERC-4906 MetadataUpdate(tokenId)
+    // fired automatically by ERC721URIStorage._setTokenURI
 
-    // ─── Constructor ─────────────────────────────────────────────────────────
-    /// @param _paymentToken  ERC-20 token used for payment (USDC, 6 decimals)
-    /// @param _treasury      Multi-sig or vault that receives payments
-    /// @param _initialPrice  Price in payment-token base units ($2,000 USDC = 2_000_000_000)
-    /// @param baseURI_       Base URI for tokenURI metadata (e.g. https://malamalaunch.vercel.app/api/nft/)
+    // --- Constructor ---------------------------------------------------------
     constructor(
         address _paymentToken,
         address _treasury,
@@ -50,42 +60,39 @@ contract GenesisValidator is ERC721, Ownable {
         require(_paymentToken != address(0), "Invalid payment token");
         require(_treasury     != address(0), "Invalid treasury");
 
-        paymentToken   = IERC20(_paymentToken);
-        treasury       = _treasury;
-        mintPrice      = _initialPrice;
-        _baseTokenURI  = baseURI_;
+        paymentToken  = IERC20(_paymentToken);
+        treasury      = _treasury;
+        mintPrice     = _initialPrice;
+        _baseTokenURI = baseURI_;
     }
 
-    // ─── Public: Purchase ────────────────────────────────────────────────────
-    /// @notice Purchase and mint a Hex Node License NFT.
-    ///         Caller must first approve this contract to spend `mintPrice` of paymentToken.
-    /// @param hexId  H3 hex cell index string (e.g. "872a100aaffffff")
+    // --- Public: Purchase ----------------------------------------------------
     function secureNode(string calldata hexId) external {
-        require(_currentSupply < MAX_GENESIS_SUPPLY, "Genesis 200: All nodes sold");
-        require(bytes(hexId).length > 0,             "Empty hex ID");
-        require(!_hexClaimed[hexId],                  "Hex already claimed");
-
-        // Collect payment
         paymentToken.safeTransferFrom(msg.sender, treasury, mintPrice);
-
-        // Mint
-        uint256 tokenId = _currentSupply + 1;
-        _currentSupply  = tokenId;
-
-        _tokenHexBoundaries[tokenId] = hexId;
-        _hexClaimed[hexId]           = true;
-        _hexToTokenId[hexId]         = tokenId;
-
-        _safeMint(msg.sender, tokenId);
-        emit NodeSecured(msg.sender, tokenId, hexId);
+        _mintHex(msg.sender, hexId, "");
     }
 
-    // ─── Admin: Mint on behalf (Cardano-path / off-chain payment) ────────────
-    /// @notice Owner can mint directly to an address (for Cardano flow or offline payments).
+    // --- Admin: Mint on behalf -----------------------------------------------
     function adminSecureNode(address to, string calldata hexId) external onlyOwner {
+        _mintHex(to, hexId, "");
+    }
+
+    function adminSecureNodeWithURI(
+        address to,
+        string calldata hexId,
+        string calldata ipfsURI
+    ) external onlyOwner {
+        _mintHex(to, hexId, ipfsURI);
+    }
+
+    function _mintHex(
+        address to,
+        string calldata hexId,
+        string memory ipfsURI
+    ) internal {
         require(_currentSupply < MAX_GENESIS_SUPPLY, "Genesis 200: All nodes sold");
         require(bytes(hexId).length > 0,             "Empty hex ID");
-        require(!_hexClaimed[hexId],                  "Hex already claimed");
+        require(!_hexClaimed[hexId],                 "Hex already claimed");
         require(to != address(0),                    "Invalid recipient");
 
         uint256 tokenId = _currentSupply + 1;
@@ -96,10 +103,15 @@ contract GenesisValidator is ERC721, Ownable {
         _hexToTokenId[hexId]         = tokenId;
 
         _safeMint(to, tokenId);
+
+        if (bytes(ipfsURI).length > 0) {
+            _setTokenURI(tokenId, ipfsURI);
+        }
+
         emit NodeSecured(to, tokenId, hexId);
     }
 
-    // ─── View ─────────────────────────────────────────────────────────────────
+    // --- View ----------------------------------------------------------------
     function getHexByToken(uint256 tokenId) external view returns (string memory) {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
         return _tokenHexBoundaries[tokenId];
@@ -122,18 +134,57 @@ contract GenesisValidator is ERC721, Ownable {
         return MAX_GENESIS_SUPPLY - _currentSupply;
     }
 
-    // ─── ERC-721 Metadata ─────────────────────────────────────────────────────
-    function _baseURI() internal view override returns (string memory) {
-        return _baseTokenURI;
+    // --- ERC-721 Metadata ----------------------------------------------------
+
+    function _baseURI() internal pure override returns (string memory) {
+        return "";
     }
 
-    /// @notice Returns metadata URI: baseURI + tokenId
-    function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override(ERC721URIStorage)
+        returns (string memory)
+    {
+        _requireOwned(tokenId);
+        string memory ipfsURI = ERC721URIStorage.tokenURI(tokenId);
+        if (bytes(ipfsURI).length > 0) {
+            return ipfsURI;
+        }
         return string(abi.encodePacked(_baseTokenURI, tokenId.toString()));
     }
 
-    // ─── Admin Config ────────────────────────────────────────────────────────
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721URIStorage)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
+
+    // --- Admin: IPFS URI management ------------------------------------------
+
+    function setTokenURI(uint256 tokenId, string calldata ipfsURI) external onlyOwner {
+        _requireOwned(tokenId);
+        require(bytes(ipfsURI).length > 0, "Empty URI");
+        _setTokenURI(tokenId, ipfsURI);
+    }
+
+    function setTokenURIBatch(
+        uint256[] calldata tokenIds,
+        string[]  calldata ipfsURIs
+    ) external onlyOwner {
+        require(tokenIds.length == ipfsURIs.length, "Length mismatch");
+        for (uint256 i = 0; i < tokenIds.length; ) {
+            _requireOwned(tokenIds[i]);
+            require(bytes(ipfsURIs[i]).length > 0, "Empty URI");
+            _setTokenURI(tokenIds[i], ipfsURIs[i]);
+            unchecked { ++i; }
+        }
+    }
+
+    // --- Admin Config --------------------------------------------------------
     function setBaseURI(string calldata newBaseURI) external onlyOwner {
         _baseTokenURI = newBaseURI;
         emit BaseURIUpdated(newBaseURI);
