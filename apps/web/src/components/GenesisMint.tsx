@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useWallet as useCardanoWallet } from '@meshsdk/react'
 import {
@@ -88,6 +88,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [stripeDeliveryAddress, setStripeDeliveryAddress] = useState('')
   const [mmImportOpen, setMmImportOpen] = useState(false)
   const [mmCopied, setMmCopied]     = useState<'address' | 'tokenId' | null>(null)
+  // IPFS URL returned from cardano/prepare-tx — baked into the on-chain datum,
+  // so showing it in the success card means the buyer sees exactly what their wallet renders.
+  const [pendingNftImageUrl, setPendingNftImageUrl] = useState<string | null>(null)
 
   const legalComplete = allLegalAcknowledged(legalAck)
   const cardEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cardEmail.trim())
@@ -115,9 +118,33 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const { writeContractAsync } = useWriteContract()
 
   const cardanoReady = cardanoConnected || !!cardanoCip30Api
+
+  // ── Auto-reconnect the last-used Cardano wallet on fresh page load ────────
+  // LACE (and other CIP-30 wallets) register their connector by origin.  If the
+  // user previously authorized this origin, provider.enable() returns silently
+  // without a popup — giving us back the CIP-30 API and letting the Mesh SDK
+  // reconnect so `cardanoWallet` is populated when the buyer hits "Mint".
+  // Without this, every fresh session requires a manual re-click.
+  useEffect(() => {
+    const lastWallet = localStorage.getItem('malama_last_cardano_wallet')
+    if (!lastWallet || cardanoConnected) return
+    const win = window as any
+    const provider = win.cardano?.[lastWallet]
+    if (!provider) return
+    provider.enable()
+      .then((api: any) => {
+        setCardanoCip30Api(api)
+        // Re-connect via Mesh SDK so cardanoWallet (used for signTx/submitTx) is live.
+        connectCardano(lastWallet).catch(() => {/* no-op if wallet rejects */})
+      })
+      .catch(() => {/* wallet not yet authorized for this origin — wait for manual click */})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // run once on mount only
   const isSetupComplete = !!hexId && (
     paymentMode === 'base'    ? evmConnected :
-    paymentMode === 'cardano' ? cardanoConnected :
+    // cardanoReady = Mesh SDK connected OR raw CIP-30 API available.
+    // Either gives us enough to sign/submit the mint tx.
+    paymentMode === 'cardano' ? cardanoReady :
     // Stripe: only a valid email is required. Delivery address is optional —
     // the backend will hold the NFT in custody when none is provided.
     cardEmailOk
@@ -145,6 +172,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       const api = await provider.enable()
       setCardanoCip30Api(api)
       await connectCardano(walletKey).catch(() => {})
+      // Persist so the auto-reconnect useEffect can silently re-enable on next visit.
+      localStorage.setItem('malama_last_cardano_wallet', walletKey)
     } catch (err) { setCardanoError('Connect failed') }
   }
 
@@ -286,7 +315,12 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     setEvmTxStatus('claiming')
     const buyerAddr = await cardanoWallet.getChangeAddress()
     const prepared = await prepareCardanoMintTx({ hexId, buyerAddress: buyerAddr })
-    
+
+    // Capture the IPFS URL the backend pinned into the datum — this is what the
+    // buyer's wallet will render, so we show the same image on the success card.
+    const mintImageUrl = prepared.nftImageUrl ?? null
+    if (mintImageUrl) setPendingNftImageUrl(mintImageUrl)
+
     setEvmTxStatus('approving')
     const sodium = (await import('libsodium-wrappers-sumo')).default
     await sodium.ready
@@ -295,17 +329,25 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
     setEvmTxStatus('minting')
     await confirmCardanoMintTx({ purchaseId: prepared.purchaseId, txHash }).catch(() => {})
-    
+
     syncNodeToMap(hexId)
     const cardanoNet = prepared.network === 'mainnet' ? 'mainnet' : 'preprod'
     const explorerUrl = cardanoNet === 'mainnet' ? `https://cardanoscan.io/tx/${txHash}` : `https://preprod.cardanoscan.io/tx/${txHash}`
     const dagwelldevExplorerUrl = `${EXPLORER_BASE}/explorer/${cardanoNet}/tx/${txHash}`
+    const editionNum = getGenesisPoolSlot(hexId, regionsData) ?? 0
+    const claimId = `G200-${String(editionNum).padStart(3, '0')}`
 
     return {
-      claimId: `G200-${String(getGenesisPoolSlot(hexId, regionsData)).padStart(3, '0')}`,
-      editionNumber: 0, txHash, chain: 'cardano' as const, explorerUrl, cnftUrl: explorerUrl,
+      claimId,
+      editionNumber: editionNum,
+      txHash,
+      chain: 'cardano' as const,
+      explorerUrl,
+      cnftUrl: explorerUrl,
       dagwelldevExplorerUrl,
-      nftImageUrl: nftImageUrl({ hexId, chain: 'cardano', claimId: 'G200' }),
+      // Prefer the IPFS URL from the prepare response — byte-identical to what the
+      // wallet renders.  Fall back to the API endpoint if Pinata was unreachable.
+      nftImageUrl: mintImageUrl ?? nftImageUrl({ hexId, chain: 'cardano', claimId }),
     }
   }
 
@@ -554,10 +596,30 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
           {step === 3 && (
             <motion.div key="step3" className="space-y-8">
               <h2 className="text-3xl font-black text-white">Review Order</h2>
-              <div className="p-6 bg-malama-deep border border-gray-800 rounded-2xl">
-                <p className="text-white font-bold">Genesis Node License</p>
-                <p className="text-malama-accent text-2xl font-black mt-1">$2,000 {paymentMode === 'stripe' ? 'USD' : 'USDC'}</p>
+
+              {/* ── NFT preview + order summary ─────────────────────────── */}
+              <div className="flex items-center gap-5 p-5 bg-malama-deep border border-gray-800 rounded-2xl">
+                {hexId && (
+                  <div className="shrink-0">
+                    <img
+                      src={nftImageUrl({ hexId, chain: paymentMode === 'cardano' ? 'cardano' : 'base' })}
+                      alt={`Hex ${hexId} NFT preview`}
+                      className="w-24 h-36 rounded-xl object-cover border border-malama-accent/20 shadow-[0_0_18px_rgba(196,240,97,0.12)]"
+                    />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-0.5">Genesis Node License</p>
+                  {hexId && (
+                    <p className="font-mono text-[11px] text-gray-400 truncate mb-2">{hexId}</p>
+                  )}
+                  <p className="text-malama-accent text-2xl font-black">$2,000 {paymentMode === 'stripe' ? 'USD' : 'USDC'}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {paymentMode === 'cardano' ? 'Cardano CIP-68 · hex territory rights' : paymentMode === 'base' ? 'Base ERC-721 + Cardano mirror' : 'Card payment · Base ERC-721'}
+                  </p>
+                </div>
               </div>
+
               <PurchaseLegalAcknowledgement value={legalAck} onChange={setLegalAck} />
               <button onClick={() => setStep(4)} disabled={!legalComplete} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl">Confirm & Pay</button>
             </motion.div>
@@ -567,6 +629,16 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
             <motion.div key="step4" className="space-y-8 text-center">
               {error && <div className="p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl">{error}</div>}
               <h2 className="text-4xl font-black text-white uppercase">{paymentMode} Payment</h2>
+              {/* Keep the hex art visible so the operator confirms the right hex at signing */}
+              {hexId && (
+                <div className="flex justify-center">
+                  <img
+                    src={nftImageUrl({ hexId, chain: paymentMode === 'cardano' ? 'cardano' : 'base' })}
+                    alt={`Hex ${hexId}`}
+                    className="w-28 h-40 rounded-xl object-cover border border-malama-accent/20 shadow-[0_0_24px_rgba(196,240,97,0.15)] mx-auto"
+                  />
+                </div>
+              )}
               <button onClick={handlePayment} disabled={loading} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl">
                 {submitLabel()}
               </button>

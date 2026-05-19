@@ -368,6 +368,9 @@ export interface CardanoPrepareTxResponse {
   treasuryAddress:  string
   network:          'mainnet' | 'preprod'
   priceLovelace:    number
+  /** IPFS (or HTTPS fallback) URL pinned into the datum and CIP-721 metadata.
+   *  Show this in the success card so the buyer sees the same image their wallet renders. */
+  nftImageUrl?:     string | null
 }
 
 export interface CardanoConfirmTxResponse {
