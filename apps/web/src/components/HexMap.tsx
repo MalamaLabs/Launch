@@ -7,6 +7,7 @@ import { cellToLatLng } from 'h3-js'
 import GenesisHexDetail from './GenesisHexDetail'
 import { formatGenesisListingUsd, GENESIS_ENTRY_USD } from '@/lib/h3'
 import { Loader2, Navigation } from 'lucide-react'
+import { API_BASE } from '@/lib/api'
 import type { GenesisHexListItem } from '@/lib/genesis-hexes'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 
