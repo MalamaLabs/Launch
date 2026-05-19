@@ -97,7 +97,7 @@ export default function HexMap() {
 
     m.on('load', async () => {
       try {
-        const res = await fetch('/api/hexes')
+        const res = await fetch(`${API_BASE}/hexes/geojson`)
         const data = await res.json()
 
         // Omnichain Local State Synchronization
