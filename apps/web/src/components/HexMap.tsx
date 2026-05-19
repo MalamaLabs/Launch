@@ -129,23 +129,29 @@ export default function HexMap() {
           type: 'fill',
           source: 'hexes',
           paint: {
+            // Priority order: sold > locally-purchased > reserved/in-cart > available
+            // sold=true can arrive with status='reserved', so we check sold first.
             'fill-color': [
-              'match',
-              ['get', 'status'],
-              'available',
-              '#44BBA4',
-              'reserved',
-              '#6B7280',
-              'active',
-              '#22C55E',
+              'case',
+              // Sold — muted slate gray (territory already claimed)
+              ['==', ['get', 'sold'], true],  '#4B5563',
+              // Locally purchased this session (optimistic, pre-confirmation)
+              ['==', ['get', 'status'], 'active'], '#22C55E',
+              // Reserved / in another buyer's cart — amber
+              ['==', ['get', 'status'], 'reserved'], '#F59E0B',
+              // Available — emerald (default)
               '#44BBA4'
             ],
             'fill-opacity': [
-              'interpolate',
-              ['linear'],
-              ['get', 'dataScore'],
-              0, 0.1,
-              100, 0.7
+              'case',
+              // Sold hexes: flat, muted opacity so they read as "taken" at a glance
+              ['==', ['get', 'sold'], true], 0.45,
+              // Available/reserved: vary by data-demand score so high-value zones pop
+              [
+                'interpolate', ['linear'], ['get', 'dataScore'],
+                0, 0.15,
+                100, 0.65
+              ]
             ]
           }
         })
@@ -158,6 +164,21 @@ export default function HexMap() {
             'line-color': '#0A1628',
             'line-width': 1.5,
             'line-opacity': 0.8
+          }
+        })
+
+        // Dashed border overlay for sold hexes — renders AFTER hex-lines so the
+        // dashes aren't overwritten by the solid dark border on the layer below.
+        m.addLayer({
+          id: 'hex-sold-border',
+          type: 'line',
+          source: 'hexes',
+          filter: ['==', ['get', 'sold'], true],
+          paint: {
+            'line-color': '#6B7280',
+            'line-width': 1.5,
+            'line-opacity': 0.6,
+            'line-dasharray': [3, 2],
           }
         })
         
