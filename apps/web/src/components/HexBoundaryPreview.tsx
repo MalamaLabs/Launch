@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { cellToLatLng } from 'h3-js'
-import { GENESIS_HEX_MAP_ZOOM, hexToGeoJSON } from '@/lib/h3'
+import { hexToGeoJSON } from '@/lib/h3'
 import { MapPin, Loader2 } from 'lucide-react'
 
 type Props = {
@@ -82,9 +82,8 @@ export default function HexBoundaryPreview({ hexId, genesisRegionLabel, classNam
         container: el,
         style: 'mapbox://styles/mapbox/dark-v11',
         center: [lng, lat],
-        zoom: GENESIS_HEX_MAP_ZOOM,
+        zoom: 11,
         attributionControl: true,
-        projection: 'globe' as any,
       })
       mapRef.current = map
 
@@ -116,7 +115,7 @@ export default function HexBoundaryPreview({ hexId, genesisRegionLabel, classNam
         const ring = feature.geometry.coordinates[0] as [number, number][]
         const b = new mapboxgl.LngLatBounds(ring[0], ring[0])
         for (const c of ring) b.extend(c)
-        map.fitBounds(b, { padding: 48, maxZoom: GENESIS_HEX_MAP_ZOOM, duration: 0 })
+        map.fitBounds(b, { padding: 48, maxZoom: 13, duration: 0 })
         setMapReady(true)
       })
 

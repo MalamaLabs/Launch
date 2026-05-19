@@ -5,9 +5,8 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { cellToLatLng } from 'h3-js'
 import GenesisHexDetail from './GenesisHexDetail'
-import { formatGenesisListingUsd, GENESIS_ENTRY_USD, GENESIS_HEX_MAP_ZOOM } from '@/lib/h3'
+import { formatGenesisListingUsd, GENESIS_ENTRY_USD } from '@/lib/h3'
 import { Loader2, Navigation } from 'lucide-react'
-import { API_BASE } from '@/lib/api'
 import type { GenesisHexListItem } from '@/lib/genesis-hexes'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 
@@ -57,7 +56,7 @@ export default function HexMap() {
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/dark-v11',
         center: [-112.5, 43.5],
-        zoom: GENESIS_HEX_MAP_ZOOM,
+        zoom: 6,
         pitch: 0,
         bearing: 0,
         attributionControl: false,
@@ -95,9 +94,9 @@ export default function HexMap() {
       }
     })
 
-      m.on('load', async () => {
+    m.on('load', async () => {
       try {
-        const res = await fetch(`${API_BASE}/hexes/geojson`)
+        const res = await fetch('/api/hexes')
         const data = await res.json()
 
         // Omnichain Local State Synchronization
@@ -329,7 +328,7 @@ export default function HexMap() {
       navigator.geolocation.getCurrentPosition((pos) => {
         map.current?.flyTo({
           center: [pos.coords.longitude, pos.coords.latitude],
-          zoom: GENESIS_HEX_MAP_ZOOM,
+          zoom: 7,
           duration: 2500,
           essential: true
         })
@@ -338,11 +337,10 @@ export default function HexMap() {
   }
 
   const regions = [
-    { name: 'Core Alpha (Idaho)', center: [-112.5, 43.5] },
-    { name: 'Nexus Prime (NYC)', center: [-74.0060, 40.7128] },
-    { name: 'Thames Node (London)', center: [-0.1278, 51.5074] },
-    { name: 'Neo-Sovereign (Tokyo)', center: [139.6503, 35.6762] },
-    { name: 'Dallas Proof Hub', center: [-96.7970, 32.7767] },
+    { name: 'Core Alpha (Idaho)', center: [-112.5, 43.5], zoom: 6 },
+    { name: 'Nexus Prime (NYC)', center: [-74.0060, 40.7128], zoom: 10 },
+    { name: 'Thames Node (London)', center: [-0.1278, 51.5074], zoom: 10 },
+    { name: 'Neo-Sovereign (Tokyo)', center: [139.6503, 35.6762], zoom: 10 }
   ]
 
   return (
@@ -385,7 +383,7 @@ export default function HexMap() {
             <button
               key={r.name}
               onClick={() => {
-                map.current?.flyTo({ center: r.center as [number, number], zoom: GENESIS_HEX_MAP_ZOOM, duration: 3000 })
+                map.current?.flyTo({ center: r.center as [number, number], zoom: r.zoom, duration: 3000 })
               }}
               className="px-4 py-2 bg-malama-deep/80 backdrop-blur-md border border-gray-800 rounded-xl text-xs font-bold text-gray-300 hover:border-malama-teal hover:text-white transition-all shadow-xl"
             >
