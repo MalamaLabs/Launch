@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { IMAGES } from '@/lib/api'
+import { GENESIS_H3_AVG_AREA_KM2, GENESIS_H3_GLOBAL_CELL_COUNT, GENESIS_H3_RESOLUTION } from '@/lib/h3'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -762,7 +763,7 @@ export default function Home() {
                   Each Hex Node operates inside a specific H3 hex cell governed by an NFT-HEX rights object. The NFT-HEX encodes geographic rights, capacity constraints, reward weighting, acquisition policy, and regional governance for that cell.
                 </p>
                 <p>
-                  H3 Resolution 5 cells are approximately 252.9 km² each, with 2,016,842 unique cells globally. Buying an NFT-HEX gives you the right and obligation to operate one Hex Node validator within that specific cell.
+                  H3 Resolution {GENESIS_H3_RESOLUTION} cells are approximately {GENESIS_H3_AVG_AREA_KM2} km² each, with {GENESIS_H3_GLOBAL_CELL_COUNT.toLocaleString('en-US')} unique cells globally. Buying an NFT-HEX gives you the right and obligation to operate one Hex Node validator within that specific cell.
                 </p>
                 <p>
                   Reward multipliers by zone: urban 0.5×, dense suburban 1.0×, rural 1.5×, frontier 2.0×, strategic gap up to 3.0×.

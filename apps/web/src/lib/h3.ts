@@ -1,4 +1,10 @@
 import { cellToBoundary } from 'h3-js'
+import genesisHexConfig from '@/config/genesis-hex.json'
+
+export const GENESIS_H3_RESOLUTION = genesisHexConfig.h3Resolution
+export const GENESIS_HEX_MAP_ZOOM = genesisHexConfig.mapZoom
+export const GENESIS_H3_AVG_AREA_KM2 = genesisHexConfig.avgAreaKm2
+export const GENESIS_H3_GLOBAL_CELL_COUNT = genesisHexConfig.globalCellCount
 
 /** Stable [0, 1) from hex id + salt (no Math.random). */
 export function hexIdUnit(hexId: string, salt: number): number {
