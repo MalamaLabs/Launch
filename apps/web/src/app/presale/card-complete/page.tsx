@@ -25,7 +25,28 @@ import {
   Wallet,
   ArrowLeft,
 } from 'lucide-react'
-import { EXPLORER_BASE, getHexDetail, HexDetail } from '@/lib/api'
+import { EXPLORER_BASE, getHexDetail, HexDetail, nftImageUrl } from '@/lib/api'
+
+// ─── NftCard ─────────────────────────────────────────────────────────────────
+
+function NftCard({ detail }: { detail: HexDetail }) {
+  const tokenId = detail.baseTokenId ?? detail.onChain.tokenId ?? null
+  const chain   = detail.cardanoMirrorStatus === 'minted' && !detail.baseTokenId ? 'cardano' : 'base'
+  const edition = tokenId != null ? String(tokenId).padStart(3, '0') : '???'
+  const claimId = tokenId != null ? `G200-${edition}` : null
+  const imgSrc  = nftImageUrl({ hexId: detail.hexId, tokenId: tokenId ?? undefined, chain, claimId: claimId ?? undefined })
+
+  return (
+    <div className="relative w-44 h-64 mx-auto rounded-2xl overflow-hidden border border-malama-accent/30 shadow-[0_0_40px_rgba(196,240,97,0.18)]">
+      <img src={imgSrc} alt={`NFT ${detail.hexId}`} className="w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+      <div className="absolute bottom-3 left-3 right-3">
+        {claimId && <p className="text-malama-accent font-black text-xl">{claimId}</p>}
+        <p className="text-gray-300 text-[10px] font-mono truncate">{detail.hexId}</p>
+      </div>
+    </div>
+  )
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -158,7 +179,7 @@ function ConfirmedView({
       <div className="w-full max-w-[480px] flex flex-col items-center text-center">
 
         {/* ── icon ── */}
-        <div className="relative mb-6">
+        <div className="relative mb-4">
           <div className="absolute inset-0 rounded-full bg-malama-accent/20 blur-2xl scale-150" />
           <CheckCircle2 className="relative w-16 h-16 text-malama-accent" strokeWidth={1.5} />
         </div>
@@ -167,9 +188,16 @@ function ConfirmedView({
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-malama-accent mb-2">
           Reservation confirmed
         </p>
-        <h1 className="font-mono text-3xl font-black text-white mb-1 break-all">
-          {detail.hexId}
-        </h1>
+        {detail.baseTokenId != null && (
+          <h1 className="font-mono text-4xl font-black text-white mb-1">
+            G200-{String(detail.baseTokenId).padStart(3, '0')}
+          </h1>
+        )}
+
+        {/* ── NFT card ── */}
+        <div className="my-5">
+          <NftCard detail={detail} />
+        </div>
 
         {/* ── metadata chips ── */}
         <div className="flex flex-wrap items-center justify-center gap-2 mt-3 mb-6">
