@@ -61,7 +61,7 @@ export default function Dashboard() {
     if (!magic) return
     magic.user.isLoggedIn().then((loggedIn: boolean) => {
       if (loggedIn) {
-        magic.user.getInfo().then((info: { publicAddress?: string | null }) => {
+        magic.user.getInfo().then((info) => {
           if (info.publicAddress) setMagicAddress(info.publicAddress)
         }).catch(() => {})
       }
@@ -78,7 +78,7 @@ export default function Dashboard() {
     setMagicLoading(true); setMagicError('')
     try {
       await magic.auth.loginWithEmailOTP({ email })
-      const info = await magic.user.getInfo() as { publicAddress?: string | null }
+      const info = await magic.user.getInfo()
       if (info.publicAddress) {
         setMagicAddress(info.publicAddress)
         setShowMagicInput(false)
