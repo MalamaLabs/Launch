@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useConnect } from 'wagmi'
 import { injected } from 'wagmi/connectors'
 import { useWallet } from '@meshsdk/react'
-import { Mail, Loader2, Wallet, Globe } from 'lucide-react'
+import { ShieldCheck, Mail, Loader2 } from 'lucide-react'
 import { useMagic } from '@/components/magic/MagicProvider'
 
 function SignInForm() {
@@ -14,162 +14,122 @@ function SignInForm() {
   const redirectTo = searchParams.get('from') ?? '/dashboard'
 
   const { magic } = useMagic()
-  const { connect } = useConnect()
-  const { connect: connectCardano, connecting: cardanoConnecting } = useWallet()
+  const { connect: connectEvm, isPending: isEvmConnecting } = useConnect()
+  const { connect: connectCardano, connecting: isCardanoConnecting } = useWallet()
 
-  const [email, setEmail]       = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
-  const [sent, setSent]         = useState(false)
+  const [email, setEmail]             = useState('')
+  const [emailSubmitting, setEmailSubmitting] = useState(false)
+  const [emailError, setEmailError]   = useState('')
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 
-  async function handleMagicSignIn(e: React.FormEvent) {
+  async function signInWithEmail(e: React.FormEvent) {
     e.preventDefault()
     if (!magic || !emailOk) return
-    setLoading(true); setError('')
+    setEmailSubmitting(true); setEmailError('')
     try {
       await magic.auth.loginWithEmailOTP({ email: email.trim() })
-      setSent(true)
-      // getInfo() to confirm wallet exists before redirecting
       const info = await magic.user.getInfo()
-      const addr = info.wallets?.ethereum?.publicAddress
-      if (!addr) throw new Error('No wallet address returned — try again.')
+      if (!info.wallets?.ethereum?.publicAddress) throw new Error('No wallet address returned.')
       router.push(redirectTo)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sign-in failed'
-      // User dismissing the OTP modal throws a MagicSDK error — treat as cancel
-      if (msg.toLowerCase().includes('modal')) {
-        setError('OTP window closed — re-enter your email to try again.')
-      } else {
-        setError(msg)
-      }
-      setSent(false)
+      setEmailError(err instanceof Error ? err.message : 'Sign-in failed — try again.')
     } finally {
-      setLoading(false)
+      setEmailSubmitting(false)
     }
   }
 
   async function handleCardanoConnect() {
     try {
       const win = window as any
-      const detected = Object.entries(win.cardano ?? {})
-      if (detected.length === 1) {
-        await connectCardano((detected[0] as any)[0])
-      } else if (detected.length > 1) {
-        // Pick the first available — user can change in the dashboard
-        await connectCardano((detected[0] as any)[0])
-      } else {
-        setError('No Cardano wallet detected — install Lace or Eternl.')
-        return
-      }
+      const detected = Object.keys(win.cardano ?? {})
+      if (detected.length === 0) { setEmailError('No Cardano wallet detected — install Lace or Eternl.'); return }
+      await connectCardano(detected[0])
       router.push(redirectTo)
     } catch {
-      setError('Cardano connection failed.')
+      setEmailError('Cardano connection failed.')
     }
   }
 
-  function handleBaseConnect() {
-    connect({ connector: injected() })
-    // wagmi fires isConnected async — poll or rely on dashboard to detect
+  function handleEvmConnect() {
+    connectEvm({ connector: injected() })
     setTimeout(() => router.push(redirectTo), 800)
   }
 
   return (
-    <div className="min-h-screen bg-[#0A1628] flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12">
+      <div className="mx-4 w-full max-w-md rounded-3xl border border-gray-800 bg-malama-card p-8 text-center shadow-2xl md:p-10">
 
-        {/* Logo */}
-        <div className="flex justify-center mb-10">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M24 4L44 15V33L24 44L4 33V15L24 4Z" fill="#0A1628" stroke="#c4f061" strokeWidth="2" />
-            <path d="M14 32V18L24 24L34 18V32" stroke="#c4f061" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          </svg>
-        </div>
-
-        <h1 className="text-center text-white text-2xl font-black tracking-tight mb-1">
-          Node Command Center
-        </h1>
-        <p className="text-center text-gray-500 text-sm mb-10">
-          Sign in to manage your Genesis hex licenses
+        <ShieldCheck className="mx-auto mb-6 h-20 w-20 text-malama-accent drop-shadow-[0_0_20px_rgba(196,240,97,0.3)]" />
+        <h2 className="mb-2 text-2xl font-black tracking-tight text-white">Sign in to the app</h2>
+        <p className="mb-8 leading-relaxed text-gray-400">
+          Sign in with your email, or connect{' '}
+          <strong className="text-gray-300">Cardano</strong> (Lace) /{' '}
+          <strong className="text-gray-300">Base</strong> (MetaMask) to load your on-chain licenses.
         </p>
 
-        {/* ── Magic email sign-in ── */}
-        {magic ? (
-          <form onSubmit={handleMagicSignIn} className="space-y-3 mb-6">
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
-              Email address
-            </label>
+        {/* ── Email sign-in ── */}
+        <form onSubmit={signInWithEmail} className="mb-6 space-y-3 text-left">
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-500">Email</span>
             <input
               type="email"
-              value={email}
-              onChange={e => { setEmail(e.target.value); setError('') }}
-              placeholder="you@example.com"
               autoComplete="email"
-              disabled={loading}
-              className="w-full bg-[#111f35] border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-[#c4f061] focus:ring-1 focus:ring-[#c4f061] transition-colors disabled:opacity-50"
+              value={email}
+              onChange={e => { setEmail(e.target.value); setEmailError('') }}
+              placeholder="you@example.com"
+              disabled={emailSubmitting}
+              className="w-full rounded-xl border border-gray-800 bg-black/50 px-4 py-3 text-white placeholder:text-gray-600 focus:border-malama-accent focus:outline-none disabled:opacity-50"
             />
-
-            {error && <p className="text-red-400 text-xs">{error}</p>}
-
-            {sent && !error && (
-              <p className="text-[#c4f061] text-xs">
-                Check your inbox — enter the 6-digit code in the Magic popup.
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || !emailOk}
-              className="w-full flex items-center justify-center gap-2 bg-[#c4f061] hover:bg-[#b3e050] disabled:opacity-40 disabled:cursor-not-allowed text-[#0A1628] font-black text-sm py-3 rounded-lg transition-colors"
-            >
-              {loading
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending code…</>
-                : <><Mail className="h-4 w-4" /> Continue with email</>}
-            </button>
-          </form>
-        ) : (
-          /* Magic API key not configured — show a placeholder */
-          <div className="mb-6 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-center text-xs text-yellow-400">
-            Email sign-in is not configured.<br />Set <code>NEXT_PUBLIC_MAGIC_API_KEY</code> to enable it.
-          </div>
-        )}
+          </label>
+          {emailError && <p className="text-sm text-red-400">{emailError}</p>}
+          <button
+            type="submit"
+            disabled={emailSubmitting || !emailOk || !magic}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-violet-500/50 bg-violet-500/10 py-4 font-black text-violet-200 transition hover:bg-violet-500/20 disabled:opacity-50"
+          >
+            {emailSubmitting
+              ? <><Loader2 className="h-5 w-5 animate-spin" /> Signing in…</>
+              : <><Mail className="h-5 w-5" /> Continue with email</>}
+          </button>
+          {!magic && (
+            <p className="text-center text-xs text-yellow-500/80">
+              Email sign-in requires <code>NEXT_PUBLIC_MAGIC_API_KEY</code> to be set.
+            </p>
+          )}
+        </form>
 
         {/* ── Divider ── */}
-        <div className="relative my-6">
+        <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-800" />
+            <span className="w-full border-t border-gray-800" />
           </div>
-          <div className="relative flex justify-center">
-            <span className="bg-[#0A1628] px-3 text-xs text-gray-600">or connect a wallet</span>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-malama-card px-4 text-gray-500">Or connect a wallet</span>
           </div>
         </div>
 
-        {/* ── Wallet options ── */}
+        {/* ── Wallet buttons ── */}
         <div className="space-y-3">
           <button
             type="button"
             onClick={() => void handleCardanoConnect()}
-            disabled={cardanoConnecting}
-            className="w-full flex items-center gap-3 border border-[#c4f061]/30 bg-[#c4f061]/5 hover:bg-[#c4f061]/10 rounded-lg px-4 py-3 text-[#c4f061] font-bold text-sm transition-colors disabled:opacity-50"
+            disabled={isCardanoConnecting || isEvmConnecting}
+            className="w-full rounded-xl border-2 border-malama-accent/50 bg-malama-accent/10 py-4 font-black text-malama-accent shadow-xl transition hover:bg-malama-accent hover:text-black disabled:opacity-50"
           >
-            <Wallet className="h-4 w-4 shrink-0" />
-            {cardanoConnecting ? 'Connecting…' : 'Cardano — Lace / Eternl / Nami'}
+            {isCardanoConnecting ? 'Connecting…' : 'Cardano — Lace / Eternl / Nami'}
           </button>
 
           <button
             type="button"
-            onClick={handleBaseConnect}
-            className="w-full flex items-center gap-3 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 rounded-lg px-4 py-3 text-blue-400 font-bold text-sm transition-colors"
+            onClick={handleEvmConnect}
+            disabled={isCardanoConnecting || isEvmConnecting}
+            className="w-full rounded-xl border-2 border-blue-500/50 bg-blue-500/10 py-4 font-black text-blue-400 shadow-xl transition hover:bg-blue-500 hover:text-white disabled:opacity-50"
           >
-            <Globe className="h-4 w-4 shrink-0" />
-            Base — MetaMask / Injected
+            {isEvmConnecting ? 'Connecting…' : 'Base — MetaMask / Injected'}
           </button>
         </div>
 
-        <p className="text-center text-gray-700 text-xs mt-10">
-          © {new Date().getFullYear()} Mālama Labs Inc.
-        </p>
       </div>
     </div>
   )
@@ -178,8 +138,8 @@ function SignInForm() {
 export default function SignInPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#0A1628] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#c4f061]" />
+      <div className="flex min-h-screen items-center justify-center bg-black">
+        <Loader2 className="h-8 w-8 animate-spin text-malama-accent" />
       </div>
     }>
       <SignInForm />
