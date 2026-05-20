@@ -14,9 +14,12 @@ import {
   AlertCircle,
   TrendingUp,
   Lock,
+  Mail,
+  Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { nftImageUrl } from '@/lib/api'
+import { useMagic } from '@/components/magic/MagicProvider'
 
 function hexToAscii(hexStr: string | undefined) {
   if (!hexStr || typeof hexStr !== 'string') return ''
@@ -44,11 +47,56 @@ export default function Dashboard() {
 
   const { isConnected: isEvmConnected, address: evmAddress } = useAccount()
   const { connect: connectEvm, isPending: isEvmConnecting } = useConnect()
+  const { magic } = useMagic()
+
+  // Magic email sign-in state (for card buyers who have no hardware wallet)
+  const [magicEmail, setMagicEmail]         = useState('')
+  const [magicAddress, setMagicAddress]     = useState<string | null>(null)
+  const [magicLoading, setMagicLoading]     = useState(false)
+  const [magicError, setMagicError]         = useState('')
+  const [showMagicInput, setShowMagicInput] = useState(false)
+
+  // Re-hydrate Magic session on page load (Magic persists login across refreshes)
+  useEffect(() => {
+    if (!magic) return
+    magic.user.isLoggedIn().then((loggedIn: boolean) => {
+      if (loggedIn) {
+        magic.user.getInfo().then((info: { publicAddress?: string | null }) => {
+          if (info.publicAddress) setMagicAddress(info.publicAddress)
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+  }, [magic])
+
+  const signInWithMagic = async () => {
+    if (!magic) return
+    const email = magicEmail.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setMagicError('Enter a valid email address')
+      return
+    }
+    setMagicLoading(true); setMagicError('')
+    try {
+      await magic.auth.loginWithEmailOTP({ email })
+      const info = await magic.user.getInfo() as { publicAddress?: string | null }
+      if (info.publicAddress) {
+        setMagicAddress(info.publicAddress)
+        setShowMagicInput(false)
+      } else {
+        setMagicError('Could not retrieve wallet address — try again.')
+      }
+    } catch {
+      setMagicError('Sign-in cancelled or failed — try again.')
+    } finally {
+      setMagicLoading(false)
+    }
+  }
 
   const [hexLicenses, setHexLicenses] = useState<HexLicense[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
 
-  const isAuthenticated = isCardanoConnected || isEvmConnected
+  const isAuthenticated = isCardanoConnected || isEvmConnected || !!magicAddress
+  const effectiveEvmAddress = evmAddress ?? magicAddress ?? undefined
   const activePredictionMarkets = hexLicenses.length > 0 ? 8 : 0
   const currentStatus = hexLicenses.length > 0 ? 'Hardware Pending' : 'Awaiting Genesis License'
 
@@ -82,7 +130,7 @@ export default function Dashboard() {
         } finally {
           setLoadingAssets(false)
         }
-      } else if (isEvmConnected && evmAddress) {
+      } else if (effectiveEvmAddress) {
         // TODO: query GenesisValidator.balanceOf / tokensOfOwner via publicClient
         // For now show empty state with a helpful CTA to the list page
         setHexLicenses([])
@@ -92,7 +140,8 @@ export default function Dashboard() {
       }
     }
     resolveAssets()
-  }, [isCardanoConnected, cardanoWallet, isEvmConnected, evmAddress])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress])
 
   return (
     <div className="relative min-h-screen bg-black p-6 font-sans text-gray-200 md:p-12">
@@ -113,10 +162,16 @@ export default function Dashboard() {
               <div className="hidden text-right sm:block">
                 <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Network Status</p>
                 <div className="flex items-center gap-2">
-                  {isEvmConnected && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
+                  {(isEvmConnected || magicAddress) && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
                   {isCardanoConnected && <span className="h-2 w-2 animate-pulse rounded-full bg-malama-accent" />}
+                  {magicAddress && !isEvmConnected && <span className="h-2 w-2 animate-pulse rounded-full bg-purple-400" />}
                   <p className="text-lg font-bold text-white">{currentStatus}</p>
                 </div>
+                {magicAddress && !isEvmConnected && (
+                  <p className="font-mono text-[10px] text-purple-400">
+                    Magic · {magicAddress.slice(0, 8)}…{magicAddress.slice(-4)}
+                  </p>
+                )}
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-malama-accent/30 bg-malama-deep shadow-[0_0_15px_rgba(196,240,97,0.2)]">
                 <Cpu className="h-6 w-6 text-malama-accent" />
@@ -140,6 +195,15 @@ export default function Dashboard() {
               >
                 MetaMask / Base
               </button>
+              {magic && (
+                <button
+                  type="button"
+                  onClick={() => setShowMagicInput(v => !v)}
+                  className="rounded-lg border border-purple-500/50 bg-purple-500/20 px-4 py-2 font-bold text-purple-400 transition-colors hover:bg-purple-500 hover:text-white"
+                >
+                  Card buyer
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -150,17 +214,16 @@ export default function Dashboard() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 pt-32 backdrop-blur-md">
           <div className="mx-4 max-w-md rounded-3xl border border-gray-800 bg-malama-card p-8 text-center shadow-2xl md:p-10">
             <ShieldCheck className="mx-auto mb-6 h-20 w-20 text-malama-accent drop-shadow-[0_0_20px_rgba(196,240,97,0.3)]" />
-            <h2 className="mb-2 text-2xl font-black tracking-tight text-white">Connect your wallet</h2>
-            <p className="mb-8 leading-relaxed text-gray-400">
-              Connect <strong className="text-gray-300">Cardano</strong> (Lace / Eternl / Nami) or{' '}
-              <strong className="text-gray-300">Base</strong> (MetaMask) to load your on-chain Genesis licenses.
+            <h2 className="mb-2 text-2xl font-black tracking-tight text-white">Access Node Command Center</h2>
+            <p className="mb-6 leading-relaxed text-gray-400">
+              Connect a wallet to load your on-chain Genesis licenses, or sign in with the email you used at checkout.
             </p>
 
             <div className="space-y-3">
               <button
                 type="button"
                 onClick={() => connectCardano('lace')}
-                disabled={isCardanoConnecting || isEvmConnecting}
+                disabled={isCardanoConnecting || isEvmConnecting || magicLoading}
                 className="w-full rounded-xl border-2 border-malama-accent/50 bg-malama-accent/10 py-4 font-black text-malama-accent shadow-xl transition hover:bg-malama-accent hover:text-black disabled:opacity-50"
               >
                 {isCardanoConnecting ? 'Connecting…' : 'Cardano — Lace / Eternl / Nami'}
@@ -169,20 +232,50 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => connectEvm({ connector: injected() })}
-                disabled={isCardanoConnecting || isEvmConnecting}
+                disabled={isCardanoConnecting || isEvmConnecting || magicLoading}
                 className="w-full rounded-xl border-2 border-blue-500/50 bg-blue-500/10 py-4 font-black text-blue-400 shadow-xl transition hover:bg-blue-500 hover:text-white disabled:opacity-50"
               >
                 {isEvmConnecting ? 'Connecting…' : 'Base — MetaMask / Injected'}
               </button>
-            </div>
 
-            <p className="mt-6 text-xs text-gray-600">
-              Paid with card and don&apos;t have a wallet?{' '}
-              <Link href="/presale" className="text-malama-accent hover:underline">
-                Use the transfer link
-              </Link>{' '}
-              from your confirmation email.
-            </p>
+              {magic && (
+                <div className="rounded-xl border-2 border-purple-500/40 bg-purple-500/5 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowMagicInput(v => !v)}
+                    className="flex w-full items-center justify-center gap-2 font-black text-purple-400 hover:text-purple-300"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Paid with card? Sign in with email
+                  </button>
+                  {showMagicInput && (
+                    <div className="mt-3 space-y-2">
+                      <input
+                        type="email"
+                        value={magicEmail}
+                        onChange={e => setMagicEmail(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') void signInWithMagic() }}
+                        placeholder="you@example.com"
+                        className="w-full rounded-lg border border-purple-500/30 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:border-purple-500/60 focus:outline-none"
+                      />
+                      {magicError && <p className="text-xs text-red-400">{magicError}</p>}
+                      <button
+                        type="button"
+                        onClick={() => void signInWithMagic()}
+                        disabled={magicLoading}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 font-black text-white transition hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        {magicLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                        {magicLoading ? 'Sending OTP…' : 'Send one-time code'}
+                      </button>
+                      <p className="text-[10px] text-gray-600">
+                        Use the same email from your Stripe checkout. A 6-digit code will be sent.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
