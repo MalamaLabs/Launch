@@ -483,201 +483,283 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
           )}
 
           {step === 2 && (
-            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-              <div className="text-center mb-2">
+            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+              <div className="text-center">
                 <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-malama-accent mb-2">Step 2</p>
-                <h2 className="text-4xl font-black text-white">Choose how to pay</h2>
-                <p className="text-gray-400 mt-2 text-sm">Crypto or card — all three lanes are live.</p>
+                <h2 className="flex flex-wrap items-center justify-center gap-2 text-4xl font-black text-white">
+                  <CreditCard className="h-9 w-9 shrink-0 text-malama-accent" />
+                  Pay with crypto or card
+                </h2>
+                <p className="mx-auto mt-3 max-w-xl text-base text-gray-400">
+                  Connect a wallet to pay with crypto, or pay with card — no wallet needed.
+                </p>
               </div>
 
-              {/* ── Crypto lanes: Base + Cardano ────────────────────────── */}
-              <div className="grid sm:grid-cols-2 gap-4">
+              {/* ── Two persistent cards side-by-side ───────────────────── */}
+              <div className="grid sm:grid-cols-2 gap-4 items-start">
 
-                {/* Base tile */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('base')}
-                  className={`relative flex flex-col gap-4 p-6 rounded-2xl border text-left transition-all ${
-                    paymentMode === 'base'
-                      ? 'border-blue-500 bg-blue-500/10 shadow-[0_0_24px_rgba(59,130,246,0.15)]'
-                      : 'border-gray-800 bg-malama-deep hover:border-gray-600'
+                {/* ╔══════════════════════════════╗
+                    ║  CARD 1 — Crypto wallets     ║
+                    ╚══════════════════════════════╝ */}
+                <div
+                  className={`flex flex-col gap-4 p-6 rounded-2xl border transition-all cursor-pointer ${
+                    paymentMode !== 'stripe'
+                      ? 'border-malama-accent/40 bg-malama-accent/5 shadow-[0_0_24px_rgba(196,240,97,0.08)]'
+                      : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                   }`}
+                  onClick={() => { if (paymentMode === 'stripe') setPaymentMode(cardanoReady ? 'cardano' : 'base') }}
                 >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-full shrink-0 ${paymentMode === 'base' ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
-                      <Globe className={`h-6 w-6 ${paymentMode === 'base' ? 'text-blue-400' : 'text-gray-500'}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-black text-white uppercase tracking-wider">Base L2</h3>
-                      <p className="text-xs text-gray-500">Pay with USDC · ERC-721 NFT</p>
-                    </div>
-                    {paymentMode === 'base' && evmConnected && (
-                      <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                  {/* Card header */}
+                  <div className="flex items-center gap-2">
+                    <Wallet className={`h-5 w-5 shrink-0 ${paymentMode !== 'stripe' ? 'text-malama-accent' : 'text-gray-500'}`} />
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider flex-1">Pay with Crypto</h3>
+                    {paymentMode !== 'stripe' && (cardanoReady || evmConnected) && (
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                        cardanoReady
+                          ? 'text-malama-accent bg-malama-accent/10 border-malama-accent/30'
+                          : 'text-blue-300 bg-blue-500/10 border-blue-500/30'
+                      }`}>READY</span>
                     )}
                   </div>
-                  {paymentMode === 'base' && (
-                    <div className="w-full" onClick={e => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => evmConnected ? disconnectEVM() : connectEVM({ connector: injected() })}
-                        className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                          evmConnected
-                            ? 'bg-blue-500/20 border border-blue-500/50 text-blue-300 hover:bg-blue-500/30'
-                            : 'bg-blue-500 text-white hover:bg-blue-400'
-                        }`}
-                      >
-                        {evmConnected
-                          ? `✓ ${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}`
-                          : 'Connect MetaMask'}
-                      </button>
-                    </div>
-                  )}
-                </button>
 
-                {/* Cardano tile */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('cardano')}
-                  className={`relative flex flex-col gap-4 p-6 rounded-2xl border text-left transition-all ${
-                    paymentMode === 'cardano'
-                      ? 'border-malama-accent bg-malama-accent/10 shadow-[0_0_24px_rgba(196,240,97,0.12)]'
-                      : 'border-gray-800 bg-malama-deep hover:border-gray-600'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-full shrink-0 text-xl font-black ${paymentMode === 'cardano' ? 'bg-malama-accent/20 text-malama-accent' : 'bg-gray-800 text-gray-500'}`}>
-                      ₳
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-black text-white uppercase tracking-wider">Cardano</h3>
-                      <p className="text-xs text-gray-500">Pay with ADA · CIP-68 NFT</p>
-                    </div>
-                    {paymentMode === 'cardano' && cardanoConnected && (
-                      <div className="w-2 h-2 rounded-full bg-malama-accent shrink-0" />
-                    )}
-                  </div>
-                  {paymentMode === 'cardano' && (
-                    <div className="w-full relative" onClick={e => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const win = window as any
-                          const detected = Object.entries(win.cardano || {}).map(([key, w]: any) => ({ name: key, icon: w.icon }))
-                          setCardanoWallets(detected)
-                          setShowCardanoPicker(p => !p)
-                        }}
-                        className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                          cardanoConnected
-                            ? 'bg-malama-accent/20 border border-malama-accent/50 text-malama-accent hover:bg-malama-accent/30'
-                            : 'bg-malama-accent text-black hover:bg-malama-accent/90'
-                        }`}
-                      >
-                        {cardanoConnected ? `✓ ${cardanoWalletName?.toUpperCase()}` : 'Connect Lace / Eternl'}
-                      </button>
-                      {showCardanoPicker && (
-                        <div className="absolute top-full mt-1 left-0 right-0 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
-                          {cardanoWallets.length === 0 ? (
-                            <p className="px-4 py-3 text-xs text-gray-500">No Cardano wallets detected — install Lace or Eternl.</p>
-                          ) : cardanoWallets.map(w => (
-                            <button
-                              key={w.name}
-                              type="button"
-                              onClick={() => { setShowCardanoPicker(false); connectCardanoWallet(w.name) }}
-                              className="flex items-center gap-2 px-4 py-3 hover:bg-gray-800 w-full text-white text-xs font-bold uppercase"
-                            >
-                              {w.icon && <img src={w.icon} className="w-4 h-4 rounded" alt="" />}
-                              {w.name}
-                            </button>
-                          ))}
+                  {/* Cardano + Base wallet sub-tiles */}
+                  <div className="grid grid-cols-2 gap-3" onClick={e => e.stopPropagation()}>
+
+                    {/* Cardano sub-tile */}
+                    <div
+                      className={`flex flex-col items-center gap-3 p-4 rounded-xl border text-center transition-all cursor-pointer ${
+                        paymentMode === 'cardano'
+                          ? 'border-malama-accent/60 bg-malama-accent/10'
+                          : 'border-gray-800 bg-malama-card/40 hover:border-gray-700'
+                      }`}
+                      onClick={() => setPaymentMode('cardano')}
+                    >
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-full text-lg font-black ${
+                        paymentMode === 'cardano' ? 'bg-malama-accent/20 text-malama-accent' : 'bg-gray-800 text-gray-500'
+                      }`}>₳</div>
+                      <div>
+                        <p className="text-xs font-black text-white uppercase tracking-wide">Cardano</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">ADA · CIP-68</p>
+                      </div>
+
+                      {cardanoReady ? (
+                        <div className="w-full py-1.5 rounded-lg bg-malama-accent/20 border border-malama-accent/40 text-malama-accent text-[10px] font-black">
+                          ✓ {cardanoWalletName?.toUpperCase() ?? 'CONNECTED'}
+                        </div>
+                      ) : (
+                        <div className="relative w-full">
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation()
+                              setPaymentMode('cardano')
+                              const win = window as any
+                              const detected = Object.entries(win.cardano || {}).map(([key, w]: any) => ({ name: key, icon: w.icon }))
+                              setCardanoWallets(detected)
+                              setShowCardanoPicker(p => !p)
+                            }}
+                            className="w-full py-1.5 rounded-lg bg-malama-accent/10 border border-malama-accent/30 text-malama-accent text-[10px] font-black hover:bg-malama-accent/20 transition-colors"
+                          >
+                            Connect
+                          </button>
+                          {showCardanoPicker && paymentMode === 'cardano' && (
+                            <div className="absolute top-full mt-1 left-0 right-0 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
+                              {cardanoWallets.length === 0 ? (
+                                <p className="px-3 py-2.5 text-[11px] text-gray-500">No Cardano wallet found — install Lace or Eternl.</p>
+                              ) : cardanoWallets.map(w => (
+                                <button key={w.name} type="button"
+                                  onClick={() => { setShowCardanoPicker(false); connectCardanoWallet(w.name) }}
+                                  className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-800 w-full text-white text-[11px] font-bold uppercase"
+                                >
+                                  {w.icon && <img src={w.icon} className="w-4 h-4 rounded" alt="" />}
+                                  {w.name}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {cardanoError && <p className="text-[10px] text-red-400 mt-1">{cardanoError}</p>}
                         </div>
                       )}
-                      {cardanoError && <p className="text-xs text-red-400 mt-1.5">{cardanoError}</p>}
                     </div>
-                  )}
-                </button>
-              </div>
 
-              {/* ── Card / No-wallet lane ────────────────────────────────── */}
-              <button
-                type="button"
-                onClick={() => setPaymentMode('stripe')}
-                className={`w-full flex flex-col gap-4 p-6 rounded-2xl border text-left transition-all ${
-                  paymentMode === 'stripe'
-                    ? 'border-purple-500/60 bg-purple-500/10 shadow-[0_0_20px_rgba(168,85,247,0.10)]'
-                    : 'border-gray-800 bg-malama-deep hover:border-gray-600'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-full shrink-0 ${paymentMode === 'stripe' ? 'bg-purple-500/20' : 'bg-gray-800'}`}>
-                    <CreditCard className={`h-6 w-6 ${paymentMode === 'stripe' ? 'text-purple-400' : 'text-gray-500'}`} />
+                    {/* Base sub-tile */}
+                    <div
+                      className={`flex flex-col items-center gap-3 p-4 rounded-xl border text-center transition-all cursor-pointer ${
+                        paymentMode === 'base'
+                          ? 'border-blue-500/60 bg-blue-500/10'
+                          : 'border-gray-800 bg-malama-card/40 hover:border-gray-700'
+                      }`}
+                      onClick={() => setPaymentMode('base')}
+                    >
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-full ${
+                        paymentMode === 'base' ? 'bg-blue-500/20' : 'bg-gray-800'
+                      }`}>
+                        <Globe className={`h-5 w-5 ${paymentMode === 'base' ? 'text-blue-400' : 'text-gray-500'}`} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-white uppercase tracking-wide">Base L2</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">USDC · ERC-721</p>
+                      </div>
+
+                      {evmConnected ? (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); disconnectEVM() }}
+                          className="w-full py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-300 text-[10px] font-black hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 transition-colors"
+                        >
+                          ✓ {evmAddress?.slice(0, 6)}…{evmAddress?.slice(-4)}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setPaymentMode('base'); connectEVM({ connector: injected() }) }}
+                          className="w-full py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-black hover:bg-blue-500/20 transition-colors"
+                        >
+                          Connect
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Credit / Debit Card</h3>
-                    <p className="text-xs text-gray-500">No crypto wallet needed · $2,000 USD via Stripe</p>
-                  </div>
-                  {paymentMode === 'stripe' && cardEmailOk && (
-                    <div className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+
+                  {/* Active chain note */}
+                  {paymentMode !== 'stripe' && (
+                    <p className="text-[10px] text-gray-600 text-center">
+                      {paymentMode === 'cardano'
+                        ? 'Pay in ADA · NFT mints CIP-68 on Cardano'
+                        : 'Pay in USDC · ERC-721 on Base + Cardano mirror'}
+                    </p>
                   )}
                 </div>
 
-                {/* Stripe form — expands inline when selected */}
-                {paymentMode === 'stripe' && (
-                  <div className="w-full space-y-4 pt-2 border-t border-purple-500/20" onClick={e => e.stopPropagation()}>
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Email for receipt *</p>
+                {/* ╔══════════════════════════════╗
+                    ║  CARD 2 — Pay with Card      ║
+                    ╚══════════════════════════════╝ */}
+                <div
+                  className={`flex flex-col gap-4 p-6 rounded-2xl border transition-all ${
+                    paymentMode === 'stripe'
+                      ? 'border-purple-500/40 bg-purple-500/5 shadow-[0_0_24px_rgba(168,85,247,0.08)]'
+                      : 'border-gray-800 bg-malama-deep hover:border-gray-700 cursor-pointer'
+                  }`}
+                  onClick={() => { if (paymentMode !== 'stripe') setPaymentMode('stripe') }}
+                >
+                  {/* Card header */}
+                  <div className="flex items-center gap-2">
+                    <CreditCard className={`h-5 w-5 shrink-0 ${paymentMode === 'stripe' ? 'text-purple-400' : 'text-gray-500'}`} />
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider flex-1">Pay with Card</h3>
+                    {paymentMode === 'stripe' && cardEmailOk && (
+                      <span className="text-[10px] font-black text-purple-300 bg-purple-500/10 border border-purple-500/30 px-2 py-0.5 rounded-full">READY</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500 -mt-2">$2,000 USD via Stripe · No crypto wallet required</p>
+
+                  <div className="space-y-3" onClick={e => e.stopPropagation()}>
+                    {/* Email */}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Email for receipt *</p>
                       <input
                         type="email"
                         value={cardEmail}
-                        onChange={e => setCardEmail(e.target.value)}
+                        onChange={e => { setCardEmail(e.target.value); if (paymentMode !== 'stripe') setPaymentMode('stripe') }}
+                        onFocus={() => { if (paymentMode !== 'stripe') setPaymentMode('stripe') }}
                         placeholder="you@example.com"
-                        className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-purple-500/60 focus:outline-none"
+                        className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-purple-500/50 focus:outline-none"
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                        NFT delivery address <span className="text-gray-600 normal-case font-normal">(optional)</span>
-                      </p>
-                      {cardanoConnected && (
-                        <div className="flex items-center gap-3 rounded-xl border border-malama-accent/30 bg-malama-accent/5 px-4 py-3">
-                          <span className="text-malama-accent text-lg">₳</span>
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-bold text-malama-accent uppercase tracking-wider">Cardano wallet connected</p>
-                            <p className="text-[11px] text-gray-400 mt-0.5">NFT mints as CIP-68 to your {cardanoWalletName} wallet</p>
+                    {/* NFT delivery — shows smart option based on connected wallet */}
+                    <div className="rounded-xl border border-gray-800 bg-black/20 p-3 space-y-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">NFT will go to</p>
+
+                      {/* a. Cardano connected → mint pair on Cardano */}
+                      {cardanoConnected ? (
+                        <div className="flex items-start gap-2.5">
+                          <span className="text-malama-accent font-black mt-0.5">₳</span>
+                          <div>
+                            <p className="text-[11px] font-bold text-malama-accent">Cardano wallet — CIP-68 mint pair</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{cardanoWalletName} · mints directly on Cardano</p>
+                          </div>
+                        </div>
+                      ) : stripeEvmOk && stripeDeliveryAddress ? (
+                        /* b. Manual address override */
+                        <div className="flex items-start gap-2.5">
+                          <Globe className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[11px] font-bold text-blue-300">Base wallet (manual) + Cardano mirror</p>
+                            <p className="text-[10px] text-gray-500 font-mono mt-0.5">{stripeEvmAddr.slice(0,10)}…{stripeEvmAddr.slice(-6)}</p>
+                          </div>
+                        </div>
+                      ) : evmConnected ? (
+                        /* c. Base wallet connected */
+                        <div className="flex items-start gap-2.5">
+                          <Globe className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[11px] font-bold text-blue-300">Connected Base wallet + Cardano mirror</p>
+                            <p className="text-[10px] text-gray-500 font-mono mt-0.5">{evmAddress?.slice(0,10)}…{evmAddress?.slice(-6)}</p>
+                          </div>
+                        </div>
+                      ) : magic ? (
+                        /* d. No wallet — Magic creates one */
+                        <div className="flex items-start gap-2.5">
+                          <Wallet className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[11px] font-bold text-purple-300">Magic embedded wallet (auto-created)</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">A Base wallet is created for your email — you own the keys</p>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Custodial fallback */
+                        <div className="flex items-start gap-2.5">
+                          <Wallet className="h-4 w-4 text-gray-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[11px] font-bold text-gray-400">Held in custody</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">Transfer to your wallet after purchase via email link</p>
                           </div>
                         </div>
                       )}
-                      <input
-                        type="text"
-                        value={stripeDeliveryAddress}
-                        onChange={e => setStripeDeliveryAddress(e.target.value)}
-                        placeholder={evmAddress ?? '0x… Base wallet address (optional)'}
-                        className="w-full rounded-xl border border-gray-700 bg-malama-deep px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-purple-500/60 focus:outline-none font-mono"
-                      />
-                      {cardanoConnected ? (
-                        <p className="text-[11px] text-gray-500">Leave blank to use Cardano wallet above. Paste a Base address to override.</p>
-                      ) : stripeEvmOk ? (
-                        <p className="text-[11px] text-malama-accent">✓ NFT mints on Base to {stripeEvmAddr.slice(0, 8)}…{stripeEvmAddr.slice(-6)}</p>
-                      ) : evmConnected ? (
-                        <p className="text-[11px] text-malama-accent">Using connected wallet: {evmAddress?.slice(0, 8)}…{evmAddress?.slice(-6)}</p>
-                      ) : magic ? (
-                        <p className="text-[11px] text-gray-500">Leave blank — we'll create a free Base wallet linked to your email automatically.</p>
-                      ) : (
-                        <p className="text-[11px] text-gray-500">Paste a Base address to receive the NFT directly. Leave blank and we'll hold it in custody.</p>
+
+                      {/* Optional Base address override */}
+                      {!cardanoConnected && (
+                        <div className="pt-1">
+                          <p className="text-[10px] text-gray-700 mb-1">Or paste a Base address to override delivery:</p>
+                          <input
+                            type="text"
+                            value={stripeDeliveryAddress}
+                            onChange={e => setStripeDeliveryAddress(e.target.value)}
+                            placeholder={evmAddress ?? '0x… optional'}
+                            className="w-full rounded-lg border border-gray-800 bg-black/30 px-3 py-2 text-xs text-white placeholder-gray-700 focus:border-purple-500/40 focus:outline-none font-mono"
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
-                )}
-              </button>
+                </div>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                disabled={!isSetupComplete}
-                className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-[1.01]"
-              >
-                Review Order
-              </button>
+              {/* ── Back + Continue ── */}
+              <div className="flex flex-col items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-sm font-bold text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  ← Back to locate HEX
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  disabled={!isSetupComplete}
+                  className={`w-full max-w-lg rounded-2xl py-5 text-xl font-black shadow-xl transition-all ${
+                    isSetupComplete
+                      ? 'bg-malama-accent text-black shadow-malama-accent/30 hover:scale-[1.02]'
+                      : 'cursor-not-allowed bg-gray-800 text-gray-600 opacity-50'
+                  }`}
+                >
+                  Review Order
+                </button>
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-600">
+                  Genesis 200 · $2,000 · One mint per hex
+                </p>
+              </div>
             </motion.div>
           )}
 
