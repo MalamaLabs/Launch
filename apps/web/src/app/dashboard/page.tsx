@@ -62,7 +62,8 @@ export default function Dashboard() {
     magic.user.isLoggedIn().then((loggedIn: boolean) => {
       if (loggedIn) {
         magic.user.getInfo().then((info) => {
-          if (info.publicAddress) setMagicAddress(info.publicAddress)
+          const addr = info.wallets?.ethereum?.publicAddress
+          if (addr) setMagicAddress(addr)
         }).catch(() => {})
       }
     }).catch(() => {})
@@ -79,8 +80,9 @@ export default function Dashboard() {
     try {
       await magic.auth.loginWithEmailOTP({ email })
       const info = await magic.user.getInfo()
-      if (info.publicAddress) {
-        setMagicAddress(info.publicAddress)
+      const addr = info.wallets?.ethereum?.publicAddress
+      if (addr) {
+        setMagicAddress(addr)
         setShowMagicInput(false)
       } else {
         setMagicError('Could not retrieve wallet address — try again.')
@@ -468,6 +470,7 @@ export default function Dashboard() {
             <Link href="/presale" className="flex items-center gap-2 rounded-xl border border-malama-accent/30 bg-malama-accent/10 px-4 py-3 text-sm font-black text-malama-accent hover:bg-malama-accent/20 transition-colors">
               <CheckCircle2 className="h-4 w-4" /> Reserve a Node
             </Link>
+    
           </section>
         </div>
       </div>
