@@ -10,6 +10,7 @@ const topNavLinks = [
   { href: '/timeline', label: 'Timeline', active: (p: string) => p.startsWith('/timeline') },
   { href: '/map', label: 'Explorer', active: (p: string) => p === '/map' || p.startsWith('/map/') },
   { href: '/partners', label: 'Become A Launch Partner', active: (p: string) => p.startsWith('/partners') },
+  { href: '/dashboard', label: 'My Node', active: (p: string) => p.startsWith('/dashboard') },
 ]
 
 export default function Navbar() {
@@ -49,13 +50,10 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
-          {/* Launch App CTA routes straight to /presale — the post-login
-              dashboard has been retired for this MVP. Once there's a real
-              operator dashboard again, swap the href back. */}
           <Link
-            href="/presale"
+            href="/dashboard"
             className={`ml-1 shrink-0 whitespace-nowrap rounded-malama-sm px-[18px] py-[11px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-px sm:ml-2 ${
-              pathname.startsWith('/presale')
+              pathname.startsWith('/dashboard')
                 ? 'bg-malama-accent text-malama-bg ring-1 ring-malama-accent/60'
                 : 'bg-malama-accent text-malama-bg hover:shadow-[0_8px_24px_rgba(196,240,97,0.2)]'
             }`}

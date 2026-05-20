@@ -252,6 +252,17 @@ function ConfirmedView({
           </div>
         )}
 
+        {/* ── Add to MetaMask — prominent, right after the NFT card ── */}
+        {hasMetaMask && (
+          <button
+            onClick={() => addToMetaMask(detail)}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-orange-700/60 bg-orange-950/50 px-8 py-4 text-[15px] font-black text-orange-300 transition-all hover:border-orange-600 hover:bg-orange-950/70 mb-3"
+          >
+            <Wallet className="w-4 h-4" />
+            Add NFT to MetaMask
+          </button>
+        )}
+
         {/* ── primary CTA ── */}
         <Link
           href={`/list/${encodeURIComponent(detail.hexId)}`}
@@ -293,9 +304,9 @@ function ConfirmedView({
           </div>
         )}
 
-        {/* ── secondary actions row ── */}
-        <div className="w-full flex gap-3 mb-3">
-          {openSeaUrl && (
+        {/* ── secondary actions row (OpenSea only — MetaMask moved above) ── */}
+        {openSeaUrl && (
+          <div className="w-full flex gap-3 mb-3">
             <ExternalButton
               href={openSeaUrl}
               className="flex-1 border border-blue-900/60 bg-blue-950/50 text-blue-300 hover:border-blue-700 hover:bg-blue-950"
@@ -303,17 +314,8 @@ function ConfirmedView({
               <ExternalLink className="w-3.5 h-3.5" />
               OpenSea
             </ExternalButton>
-          )}
-          {hasMetaMask && (
-            <button
-              onClick={() => addToMetaMask(detail)}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-orange-900/50 bg-orange-950/30 px-5 py-3.5 text-[13px] font-bold text-orange-300 transition-all hover:-translate-y-px hover:border-orange-700 hover:bg-orange-950/50"
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              Add to wallet
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* ── discord ── */}
         <ExternalButton
