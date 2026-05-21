@@ -87,6 +87,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   // uiTab drives which toggle is visible; stripeSubMode picks the delivery card under Card tab
   const [uiTab, setUiTab]           = useState<'crypto' | 'card'>('crypto')
   const [stripeSubMode, setStripeSubMode] = useState<'magic' | 'wallet'>('magic')
+  const [magicDeliveryAddress, setMagicDeliveryAddress] = useState<string | null>(null)
+  const [magicVerifying, setMagicVerifying]             = useState(false)
+  const [magicVerifyError, setMagicVerifyError]         = useState('')
   const [cardEmail, setCardEmail]   = useState('')
   const [stripeDeliveryAddress, setStripeDeliveryAddress] = useState('')
   const [mmImportOpen, setMmImportOpen] = useState(false)
@@ -149,7 +152,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     // Either gives us enough to sign/submit the mint tx.
     paymentMode === 'cardano' ? cardanoReady :
     // Stripe: email required + wallet required when "connected wallet" sub-mode chosen
-    cardEmailOk && (stripeSubMode === 'magic' || cardanoReady || evmConnected)
+    cardEmailOk && (stripeSubMode === 'magic' ? !!magicDeliveryAddress : (cardanoReady || evmConnected))
   )
 
   const syncNodeToMap = (id: string | null) => {
@@ -353,6 +356,23 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     }
   }
 
+  // ── Magic Email Verify (step before Stripe checkout) ───────────────────
+  const handleMagicVerify = async () => {
+    if (!magic || !cardEmailOk) return
+    setMagicVerifying(true); setMagicVerifyError('')
+    try {
+      await magic.auth.loginWithEmailOTP({ email: cardEmail.trim() })
+      const info = await magic.user.getInfo()
+      const addr = info.wallets?.ethereum?.publicAddress
+      if (!addr) throw new Error('No wallet address returned from Magic.')
+      setMagicDeliveryAddress(addr)
+    } catch (err: unknown) {
+      setMagicVerifyError(err instanceof Error ? err.message : 'Verification failed — try again.')
+    } finally {
+      setMagicVerifying(false)
+    }
+  }
+
   // ── Stripe Payment ──────────────────────────────────────────────────────
   const handleStripePayment = async () => {
     if (!hexId) throw new Error('No hex selected')
@@ -369,23 +389,13 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       ? await cardanoWallet?.getChangeAddress().catch(() => undefined)
       : undefined
 
-    // No wallet connected and no address typed → prompt Magic Email OTP
-    // so the buyer gets an embedded Base wallet without needing MetaMask.
-    // If Magic isn't configured or the buyer dismisses the modal, fall
-    // through to bank-wallet custody (same behaviour as before this patch).
+    // Use the address captured in the pre-payment Magic verify step.
+    // handleMagicVerify() must complete before this handler runs — the buy
+    // button is disabled until magicDeliveryAddress is set when in magic mode.
     let usedMagic = false
-    if (!deliveryEvm && !deliveryCardano && magic) {
-      try {
-        await magic.auth.loginWithEmailOTP({ email: cardEmail.trim() })
-        const info = await magic.user.getInfo()
-        const addr = info.wallets?.ethereum?.publicAddress
-        if (addr) {
-          deliveryEvm = addr
-          usedMagic = true
-        }
-      } catch {
-        // User dismissed OTP modal or Magic errored — continue custodial
-      }
+    if (useMagicMode && magicDeliveryAddress) {
+      deliveryEvm = magicDeliveryAddress
+      usedMagic = true
     }
 
     const intent = await createStripeCheckout(
@@ -663,7 +673,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                       type="email"
                       autoComplete="email"
                       value={cardEmail}
-                      onChange={e => setCardEmail(e.target.value)}
+                      onChange={e => { setCardEmail(e.target.value); setMagicDeliveryAddress(null); setMagicVerifyError('') }}
                       placeholder="you@example.com"
                       className="mt-2 w-full rounded-xl border border-gray-800 bg-black/40 px-4 py-3 text-white placeholder:text-gray-600 focus:border-malama-accent focus:outline-none"
                     />
@@ -696,9 +706,25 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                         Magic creates a Base wallet tied to your email.
                         You receive a transfer link to move the NFT to MetaMask later.
                       </p>
-                      {stripeSubMode === 'magic' && cardEmailOk && (
-                        <div className="w-full rounded-lg border border-malama-accent/50 bg-malama-accent/20 py-2 text-xs font-bold text-malama-accent">
-                          ✓ READY
+                      {stripeSubMode === 'magic' && (
+                        <div className="w-full space-y-2">
+                          {magicDeliveryAddress ? (
+                            <div className="rounded-lg border border-malama-accent/50 bg-malama-accent/20 px-3 py-2 text-xs font-bold text-malama-accent">
+                              ✓ Wallet verified · {magicDeliveryAddress.slice(0, 6)}…{magicDeliveryAddress.slice(-4)}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={!cardEmailOk || magicVerifying || !magic}
+                              onClick={e => { e.stopPropagation(); void handleMagicVerify() }}
+                              className="w-full rounded-lg border border-violet-500/50 bg-violet-500/10 py-2 text-xs font-bold text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-40"
+                            >
+                              {magicVerifying ? 'Sending code…' : 'Verify email →'}
+                            </button>
+                          )}
+                          {magicVerifyError && (
+                            <p className="text-[11px] text-red-400">{magicVerifyError}</p>
+                          )}
                         </div>
                       )}
                     </div>
