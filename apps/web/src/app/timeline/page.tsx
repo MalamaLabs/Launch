@@ -359,7 +359,7 @@ export default function TimelinePage() {
               Reserve a Hex Node →
             </Link>
             <Link
-              href="/map"
+              href="/explorer"
               className="inline-flex items-center justify-center gap-2 px-7 py-3.5 border border-malama-accent/40 text-malama-accent font-black text-sm uppercase tracking-wider rounded-malama hover:bg-malama-accent/8 transition-all"
             >
               Browse Available Hexes

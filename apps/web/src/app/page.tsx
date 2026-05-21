@@ -114,7 +114,7 @@ export default function Home() {
               Reserve a Hex Node →
             </Link>
             <Link
-              href="/map"
+              href="/explorer"
               className="btn-ghost inline-flex items-center justify-center gap-2 border border-malama-line-bright px-7 py-4 font-mono text-xs font-semibold uppercase tracking-[0.1em] text-malama-ink transition hover:border-malama-accent hover:text-malama-accent"
             >
               Hex Map Explorer
@@ -594,54 +594,62 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── HARDWARE IMAGES ───────────────────────────────────────── */}
-      <section id="hardware" className="w-full bg-malama-bg px-5 py-[120px] sm:px-10">
-        <div className="mx-auto max-w-[1400px]">
-          <motion.h2
-            variants={fadeUp}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true }}
-            className="mb-4 text-center font-serif text-[clamp(2rem,4vw,3rem)] font-normal tracking-tight text-malama-ink"
-          >
-            The Hex Node Hardware
-          </motion.h2>
-          <p className="mb-12 text-center text-lg text-malama-ink-dim">
-            Everything you need to validate carbon and compute data — shipped to your door.
-          </p>
-          <div className="flex flex-col gap-8">
-            <motion.div
+      {/* ── HARDWARE IMAGES (HIDDEN · sensors still in production) ───
+       *
+       * The two hardware photos (/hardware-exploded.png and
+       * /hardware-views.png) are temporarily hidden because the
+       * physical sensor hardware is still being finalized for production.
+       * To restore: change `{false &&` to `{true &&` (or remove the wrapper).
+       */}
+      {false && (
+        <section id="hardware" className="w-full bg-malama-bg px-5 py-[120px] sm:px-10">
+          <div className="mx-auto max-w-[1400px]">
+            <motion.h2
               variants={fadeUp}
               initial="hidden"
               whileInView="show"
               viewport={{ once: true }}
-              className="overflow-hidden rounded-malama border border-malama-line shadow-2xl"
+              className="mb-4 text-center font-serif text-[clamp(2rem,4vw,3rem)] font-normal tracking-tight text-malama-ink"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/hardware-exploded.png"
-                alt="Mālama Hex Node — full hardware exploded view"
-                className="h-auto w-full object-cover"
-              />
-            </motion.div>
-            <motion.div
-              variants={fadeUp}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true }}
-              custom={1}
-              className="overflow-hidden rounded-malama border border-malama-line shadow-2xl"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/hardware-views.png"
-                alt="Mālama Hex Node — enclosure, power system, sensor and network views"
-                className="h-auto w-full object-cover"
-              />
-            </motion.div>
+              The Hex Node Hardware
+            </motion.h2>
+            <p className="mb-12 text-center text-lg text-malama-ink-dim">
+              Everything you need to validate carbon and compute data — shipped to your door.
+            </p>
+            <div className="flex flex-col gap-8">
+              <motion.div
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true }}
+                className="overflow-hidden rounded-malama border border-malama-line shadow-2xl"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/hardware-exploded.png"
+                  alt="Mālama Hex Node — full hardware exploded view"
+                  className="h-auto w-full object-cover"
+                />
+              </motion.div>
+              <motion.div
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true }}
+                custom={1}
+                className="overflow-hidden rounded-malama border border-malama-line shadow-2xl"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/hardware-views.png"
+                  alt="Mālama Hex Node — enclosure, power system, sensor and network views"
+                  className="h-auto w-full object-cover"
+                />
+              </motion.div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── 06 · HARDWARE SPECIFICATIONS ─────────────────────────── */}
       <section id="specs" className="w-full border-y border-malama-line bg-malama-elev px-5 py-[120px] sm:px-10">
