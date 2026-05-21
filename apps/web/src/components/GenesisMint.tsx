@@ -26,8 +26,12 @@ import {
 } from '@/components/legal/PurchaseLegalAcknowledgement'
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
-import { requireGenesisContract } from '@/lib/genesis-contract'
-const GENESIS_CONTRACT = requireGenesisContract()
+import { tryGetGenesisContract, GENESIS_CONTRACT_PLACEHOLDER } from '@/lib/genesis-contract'
+// Module-level fallback to placeholder so this client bundle builds + renders
+// even when the env var isn't set on a preview branch. The actual mint flow
+// (handleBasePayment) guards against the placeholder and surfaces a clear
+// error — so previews don't silently mint to a non-existent contract.
+const GENESIS_CONTRACT = (tryGetGenesisContract() ?? GENESIS_CONTRACT_PLACEHOLDER) as `0x${string}`
 const USDC_CONTRACT    = (process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS         ?? '0x1111111111111111111111111111111111111111') as `0x${string}`
 const PRICE_USDC       = parseUnits('2000', 6) // $2,000 USDC (6 decimals)
 
@@ -210,6 +214,16 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   // ── Base payment flow ────────────────────────────────────────────────────
   const handleBasePayment = async () => {
     if (!publicClient || !evmAddress || !hexId) throw new Error('Wallet or hex not ready')
+
+    // Fail-fast at mint time if the env var wasn't set on this deployment.
+    // The placeholder address has no deployed contract — minting against it
+    // would silently fail or land in a confusing MetaMask "ownership details
+    // do not match" state. Surface the config error instead.
+    if (GENESIS_CONTRACT === GENESIS_CONTRACT_PLACEHOLDER) {
+      throw new Error(
+        'Mint not configured for this environment. NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS is missing — set the deployed Genesis ERC-721 contract address on this Vercel project / branch and redeploy.',
+      )
+    }
 
     // 0. Enforce Base Sepolia — switch if needed
     const eth = (window as any).ethereum

@@ -9,14 +9,16 @@ import { requireGenesisContract } from '@/lib/genesis-contract'
 
 export const runtime = 'nodejs'
 
-const GENESIS_CONTRACT = requireGenesisContract()
-
 const ERC721_ABI = parseAbi([
   'function transferFrom(address from, address to, uint256 tokenId) external',
 ])
 
 export async function POST(req: Request) {
   try {
+    // Lazy at request time, not module top-level — avoids blocking Next.js
+    // build "Collect page data" when the env var isn't set on a preview branch.
+    const GENESIS_CONTRACT = requireGenesisContract()
+
     const body = (await req.json()) as {
       claimId?: string
       transferToken?: string
