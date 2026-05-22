@@ -59,6 +59,18 @@ export default function Dashboard() {
   const [magicError, setMagicError]         = useState('')
   const [showMagicInput, setShowMagicInput] = useState(false)
 
+  // Which auth method the user explicitly chose — drives the hex lookup.
+  // Persisted so a page refresh still shows the right wallet's hexes.
+  const [activeMethod, setActiveMethod] = useState<'cardano' | 'evm' | 'email' | null>(() => {
+    if (typeof window === 'undefined') return null
+    return (localStorage.getItem('malama_dashboard_method') as 'cardano' | 'evm' | 'email' | null) ?? null
+  })
+
+  const chooseMethod = (m: 'cardano' | 'evm' | 'email') => {
+    setActiveMethod(m)
+    localStorage.setItem('malama_dashboard_method', m)
+  }
+
   // Re-hydrate Magic session on page load (Magic persists login across refreshes)
   useEffect(() => {
     if (!magic) return
@@ -68,6 +80,10 @@ export default function Dashboard() {
           const addr = info.wallets?.ethereum?.publicAddress
           if (addr) setMagicAddress(addr)
           if (info.email) setLoggedInEmail(info.email)
+          // Only auto-restore email method if that was the last choice
+          if (localStorage.getItem('malama_dashboard_method') === 'email') {
+            setActiveMethod('email')
+          }
         }).catch(() => {})
       }
     }).catch(() => {})
@@ -88,6 +104,7 @@ export default function Dashboard() {
       if (addr) {
         setMagicAddress(addr)
         setLoggedInEmail(email)
+        chooseMethod('email')
         setShowMagicInput(false)
       } else {
         setMagicError('Could not retrieve wallet address — try again.')
@@ -120,7 +137,7 @@ export default function Dashboard() {
     async function resolveAssets() {
       setLoadingAssets(true)
       try {
-        if (isCardanoConnected && cardanoWallet) {
+        if (activeMethod === 'cardano' && isCardanoConnected && cardanoWallet) {
           // ── Cardano: wallet asset scan ────────────────────────────────────
           const [rawAssets, changeAddr] = await Promise.all([
             cardanoWallet.getAssets().catch(() => []),
@@ -163,7 +180,7 @@ export default function Dashboard() {
 
           setHexLicenses(found)
 
-        } else if (effectiveEvmAddress) {
+        } else if (activeMethod === 'evm' && effectiveEvmAddress) {
           // ── EVM wallet or Magic custodial ─────────────────────────────────
           // Run DB lookup and on-chain event scan in parallel, then merge.
           const contractAddr = (
@@ -211,7 +228,7 @@ export default function Dashboard() {
 
           setHexLicenses(merged)
 
-        } else if (loggedInEmail) {
+        } else if (activeMethod === 'email' && loggedInEmail) {
           // ── Email-only (Magic sign-in before wallet connected) ───────────
           const r = await fetch(
             `${API_BASE}/hexes/by-owner?email=${encodeURIComponent(loggedInEmail)}`,
@@ -239,7 +256,7 @@ export default function Dashboard() {
     }
     resolveAssets()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress, loggedInEmail])
+  }, [activeMethod, isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress, loggedInEmail])
 
   return (
     <div className="relative min-h-screen bg-black p-6 font-sans text-gray-200 md:p-12">
@@ -279,7 +296,7 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => connectCardano('lace')}
+                onClick={() => { chooseMethod('cardano'); connectCardano('lace') }}
                 disabled={isCardanoConnecting || isEvmConnecting}
                 className="rounded-lg border border-malama-accent/50 bg-malama-accent/20 px-4 py-2 font-bold text-malama-accent transition-colors hover:bg-malama-accent hover:text-black disabled:opacity-50"
               >
@@ -287,7 +304,7 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => connectEvm({ connector: injected() })}
+                onClick={() => { chooseMethod('evm'); connectEvm({ connector: injected() }) }}
                 disabled={isCardanoConnecting || isEvmConnecting}
                 className="rounded-lg border border-blue-500/50 bg-blue-500/20 px-4 py-2 font-bold text-blue-400 transition-colors hover:bg-blue-500 hover:text-white disabled:opacity-50"
               >
@@ -320,7 +337,7 @@ export default function Dashboard() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={() => connectCardano('lace')}
+                onClick={() => { chooseMethod('cardano'); connectCardano('lace') }}
                 disabled={isCardanoConnecting || isEvmConnecting || magicLoading}
                 className="w-full rounded-xl border-2 border-malama-accent/50 bg-malama-accent/10 py-4 font-black text-malama-accent shadow-xl transition hover:bg-malama-accent hover:text-black disabled:opacity-50"
               >
@@ -329,7 +346,7 @@ export default function Dashboard() {
 
               <button
                 type="button"
-                onClick={() => connectEvm({ connector: injected() })}
+                onClick={() => { chooseMethod('evm'); connectEvm({ connector: injected() }) }}
                 disabled={isCardanoConnecting || isEvmConnecting || magicLoading}
                 className="w-full rounded-xl border-2 border-blue-500/50 bg-blue-500/10 py-4 font-black text-blue-400 shadow-xl transition hover:bg-blue-500 hover:text-white disabled:opacity-50"
               >
