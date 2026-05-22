@@ -71,6 +71,18 @@ export default function Dashboard() {
     localStorage.setItem('malama_dashboard_method', m)
   }
 
+  // Auto-promote method when a wallet connects via auto-reconnect (no button click)
+  // This handles Mesh/wagmi restoring the previous session on page load.
+  useEffect(() => {
+    if (activeMethod !== null) return // already chosen — don't override
+    if (isCardanoConnected) {
+      chooseMethod('cardano')
+    } else if (isEvmConnected || !!magicAddress) {
+      chooseMethod('evm')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCardanoConnected, isEvmConnected, magicAddress])
+
   // Re-hydrate Magic session on page load (Magic persists login across refreshes)
   useEffect(() => {
     if (!magic) return
@@ -139,10 +151,13 @@ export default function Dashboard() {
       try {
         if (activeMethod === 'cardano' && isCardanoConnected && cardanoWallet) {
           // ── Cardano: wallet asset scan ────────────────────────────────────
+          console.log('[Dashboard] Cardano scan starting…')
           const [rawAssets, changeAddr] = await Promise.all([
-            cardanoWallet.getAssets().catch(() => []),
-            cardanoWallet.getChangeAddress().catch(() => null),
+            cardanoWallet.getAssets().catch((e: unknown) => { console.error('[Dashboard] getAssets failed', e); return [] }),
+            cardanoWallet.getChangeAddress().catch((e: unknown) => { console.error('[Dashboard] getChangeAddress failed', e); return null }),
           ])
+          console.log('[Dashboard] changeAddr:', changeAddr)
+          console.log('[Dashboard] rawAssets count:', Array.isArray(rawAssets) ? rawAssets.length : 'not array', rawAssets)
           const assets = Array.isArray(rawAssets) ? rawAssets : []
           const found: HexLicense[] = []
 
@@ -152,7 +167,9 @@ export default function Dashboard() {
               if (assetNameHex.length > 0) {
                 try {
                   const decoded = hexToAscii(assetNameHex)
+                  console.log('[Dashboard] asset unit:', asset.unit, '→ decoded name:', decoded)
                   if (/^[0-9a-f]{24}$/.test(decoded) || decoded.startsWith('Hex')) {
+                    console.log('[Dashboard] ✓ Matched Genesis hex:', decoded)
                     found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
                   }
                 } catch { /* skip */ }
@@ -169,6 +186,7 @@ export default function Dashboard() {
               )
               if (r.ok) {
                 const data = await r.json() as { hexes?: Array<{ hexId: string; status: string; baseTokenId?: number }> }
+                console.log('[Dashboard] DB lookup for', changeAddr, '→', data.hexes)
                 for (const h of data.hexes ?? []) {
                   if (!found.some(f => f.id === h.hexId)) {
                     found.push({ id: h.hexId, chain: 'cardano' })
@@ -178,6 +196,7 @@ export default function Dashboard() {
             } catch { /* non-fatal */ }
           }
 
+          console.log('[Dashboard] Final Cardano licenses:', found)
           setHexLicenses(found)
 
         } else if (activeMethod === 'evm' && effectiveEvmAddress) {
@@ -254,6 +273,8 @@ export default function Dashboard() {
         setLoadingAssets(false)
       }
     }
+    console.log('[Dashboard] resolveAssets: activeMethod=%s cardano=%s evm=%s evmAddr=%s email=%s',
+      activeMethod, isCardanoConnected, isEvmConnected, effectiveEvmAddress, loggedInEmail)
     resolveAssets()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMethod, isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress, loggedInEmail])
