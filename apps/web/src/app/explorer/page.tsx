@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { API_BASE } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import { cellToLatLng, getResolution } from 'h3-js';
 
@@ -142,14 +143,14 @@ export default function ExplorerPage() {
           <HexPanel
             hex={selected}
             links={{
-              erc721MetadataUrl: `/api/erc721/${selected.h3Index}`,
-              cardanoReferenceNftUrl: `/api/cardano/${selected.h3Index}`,
-              purchaseAgreementUrl: '/legal/hex-node-purchase-agreement',
-              termsAndConditionsUrl: '/legal',
+              erc721MetadataUrl: `${API_BASE}/hexes/token-uri/by-hex/${selected.h3Index}`,
+              cardanoReferenceNftUrl: `${API_BASE}/hexes/${selected.h3Index}`,
+              purchaseAgreementUrl: '/legal/hex-node-purchase',
+              termsAndConditionsUrl: '/legal/terms',
               tokenRewardsRiskUrl: '/legal/token-rewards-risk',
-              zoneClassificationDocUrl: '/docs/zone-classification',
-              dataDemandScoreDocUrl: '/docs/data-demand-score-methodology',
-              pricingMethodologyDocUrl: '/docs/pricing',
+              zoneClassificationDocUrl: '/docs/operators',
+              dataDemandScoreDocUrl: '/docs/pricing-roi',
+              pricingMethodologyDocUrl: '/docs/pricing-roi',
             }}
             onReserveClick={(hex) => {
               // /explorer now uses the same hex catalog as /api/hexes, so
