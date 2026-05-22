@@ -51,7 +51,6 @@ export default function Dashboard() {
   const publicClient = usePublicClient()
   const { magic } = useMagic()
 
-  // Magic email sign-in state (for card buyers who have no hardware wallet)
   const [magicEmail, setMagicEmail]         = useState('')
   const [magicAddress, setMagicAddress]     = useState<string | null>(null)
   const [loggedInEmail, setLoggedInEmail]   = useState<string | null>(null)
@@ -59,25 +58,7 @@ export default function Dashboard() {
   const [magicError, setMagicError]         = useState('')
   const [showMagicInput, setShowMagicInput] = useState(false)
 
-  // Which auth method the user explicitly chose — drives the hex lookup.
-  // Persisted so a page refresh still shows the right wallet's hexes.
-  const [activeMethod, setActiveMethod] = useState<'cardano' | 'evm' | 'email' | null>(() => {
-    if (typeof window === 'undefined') return null
-    return (localStorage.getItem('malama_dashboard_method') as 'cardano' | 'evm' | 'email' | null) ?? null
-  })
-
-  const chooseMethod = (m: 'cardano' | 'evm' | 'email') => {
-    setActiveMethod(m)
-    localStorage.setItem('malama_dashboard_method', m)
-  }
-
-  const resetMethod = () => {
-    setActiveMethod(null)
-    localStorage.removeItem('malama_dashboard_method')
-    setHexLicenses([])
-  }
-
-  // Re-hydrate Magic session on page load (Magic persists login across refreshes)
+  // Re-hydrate Magic session on page load
   useEffect(() => {
     if (!magic) return
     magic.user.isLoggedIn().then((loggedIn: boolean) => {
@@ -86,10 +67,6 @@ export default function Dashboard() {
           const addr = info.wallets?.ethereum?.publicAddress
           if (addr) setMagicAddress(addr)
           if (info.email) setLoggedInEmail(info.email)
-          // Only auto-restore email method if that was the last choice
-          if (localStorage.getItem('malama_dashboard_method') === 'email') {
-            setActiveMethod('email')
-          }
         }).catch(() => {})
       }
     }).catch(() => {})
@@ -110,7 +87,6 @@ export default function Dashboard() {
       if (addr) {
         setMagicAddress(addr)
         setLoggedInEmail(email)
-        chooseMethod('email')
         setShowMagicInput(false)
       } else {
         setMagicError('Could not retrieve wallet address — try again.')
@@ -125,38 +101,28 @@ export default function Dashboard() {
   const [hexLicenses, setHexLicenses] = useState<HexLicense[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
 
-  const isAuthenticated = activeMethod !== null && (isCardanoConnected || isEvmConnected || !!magicAddress)
+  const isAuthenticated = isCardanoConnected || isEvmConnected || !!magicAddress
+  // Magic custodial address falls back to MetaMask address if MetaMask is connected
   const effectiveEvmAddress = evmAddress ?? magicAddress ?? undefined
   const activePredictionMarkets = hexLicenses.length > 0 ? 8 : 0
   const currentStatus = hexLicenses.length > 0 ? 'Hardware Pending' : 'Awaiting Genesis License'
 
-  // ── Load Genesis licenses from wallet + backend ─────────────────────────
-  //
-  // Three paths:
-  //   Cardano wallet — on-chain asset scan + DB lookup by change address
-  //   EVM wallet / Magic — GET /hexes/by-owner?evmAddress=
-  //   Magic email only   — GET /hexes/by-owner?email=
-  //
-  // The DB lookup catches reserved/paid hexes that haven't been minted yet
-  // (e.g. Stripe purchases) in addition to confirmed on-chain holdings.
+  // ── Load Genesis licenses ─────────────────────────────────────────────────
+  // Priority:
+  //   1. Cardano wallet connected — scan on-chain assets + DB by address
+  //   2. Email sign-in (Magic OTP) — DB lookup by email (takes priority over
+  //      MetaMask so card buyers see their purchase, not a MetaMask wallet)
+  //   3. EVM wallet (MetaMask / Magic custodial) — DB + on-chain event scan
   useEffect(() => {
     async function resolveAssets() {
-      if (activeMethod === null) {
-        setHexLicenses([])
-        setLoadingAssets(false)
-        return
-      }
       setLoadingAssets(true)
       try {
-        if (activeMethod === 'cardano' && isCardanoConnected && cardanoWallet) {
-          // ── Cardano: wallet asset scan ────────────────────────────────────
-          console.log('[Dashboard] Cardano scan starting…')
+        if (isCardanoConnected && cardanoWallet) {
+          // ── Cardano ───────────────────────────────────────────────────────
           const [rawAssets, changeAddr] = await Promise.all([
-            cardanoWallet.getAssets().catch((e: unknown) => { console.error('[Dashboard] getAssets failed', e); return [] }),
-            cardanoWallet.getChangeAddress().catch((e: unknown) => { console.error('[Dashboard] getChangeAddress failed', e); return null }),
+            cardanoWallet.getAssets().catch(() => []),
+            cardanoWallet.getChangeAddress().catch(() => null),
           ])
-          console.log('[Dashboard] changeAddr:', changeAddr)
-          console.log('[Dashboard] rawAssets count:', Array.isArray(rawAssets) ? rawAssets.length : 'not array', rawAssets)
           const assets = Array.isArray(rawAssets) ? rawAssets : []
           const found: HexLicense[] = []
 
@@ -166,9 +132,7 @@ export default function Dashboard() {
               if (assetNameHex.length > 0) {
                 try {
                   const decoded = hexToAscii(assetNameHex)
-                  console.log('[Dashboard] asset unit:', asset.unit, '→ decoded name:', decoded)
                   if (/^[0-9a-f]{24}$/.test(decoded) || decoded.startsWith('Hex')) {
-                    console.log('[Dashboard] ✓ Matched Genesis hex:', decoded)
                     found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
                   }
                 } catch { /* skip */ }
@@ -176,7 +140,6 @@ export default function Dashboard() {
             }
           }
 
-          // Also query DB for reserved/sold hexes not yet on-chain (e.g. pending mints)
           if (changeAddr) {
             try {
               const r = await fetch(
@@ -185,7 +148,6 @@ export default function Dashboard() {
               )
               if (r.ok) {
                 const data = await r.json() as { hexes?: Array<{ hexId: string; status: string; baseTokenId?: number }> }
-                console.log('[Dashboard] DB lookup for', changeAddr, '→', data.hexes)
                 for (const h of data.hexes ?? []) {
                   if (!found.some(f => f.id === h.hexId)) {
                     found.push({ id: h.hexId, chain: 'cardano' })
@@ -195,61 +157,11 @@ export default function Dashboard() {
             } catch { /* non-fatal */ }
           }
 
-          console.log('[Dashboard] Final Cardano licenses:', found)
           setHexLicenses(found)
 
-        } else if (activeMethod === 'evm' && effectiveEvmAddress) {
-          // ── EVM wallet or Magic custodial ─────────────────────────────────
-          // Run DB lookup and on-chain event scan in parallel, then merge.
-          const contractAddr = (
-            process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_SEPOLIA ??
-            process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_MAINNET ??
-            ''
-          ) as `0x${string}`
-
-          const NODE_SECURED_EVENT = parseAbiItem(
-            'event NodeSecured(address indexed operator, uint256 indexed tokenId, string hexId)'
-          )
-
-          const [dbResult, onChainLogs] = await Promise.allSettled([
-            // DB lookup — covers Stripe/pending hexes before on-chain delivery
-            fetch(
-              `${API_BASE}/hexes/by-owner?evmAddress=${encodeURIComponent(effectiveEvmAddress)}`,
-              { cache: 'no-store' }
-            ).then(r => r.ok ? r.json() as Promise<{ hexes?: Array<{ hexId: string; baseTokenId?: number }> }> : { hexes: [] }),
-
-            // On-chain event scan — trustless, catches any direct wallet transfer
-            publicClient && contractAddr && contractAddr !== '0x2222222222222222222222222222222222222222'
-              ? publicClient.getLogs({
-                  address: contractAddr,
-                  event: NODE_SECURED_EVENT,
-                  args: { operator: effectiveEvmAddress as `0x${string}` },
-                  fromBlock: BigInt(0),
-                })
-              : Promise.resolve([]),
-          ])
-
-          // Merge: start with DB entries, then add any on-chain logs not already present
-          const merged: HexLicense[] = (
-            dbResult.status === 'fulfilled' ? dbResult.value.hexes ?? [] : []
-          ).map(h => ({ id: h.hexId, chain: 'base' as const, tokenId: h.baseTokenId }))
-
-          if (onChainLogs.status === 'fulfilled') {
-            for (const log of onChainLogs.value) {
-              const hexId = (log.args as { hexId?: string }).hexId ?? ''
-              const tokenId = Number((log.args as { tokenId?: bigint }).tokenId ?? 0)
-              if (hexId && !merged.some(m => m.id === hexId)) {
-                merged.push({ id: hexId, chain: 'base' as const, tokenId })
-              }
-            }
-          } else {
-            console.warn('[Dashboard] On-chain scan failed:', onChainLogs.reason)
-          }
-
-          setHexLicenses(merged)
-
-        } else if (activeMethod === 'email' && loggedInEmail) {
-          // ── Email-only (Magic sign-in before wallet connected) ───────────
+        } else if (loggedInEmail) {
+          // ── Email (card buyer via Magic OTP) ─────────────────────────────
+          // Checked before EVM so MetaMask being open doesn't shadow the result.
           const r = await fetch(
             `${API_BASE}/hexes/by-owner?email=${encodeURIComponent(loggedInEmail)}`,
             { cache: 'no-store' }
@@ -264,6 +176,50 @@ export default function Dashboard() {
             }))
           )
 
+        } else if (effectiveEvmAddress) {
+          // ── EVM (MetaMask or Magic custodial without email sign-in) ───────
+          const contractAddr = (
+            process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_SEPOLIA ??
+            process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_MAINNET ??
+            ''
+          ) as `0x${string}`
+
+          const NODE_SECURED_EVENT = parseAbiItem(
+            'event NodeSecured(address indexed operator, uint256 indexed tokenId, string hexId)'
+          )
+
+          const [dbResult, onChainLogs] = await Promise.allSettled([
+            fetch(
+              `${API_BASE}/hexes/by-owner?evmAddress=${encodeURIComponent(effectiveEvmAddress)}`,
+              { cache: 'no-store' }
+            ).then(r => r.ok ? r.json() as Promise<{ hexes?: Array<{ hexId: string; baseTokenId?: number }> }> : { hexes: [] }),
+
+            publicClient && contractAddr
+              ? publicClient.getLogs({
+                  address: contractAddr,
+                  event: NODE_SECURED_EVENT,
+                  args: { operator: effectiveEvmAddress as `0x${string}` },
+                  fromBlock: BigInt(0),
+                })
+              : Promise.resolve([]),
+          ])
+
+          const merged: HexLicense[] = (
+            dbResult.status === 'fulfilled' ? dbResult.value.hexes ?? [] : []
+          ).map(h => ({ id: h.hexId, chain: 'base' as const, tokenId: h.baseTokenId }))
+
+          if (onChainLogs.status === 'fulfilled') {
+            for (const log of onChainLogs.value) {
+              const hexId = (log.args as { hexId?: string }).hexId ?? ''
+              const tokenId = Number((log.args as { tokenId?: bigint }).tokenId ?? 0)
+              if (hexId && !merged.some(m => m.id === hexId)) {
+                merged.push({ id: hexId, chain: 'base' as const, tokenId })
+              }
+            }
+          }
+
+          setHexLicenses(merged)
+
         } else {
           setHexLicenses([])
         }
@@ -274,11 +230,9 @@ export default function Dashboard() {
         setLoadingAssets(false)
       }
     }
-    console.log('[Dashboard] resolveAssets: activeMethod=%s cardano=%s evm=%s evmAddr=%s email=%s',
-      activeMethod, isCardanoConnected, isEvmConnected, effectiveEvmAddress, loggedInEmail)
     resolveAssets()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMethod, isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress, loggedInEmail])
+  }, [isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress, loggedInEmail])
 
   return (
     <div className="relative min-h-screen bg-black p-6 font-sans text-gray-200 md:p-12">
@@ -297,22 +251,18 @@ export default function Dashboard() {
           {isAuthenticated ? (
             <div className="flex flex-wrap items-center gap-3">
               <div className="hidden text-right sm:block">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                  {activeMethod === 'cardano' ? 'Cardano' : activeMethod === 'email' ? 'Email' : 'Base'} · Network Status
-                </p>
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Network Status</p>
                 <div className="flex items-center gap-2">
-                  {activeMethod === 'evm' && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
-                  {activeMethod === 'cardano' && <span className="h-2 w-2 animate-pulse rounded-full bg-malama-accent" />}
-                  {activeMethod === 'email' && <span className="h-2 w-2 animate-pulse rounded-full bg-purple-400" />}
+                  {(isEvmConnected || magicAddress) && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
+                  {isCardanoConnected && <span className="h-2 w-2 animate-pulse rounded-full bg-malama-accent" />}
+                  {loggedInEmail && <span className="h-2 w-2 animate-pulse rounded-full bg-purple-400" />}
                   <p className="text-lg font-bold text-white">{currentStatus}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={resetMethod}
-                  className="mt-0.5 text-[10px] font-bold text-gray-600 hover:text-gray-400 underline underline-offset-2"
-                >
-                  Switch method
-                </button>
+                {loggedInEmail && (
+                  <p className="font-mono text-[10px] text-purple-400">
+                    {loggedInEmail}
+                  </p>
+                )}
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-malama-accent/30 bg-malama-deep shadow-[0_0_15px_rgba(196,240,97,0.2)]">
                 <Cpu className="h-6 w-6 text-malama-accent" />
@@ -322,7 +272,7 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => { chooseMethod('cardano'); connectCardano('lace') }}
+                onClick={() => connectCardano('lace')}
                 disabled={isCardanoConnecting || isEvmConnecting}
                 className="rounded-lg border border-malama-accent/50 bg-malama-accent/20 px-4 py-2 font-bold text-malama-accent transition-colors hover:bg-malama-accent hover:text-black disabled:opacity-50"
               >
@@ -330,7 +280,7 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => { chooseMethod('evm'); connectEvm({ connector: injected() }) }}
+                onClick={() => connectEvm({ connector: injected() })}
                 disabled={isCardanoConnecting || isEvmConnecting}
                 className="rounded-lg border border-blue-500/50 bg-blue-500/20 px-4 py-2 font-bold text-blue-400 transition-colors hover:bg-blue-500 hover:text-white disabled:opacity-50"
               >
@@ -363,7 +313,7 @@ export default function Dashboard() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={() => { chooseMethod('cardano'); connectCardano('lace') }}
+                onClick={() => connectCardano('lace')}
                 disabled={isCardanoConnecting || isEvmConnecting || magicLoading}
                 className="w-full rounded-xl border-2 border-malama-accent/50 bg-malama-accent/10 py-4 font-black text-malama-accent shadow-xl transition hover:bg-malama-accent hover:text-black disabled:opacity-50"
               >
@@ -372,7 +322,7 @@ export default function Dashboard() {
 
               <button
                 type="button"
-                onClick={() => { chooseMethod('evm'); connectEvm({ connector: injected() }) }}
+                onClick={() => connectEvm({ connector: injected() })}
                 disabled={isCardanoConnecting || isEvmConnecting || magicLoading}
                 className="w-full rounded-xl border-2 border-blue-500/50 bg-blue-500/10 py-4 font-black text-blue-400 shadow-xl transition hover:bg-blue-500 hover:text-white disabled:opacity-50"
               >
@@ -609,7 +559,6 @@ export default function Dashboard() {
             <Link href="/presale" className="flex items-center gap-2 rounded-xl border border-malama-accent/30 bg-malama-accent/10 px-4 py-3 text-sm font-black text-malama-accent hover:bg-malama-accent/20 transition-colors">
               <CheckCircle2 className="h-4 w-4" /> Reserve a Node
             </Link>
-    
           </section>
         </div>
       </div>
