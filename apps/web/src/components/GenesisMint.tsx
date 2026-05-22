@@ -469,14 +469,14 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   </p>
                 </div>
                 <Link
-                  href="/map"
+                  href="/explorer"
                   className={`flex w-full items-center justify-center rounded-xl px-4 py-3 text-xs font-black transition-all ${
                     hexId
                       ? 'border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
                       : 'bg-amber-500 text-black shadow-lg hover:scale-[1.02]'
                   }`}
                 >
-                  {hexId ? 'Change hex on map →' : 'Open map to choose hex →'}
+                  {hexId ? 'Change hex on explorer →' : 'Open explorer to choose hex →'}
                 </Link>
               </div>
 

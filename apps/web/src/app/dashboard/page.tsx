@@ -393,7 +393,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <Link
-                        href={`/map`}
+                        href={`/explorer`}
                         className="inline-flex items-center rounded-lg border border-malama-accent/20 bg-malama-accent/10 px-3 py-1.5 text-xs font-bold text-malama-accent transition-colors hover:border-malama-accent hover:text-white"
                       >
                         <MapPin className="mr-1 h-3 w-3" /> View on Map
@@ -461,7 +461,7 @@ export default function Dashboard() {
           {/* Quick links */}
           <section className="rounded-3xl border border-gray-800 bg-malama-card p-6 shadow-xl space-y-3">
             <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-4">Quick Links</h2>
-            <Link href="/map" className="flex items-center gap-2 rounded-xl border border-gray-800 bg-malama-deep px-4 py-3 text-sm font-bold text-gray-300 hover:border-malama-accent/40 hover:text-malama-accent transition-colors">
+            <Link href="/explorer" className="flex items-center gap-2 rounded-xl border border-gray-800 bg-malama-deep px-4 py-3 text-sm font-bold text-gray-300 hover:border-malama-accent/40 hover:text-malama-accent transition-colors">
               <MapPin className="h-4 w-4" /> Hex Territory Map
             </Link>
             <Link href="/docs" className="flex items-center gap-2 rounded-xl border border-gray-800 bg-malama-deep px-4 py-3 text-sm font-bold text-gray-300 hover:border-malama-accent/40 hover:text-malama-accent transition-colors">

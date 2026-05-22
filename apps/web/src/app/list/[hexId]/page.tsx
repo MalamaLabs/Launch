@@ -94,7 +94,7 @@ export default async function GenesisHexDetailPage({ params }: Props) {
         <Link href="/list" className="text-sm font-bold text-malama-teal hover:underline">
           ← Back to list
         </Link>
-        <Link href="/map" className="text-sm text-gray-500 hover:text-white">
+        <Link href="/explorer" className="text-sm text-gray-500 hover:text-white">
           Map
         </Link>
       </div>

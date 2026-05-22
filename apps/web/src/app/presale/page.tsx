@@ -5,7 +5,7 @@ import { getSaleState } from '@/lib/api'
 export const metadata: Metadata = {
   title: 'Reserve with Crypto or Card | Genesis 200 | Mālama Labs',
   description:
-    'Connect your wallet, pick your hex on the map, and reserve a Genesis validator node. $2,000 entry. 125K MLMA per node. 200 Genesis nodes (195 remaining). Oct 2026 revenue.',
+    'Connect your wallet, pick your hex on the map, and reserve a Genesis validator node. $2,000 entry. 125K MLMA per node. 200 Genesis nodes (195 remaining). Public Hex Launch June 1, 2026 · mainnet live Q4 2026 ahead of TGE.',
 }
 
 export default async function PresalePage({
@@ -37,7 +37,7 @@ export default async function PresalePage({
         <p className="text-xl md:text-2xl text-gray-400 max-w-4xl mx-auto leading-relaxed mb-6">
           Choose a hex from the 200 Genesis licenses for early supporters, connect an EVM or Cardano wallet (or custodial
           with email), then reserve with crypto or fiat via credit/debit card. $2,000 entry. 125K MLMA vests at first boot.
-          Revenue starts October 2026.
+          Mainnet live Q4 2026, ahead of TGE.
         </p>
         <p className="text-sm text-gray-500 mb-10">
           <a
