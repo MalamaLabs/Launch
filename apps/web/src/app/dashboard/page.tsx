@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useWallet } from '@meshsdk/react'
-import { useAccount, useConnect } from 'wagmi'
+import { useAccount, useConnect, usePublicClient } from 'wagmi'
+import { parseAbiItem } from 'viem'
 import { injected } from 'wagmi/connectors'
 import {
   ShieldCheck,
@@ -18,7 +19,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
-import { nftImageUrl } from '@/lib/api'
+import { API_BASE, nftImageUrl } from '@/lib/api'
 import { useMagic } from '@/components/magic/MagicProvider'
 
 function hexToAscii(hexStr: string | undefined) {
@@ -47,11 +48,13 @@ export default function Dashboard() {
 
   const { isConnected: isEvmConnected, address: evmAddress } = useAccount()
   const { connect: connectEvm, isPending: isEvmConnecting } = useConnect()
+  const publicClient = usePublicClient()
   const { magic } = useMagic()
 
   // Magic email sign-in state (for card buyers who have no hardware wallet)
   const [magicEmail, setMagicEmail]         = useState('')
   const [magicAddress, setMagicAddress]     = useState<string | null>(null)
+  const [loggedInEmail, setLoggedInEmail]   = useState<string | null>(null)
   const [magicLoading, setMagicLoading]     = useState(false)
   const [magicError, setMagicError]         = useState('')
   const [showMagicInput, setShowMagicInput] = useState(false)
@@ -64,6 +67,7 @@ export default function Dashboard() {
         magic.user.getInfo().then((info) => {
           const addr = info.wallets?.ethereum?.publicAddress
           if (addr) setMagicAddress(addr)
+          if (info.email) setLoggedInEmail(info.email)
         }).catch(() => {})
       }
     }).catch(() => {})
@@ -83,6 +87,7 @@ export default function Dashboard() {
       const addr = info.wallets?.ethereum?.publicAddress
       if (addr) {
         setMagicAddress(addr)
+        setLoggedInEmail(email)
         setShowMagicInput(false)
       } else {
         setMagicError('Could not retrieve wallet address — try again.')
@@ -102,23 +107,34 @@ export default function Dashboard() {
   const activePredictionMarkets = hexLicenses.length > 0 ? 8 : 0
   const currentStatus = hexLicenses.length > 0 ? 'Hardware Pending' : 'Awaiting Genesis License'
 
-  // ── Scan wallet for Genesis licenses on connect ───────────────────────────
+  // ── Load Genesis licenses from wallet + backend ─────────────────────────
+  //
+  // Three paths:
+  //   Cardano wallet — on-chain asset scan + DB lookup by change address
+  //   EVM wallet / Magic — GET /hexes/by-owner?evmAddress=
+  //   Magic email only   — GET /hexes/by-owner?email=
+  //
+  // The DB lookup catches reserved/paid hexes that haven't been minted yet
+  // (e.g. Stripe purchases) in addition to confirmed on-chain holdings.
   useEffect(() => {
     async function resolveAssets() {
-      if (isCardanoConnected && cardanoWallet) {
-        setLoadingAssets(true)
-        try {
-          const rawAssets = await cardanoWallet.getAssets()
+      setLoadingAssets(true)
+      try {
+        if (isCardanoConnected && cardanoWallet) {
+          // ── Cardano: wallet asset scan ────────────────────────────────────
+          const [rawAssets, changeAddr] = await Promise.all([
+            cardanoWallet.getAssets().catch(() => []),
+            cardanoWallet.getChangeAddress().catch(() => null),
+          ])
           const assets = Array.isArray(rawAssets) ? rawAssets : []
           const found: HexLicense[] = []
+
           for (const asset of assets) {
             if (asset?.unit && typeof asset.unit === 'string') {
               const assetNameHex = asset.unit.length > 56 ? asset.unit.slice(56) : ''
               if (assetNameHex.length > 0) {
                 try {
                   const decoded = hexToAscii(assetNameHex)
-                  // Genesis hex assets: 24-hex sha256 asset names (hex license)
-                  // Asset names are 24 chars of lowercase hex from hexIdToAssetName()
                   if (/^[0-9a-f]{24}$/.test(decoded) || decoded.startsWith('Hex')) {
                     found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
                   }
@@ -126,24 +142,104 @@ export default function Dashboard() {
               }
             }
           }
+
+          // Also query DB for reserved/sold hexes not yet on-chain (e.g. pending mints)
+          if (changeAddr) {
+            try {
+              const r = await fetch(
+                `${API_BASE}/hexes/by-owner?cardanoAddress=${encodeURIComponent(changeAddr)}`,
+                { cache: 'no-store' }
+              )
+              if (r.ok) {
+                const data = await r.json() as { hexes?: Array<{ hexId: string; status: string; baseTokenId?: number }> }
+                for (const h of data.hexes ?? []) {
+                  if (!found.some(f => f.id === h.hexId)) {
+                    found.push({ id: h.hexId, chain: 'cardano' })
+                  }
+                }
+              }
+            } catch { /* non-fatal */ }
+          }
+
           setHexLicenses(found)
-        } catch (e) {
-          console.error('[Dashboard] Failed to scan Cardano assets', e)
-        } finally {
-          setLoadingAssets(false)
+
+        } else if (effectiveEvmAddress) {
+          // ── EVM wallet or Magic custodial ─────────────────────────────────
+          // Run DB lookup and on-chain event scan in parallel, then merge.
+          const contractAddr = (
+            process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? ''
+          ) as `0x${string}`
+
+          const NODE_SECURED_EVENT = parseAbiItem(
+            'event NodeSecured(address indexed operator, uint256 indexed tokenId, string hexId)'
+          )
+
+          const [dbResult, onChainLogs] = await Promise.allSettled([
+            // DB lookup — covers Stripe/pending hexes before on-chain delivery
+            fetch(
+              `${API_BASE}/hexes/by-owner?evmAddress=${encodeURIComponent(effectiveEvmAddress)}`,
+              { cache: 'no-store' }
+            ).then(r => r.ok ? r.json() as Promise<{ hexes?: Array<{ hexId: string; baseTokenId?: number }> }> : { hexes: [] }),
+
+            // On-chain event scan — trustless, catches any direct wallet transfer
+            publicClient && contractAddr && contractAddr !== '0x2222222222222222222222222222222222222222'
+              ? publicClient.getLogs({
+                  address: contractAddr,
+                  event: NODE_SECURED_EVENT,
+                  args: { operator: effectiveEvmAddress as `0x${string}` },
+                  fromBlock: 0n,
+                })
+              : Promise.resolve([]),
+          ])
+
+          // Merge: start with DB entries, then add any on-chain logs not already present
+          const merged: HexLicense[] = (
+            dbResult.status === 'fulfilled' ? dbResult.value.hexes ?? [] : []
+          ).map(h => ({ id: h.hexId, chain: 'base' as const, tokenId: h.baseTokenId }))
+
+          if (onChainLogs.status === 'fulfilled') {
+            for (const log of onChainLogs.value) {
+              const hexId = (log.args as { hexId?: string }).hexId ?? ''
+              const tokenId = Number((log.args as { tokenId?: bigint }).tokenId ?? 0)
+              if (hexId && !merged.some(m => m.id === hexId)) {
+                merged.push({ id: hexId, chain: 'base' as const, tokenId })
+              }
+            }
+          } else {
+            console.warn('[Dashboard] On-chain scan failed:', onChainLogs.reason)
+          }
+
+          setHexLicenses(merged)
+
+        } else if (loggedInEmail) {
+          // ── Email-only (Magic sign-in before wallet connected) ───────────
+          const r = await fetch(
+            `${API_BASE}/hexes/by-owner?email=${encodeURIComponent(loggedInEmail)}`,
+            { cache: 'no-store' }
+          )
+          if (!r.ok) throw new Error(`/hexes/by-owner returned ${r.status}`)
+          const data = await r.json() as { hexes?: Array<{ hexId: string; baseTokenId?: number }> }
+          setHexLicenses(
+            (data.hexes ?? []).map(h => ({
+              id: h.hexId,
+              chain: 'base' as const,
+              tokenId: h.baseTokenId,
+            }))
+          )
+
+        } else {
+          setHexLicenses([])
         }
-      } else if (effectiveEvmAddress) {
-        // TODO: query GenesisValidator.balanceOf / tokensOfOwner via publicClient
-        // For now show empty state with a helpful CTA to the list page
+      } catch (e) {
+        console.error('[Dashboard] Failed to load Genesis licenses', e)
         setHexLicenses([])
+      } finally {
         setLoadingAssets(false)
-      } else {
-        setHexLicenses([])
       }
     }
     resolveAssets()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress])
+  }, [isCardanoConnected, cardanoWallet, isEvmConnected, effectiveEvmAddress, loggedInEmail])
 
   return (
     <div className="relative min-h-screen bg-black p-6 font-sans text-gray-200 md:p-12">
