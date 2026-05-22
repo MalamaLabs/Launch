@@ -43,6 +43,30 @@ const nextConfig = {
   turbopack: {},
   webpack: (config) => config,
 
+  // Mapbox GL JS requires 'unsafe-eval' (uses new Function() for GLSL shader
+  // compilation). Scoped tightly to /explorer only — all other routes unaffected.
+  async headers() {
+    return [
+      {
+        source: '/explorer/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' blob: https://api.mapbox.com",
+              "connect-src 'self' https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com",
+              "img-src 'self' data: blob: https://*.mapbox.com",
+              "worker-src blob:",
+              "style-src 'self' 'unsafe-inline'",
+              "font-src 'self' data:",
+            ].join('; '),
+          },
+        ],
+      },
+    ]
+  },
+
   allowedDevOrigins: ['192.168.1.126', 'dev.dagwelldev.com'],
   images: {
     remotePatterns: [
@@ -56,10 +80,8 @@ const nextConfig = {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:              process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_MAGIC_API_KEY:                       process.env.NEXT_PUBLIC_MAGIC_API_KEY,
     NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL:                process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL,
-    // GenesisValidator contract addresses — used for OpenSea asset deep-links
     NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_SEPOLIA:   process.env.GENESIS_VALIDATOR_ADDRESS_SEPOLIA,
     NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_MAINNET:   process.env.GENESIS_VALIDATOR_ADDRESS_MAINNET,
-    // Discord invite for operator community
     NEXT_PUBLIC_DISCORD_INVITE:                      process.env.NEXT_PUBLIC_DISCORD_INVITE,
   },
 }
