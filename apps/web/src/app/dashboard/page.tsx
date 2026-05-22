@@ -71,6 +71,12 @@ export default function Dashboard() {
     localStorage.setItem('malama_dashboard_method', m)
   }
 
+  const resetMethod = () => {
+    setActiveMethod(null)
+    localStorage.removeItem('malama_dashboard_method')
+    setHexLicenses([])
+  }
+
   // Re-hydrate Magic session on page load (Magic persists login across refreshes)
   useEffect(() => {
     if (!magic) return
@@ -291,18 +297,22 @@ export default function Dashboard() {
           {isAuthenticated ? (
             <div className="flex flex-wrap items-center gap-3">
               <div className="hidden text-right sm:block">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Network Status</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                  {activeMethod === 'cardano' ? 'Cardano' : activeMethod === 'email' ? 'Email' : 'Base'} · Network Status
+                </p>
                 <div className="flex items-center gap-2">
-                  {(isEvmConnected || magicAddress) && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
-                  {isCardanoConnected && <span className="h-2 w-2 animate-pulse rounded-full bg-malama-accent" />}
-                  {magicAddress && !isEvmConnected && <span className="h-2 w-2 animate-pulse rounded-full bg-purple-400" />}
+                  {activeMethod === 'evm' && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
+                  {activeMethod === 'cardano' && <span className="h-2 w-2 animate-pulse rounded-full bg-malama-accent" />}
+                  {activeMethod === 'email' && <span className="h-2 w-2 animate-pulse rounded-full bg-purple-400" />}
                   <p className="text-lg font-bold text-white">{currentStatus}</p>
                 </div>
-                {magicAddress && !isEvmConnected && (
-                  <p className="font-mono text-[10px] text-purple-400">
-                    Magic · {magicAddress.slice(0, 8)}…{magicAddress.slice(-4)}
-                  </p>
-                )}
+                <button
+                  type="button"
+                  onClick={resetMethod}
+                  className="mt-0.5 text-[10px] font-bold text-gray-600 hover:text-gray-400 underline underline-offset-2"
+                >
+                  Switch method
+                </button>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-malama-accent/30 bg-malama-deep shadow-[0_0_15px_rgba(196,240,97,0.2)]">
                 <Cpu className="h-6 w-6 text-malama-accent" />
