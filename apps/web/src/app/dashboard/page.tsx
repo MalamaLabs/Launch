@@ -187,7 +187,7 @@ export default function Dashboard() {
                   address: contractAddr,
                   event: NODE_SECURED_EVENT,
                   args: { operator: effectiveEvmAddress as `0x${string}` },
-                  fromBlock: 0n,
+                  fromBlock: BigInt(0),
                 })
               : Promise.resolve([]),
           ])
