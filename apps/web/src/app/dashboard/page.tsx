@@ -71,18 +71,6 @@ export default function Dashboard() {
     localStorage.setItem('malama_dashboard_method', m)
   }
 
-  // Auto-promote method when a wallet connects via auto-reconnect (no button click)
-  // This handles Mesh/wagmi restoring the previous session on page load.
-  useEffect(() => {
-    if (activeMethod !== null) return // already chosen — don't override
-    if (isCardanoConnected) {
-      chooseMethod('cardano')
-    } else if (isEvmConnected || !!magicAddress) {
-      chooseMethod('evm')
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCardanoConnected, isEvmConnected, magicAddress])
-
   // Re-hydrate Magic session on page load (Magic persists login across refreshes)
   useEffect(() => {
     if (!magic) return
@@ -131,7 +119,7 @@ export default function Dashboard() {
   const [hexLicenses, setHexLicenses] = useState<HexLicense[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
 
-  const isAuthenticated = isCardanoConnected || isEvmConnected || !!magicAddress
+  const isAuthenticated = activeMethod !== null && (isCardanoConnected || isEvmConnected || !!magicAddress)
   const effectiveEvmAddress = evmAddress ?? magicAddress ?? undefined
   const activePredictionMarkets = hexLicenses.length > 0 ? 8 : 0
   const currentStatus = hexLicenses.length > 0 ? 'Hardware Pending' : 'Awaiting Genesis License'
@@ -147,6 +135,11 @@ export default function Dashboard() {
   // (e.g. Stripe purchases) in addition to confirmed on-chain holdings.
   useEffect(() => {
     async function resolveAssets() {
+      if (activeMethod === null) {
+        setHexLicenses([])
+        setLoadingAssets(false)
+        return
+      }
       setLoadingAssets(true)
       try {
         if (activeMethod === 'cardano' && isCardanoConnected && cardanoWallet) {
@@ -203,7 +196,9 @@ export default function Dashboard() {
           // ── EVM wallet or Magic custodial ─────────────────────────────────
           // Run DB lookup and on-chain event scan in parallel, then merge.
           const contractAddr = (
-            process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? ''
+            process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_SEPOLIA ??
+            process.env.NEXT_PUBLIC_GENESIS_VALIDATOR_ADDRESS_MAINNET ??
+            ''
           ) as `0x${string}`
 
           const NODE_SECURED_EVENT = parseAbiItem(
