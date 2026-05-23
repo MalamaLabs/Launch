@@ -51,7 +51,7 @@ export default function Navbar() {
             </Link>
           ))}
           <Link
-            href="/sign-in?from=/dashboard"
+            href="/dashboard"
             className={`ml-1 shrink-0 whitespace-nowrap rounded-malama-sm px-[18px] py-[11px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-px sm:ml-2 ${
               pathname.startsWith('/dashboard') || pathname.startsWith('/sign-in')
                 ? 'bg-malama-accent text-malama-bg ring-1 ring-malama-accent/60'

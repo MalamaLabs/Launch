@@ -69,6 +69,16 @@ export default function Dashboard() {
     }
   }, [authMethod])
 
+  // Auto-detect an existing wallet connection when no sessionStorage entry
+  // exists — handles the case where the user arrives from an external link or
+  // browser-session recovery (wagmi/Mesh persist their state independently).
+  useEffect(() => {
+    if (authMethod !== null) return          // already set — don't override
+    if (isEvmConnected) setAuthMethod('evm')
+    else if (isCardanoConnected) setAuthMethod('cardano')
+    // Magic session is handled by its own effect below
+  }, [authMethod, isEvmConnected, isCardanoConnected])
+
   // Re-hydrate a persisted Magic session after page refresh
   useEffect(() => {
     if (!magic) return

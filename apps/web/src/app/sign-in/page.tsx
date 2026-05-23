@@ -26,7 +26,10 @@ function SignInForm() {
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 
   useEffect(() => {
-    if (evmConnectStarted && isEvmConnected) router.push(redirectTo)
+    if (evmConnectStarted && isEvmConnected) {
+      sessionStorage.setItem('dashboardAuthMethod', 'evm')
+      router.push(redirectTo)
+    }
   }, [evmConnectStarted, isEvmConnected, router, redirectTo])
 
   async function signInWithEmail(e: React.FormEvent) {
@@ -38,6 +41,7 @@ function SignInForm() {
       await magic.auth.loginWithEmailOTP({ email: email.trim() })
       const info = await magic.user.getInfo()
       if (!info.wallets?.ethereum?.publicAddress) throw new Error('No wallet address returned.')
+      sessionStorage.setItem('dashboardAuthMethod', 'magic')
       router.push(redirectTo)
     } catch (err: unknown) {
       setEmailError(err instanceof Error ? err.message : 'Sign-in failed — try again.')
@@ -52,6 +56,7 @@ function SignInForm() {
       const detected = Object.keys(win.cardano ?? {})
       if (detected.length === 0) { setEmailError('No Cardano wallet detected — install Lace or Eternl.'); return }
       await connectCardano(detected[0])
+      sessionStorage.setItem('dashboardAuthMethod', 'cardano')
       router.push(redirectTo)
     } catch {
       setEmailError('Cardano connection failed.')
