@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useWallet } from '@meshsdk/react'
 import { useAccount, useConnect, useDisconnect, usePublicClient } from 'wagmi'
 import { parseAbiItem } from 'viem'
@@ -46,6 +46,11 @@ export default function Dashboard() {
   const publicClient = usePublicClient()
   const { magic } = useMagic()
 
+  // Prevents the auto-detect effect from re-connecting immediately after an
+  // intentional logout (wagmi / Mesh disconnect is async; isConnected stays
+  // true for one render cycle while the provider unwinds).
+  const loggedOutRef = useRef(false)
+
   const [authMethod, setAuthMethod]         = useState<AuthMethod>(null)
   const [magicEmail, setMagicEmail]         = useState('')
   const [magicAddress, setMagicAddress]     = useState<string | null>(null)
@@ -74,10 +79,19 @@ export default function Dashboard() {
   // browser-session recovery (wagmi/Mesh persist their state independently).
   useEffect(() => {
     if (authMethod !== null) return          // already set — don't override
+    if (loggedOutRef.current) return         // don't re-detect while wagmi/Mesh are still unwinding
     if (isEvmConnected) setAuthMethod('evm')
     else if (isCardanoConnected) setAuthMethod('cardano')
     // Magic session is handled by its own effect below
   }, [authMethod, isEvmConnected, isCardanoConnected])
+
+  // Once both providers have actually disconnected, clear the logout guard so
+  // future page visits / wallet auto-reconnects work normally.
+  useEffect(() => {
+    if (!isEvmConnected && !isCardanoConnected) {
+      loggedOutRef.current = false
+    }
+  }, [isEvmConnected, isCardanoConnected])
 
   // Re-hydrate a persisted Magic session after page refresh
   useEffect(() => {
@@ -99,11 +113,13 @@ export default function Dashboard() {
     const win = window as any
     const detected = Object.keys(win.cardano ?? {})
     if (detected.length === 0) return
+    loggedOutRef.current = false
     await connectCardano(detected[0])
     setAuthMethod('cardano')
   }
 
   function handleEvmConnect() {
+    loggedOutRef.current = false
     connectEvm({ connector: injected() })
     setAuthMethod('evm')
   }
@@ -137,6 +153,9 @@ export default function Dashboard() {
   }
 
   const handleLogout = async () => {
+    // Raise the guard BEFORE calling disconnect so the auto-detect effect
+    // can't re-connect during the async unwind period.
+    loggedOutRef.current = true
     if (authMethod === 'magic' && magic) {
       try { await magic.user.logout() } catch { /* ignore */ }
       setMagicAddress(null)
@@ -174,40 +193,36 @@ export default function Dashboard() {
         if (authMethod === 'cardano') {
           if (!isCardanoConnected || !cardanoWallet) { setHexLicenses([]); return }
 
-          // Collect all wallet addresses — change address may rotate between txs;
-          // DB stores whichever address was current at purchase time.
-          const [rawAssets, usedAddrs, changeAddr] = await Promise.all([
-            cardanoWallet.getAssets().catch(() => [] as Awaited<ReturnType<typeof cardanoWallet.getAssets>>),
-            cardanoWallet.getUsedAddresses().catch(() => [] as string[]),
-            cardanoWallet.getChangeAddress().catch(() => null as string | null),
-          ])
+          // Step 1 — get the change address first (most reliable Mesh call).
+          // This is the address the DB records at purchase time for Cardano buys.
+          const changeAddr = await cardanoWallet.getChangeAddress().catch(() => null as string | null)
 
-          // De-duplicate address list
-          const allAddrs = Array.from(new Set([...usedAddrs, ...(changeAddr ? [changeAddr] : [])]))
-
-          const assets = Array.isArray(rawAssets) ? rawAssets : []
-          const found: HexLicense[] = []
-
-          // CIP-68 user token (label 222) unit structure:
-          //   56 hex chars  = policyId
-          //    8 hex chars  = "000de140"  (label 222 prefix)
-          //   48 hex chars  = fromText(assetName)  — UTF-8 encoding of the 24-char hex name
-          for (const asset of assets) {
-            if (asset?.unit && typeof asset.unit === 'string' && asset.unit.length >= 64) {
-              if (asset.unit.slice(56, 64) !== '000de140') continue   // not a label-222 user token
-              const assetNameHex = asset.unit.slice(64)               // UTF-8 hex of the asset name
-              try {
-                const decoded = hexToAscii(assetNameHex)
-                if (/^[0-9a-f]{24}$/.test(decoded)) {
-                  found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
-                }
-              } catch { /* skip malformed */ }
-            }
+          if (!changeAddr) {
+            // Wallet connected but can't vend an address yet — bail and wait
+            // for the next render cycle (Mesh may still be initialising).
+            setHexLicenses([])
+            return
           }
 
-          // DB lookup across every address the wallet has ever used
+          const found: HexLicense[] = []
+
+          // Step 2 — DB lookup on change address immediately (primary path).
+          try {
+            const r = await fetch(`${API_BASE}/hexes/by-owner?cardanoAddress=${encodeURIComponent(changeAddr)}`, { cache: 'no-store' })
+            if (r.ok) {
+              const data = await r.json() as { hexes?: Array<{ hexId: string }> }
+              for (const h of data.hexes ?? []) {
+                if (!found.some(f => f.id === h.hexId)) found.push({ id: h.hexId, chain: 'cardano' })
+              }
+            }
+          } catch { /* non-fatal */ }
+
+          // Step 3 — also check any previously-used addresses (change address
+          // rotates on each tx; DB stores whichever was current at purchase time).
+          const usedAddrs = await cardanoWallet.getUsedAddresses().catch(() => [] as string[])
+          const extraAddrs = usedAddrs.filter(a => a !== changeAddr)
           await Promise.all(
-            allAddrs.map(async addr => {
+            extraAddrs.map(async addr => {
               try {
                 const r = await fetch(`${API_BASE}/hexes/by-owner?cardanoAddress=${encodeURIComponent(addr)}`, { cache: 'no-store' })
                 if (!r.ok) return
@@ -218,6 +233,24 @@ export default function Dashboard() {
               } catch { /* non-fatal */ }
             })
           )
+
+          // Step 4 — on-chain CIP-68 label-222 scan (secondary; may not match
+          // DB records for freshly-minted tokens, but catches direct transfers).
+          // CIP-68 user token unit: 56-char policyId + "000de140" + 48-char name
+          const rawAssets = await cardanoWallet.getAssets().catch(() => [] as Awaited<ReturnType<typeof cardanoWallet.getAssets>>)
+          const assets = Array.isArray(rawAssets) ? rawAssets : []
+          for (const asset of assets) {
+            if (asset?.unit && typeof asset.unit === 'string' && asset.unit.length >= 64) {
+              if (asset.unit.slice(56, 64) !== '000de140') continue
+              const assetNameHex = asset.unit.slice(64)
+              try {
+                const decoded = hexToAscii(assetNameHex)
+                if (/^[0-9a-f]{24}$/.test(decoded) && !found.some(f => f.id === decoded)) {
+                  found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
+                }
+              } catch { /* skip malformed */ }
+            }
+          }
 
           setHexLicenses(found)
 
