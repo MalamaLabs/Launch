@@ -163,44 +163,86 @@ export default function Dashboard() {
       try {
         if (authMethod === 'cardano') {
           if (!isCardanoConnected || !cardanoWallet) { setHexLicenses([]); return }
-          const [rawAssets, changeAddr] = await Promise.all([
+
+          // Collect all wallet addresses — change address may rotate between txs;
+          // DB stores whichever address was current at purchase time.
+          const [rawAssets, usedAddrs, changeAddr] = await Promise.all([
             cardanoWallet.getAssets().catch(() => [] as Awaited<ReturnType<typeof cardanoWallet.getAssets>>),
-            cardanoWallet.getChangeAddress().catch(() => null),
+            cardanoWallet.getUsedAddresses().catch(() => [] as string[]),
+            cardanoWallet.getChangeAddress().catch(() => null as string | null),
           ])
+
+          // De-duplicate address list
+          const allAddrs = Array.from(new Set([...usedAddrs, ...(changeAddr ? [changeAddr] : [])]))
+
           const assets = Array.isArray(rawAssets) ? rawAssets : []
           const found: HexLicense[] = []
+
+          // CIP-68 user token (label 222) unit structure:
+          //   56 hex chars  = policyId
+          //    8 hex chars  = "000de140"  (label 222 prefix)
+          //   48 hex chars  = fromText(assetName)  — UTF-8 encoding of the 24-char hex name
           for (const asset of assets) {
-            if (asset?.unit && typeof asset.unit === 'string') {
-              const assetNameHex = asset.unit.length > 56 ? asset.unit.slice(56) : ''
-              if (assetNameHex.length > 0) {
-                try {
-                  const decoded = hexToAscii(assetNameHex)
-                  if (/^[0-9a-f]{24}$/.test(decoded) || decoded.startsWith('Hex')) {
-                    found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
-                  }
-                } catch { /* skip */ }
-              }
+            if (asset?.unit && typeof asset.unit === 'string' && asset.unit.length >= 64) {
+              if (asset.unit.slice(56, 64) !== '000de140') continue   // not a label-222 user token
+              const assetNameHex = asset.unit.slice(64)               // UTF-8 hex of the asset name
+              try {
+                const decoded = hexToAscii(assetNameHex)
+                if (/^[0-9a-f]{24}$/.test(decoded)) {
+                  found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
+                }
+              } catch { /* skip malformed */ }
             }
           }
-          if (changeAddr) {
-            try {
-              const r = await fetch(`${API_BASE}/hexes/by-owner?cardanoAddress=${encodeURIComponent(changeAddr)}`, { cache: 'no-store' })
-              if (r.ok) {
+
+          // DB lookup across every address the wallet has ever used
+          await Promise.all(
+            allAddrs.map(async addr => {
+              try {
+                const r = await fetch(`${API_BASE}/hexes/by-owner?cardanoAddress=${encodeURIComponent(addr)}`, { cache: 'no-store' })
+                if (!r.ok) return
                 const data = await r.json() as { hexes?: Array<{ hexId: string }> }
                 for (const h of data.hexes ?? []) {
                   if (!found.some(f => f.id === h.hexId)) found.push({ id: h.hexId, chain: 'cardano' })
                 }
-              }
-            } catch { /* non-fatal */ }
-          }
+              } catch { /* non-fatal */ }
+            })
+          )
+
           setHexLicenses(found)
 
         } else if (authMethod === 'magic') {
           if (!loggedInEmail) { setHexLicenses([]); return }
-          const r = await fetch(`${API_BASE}/hexes/by-owner?email=${encodeURIComponent(loggedInEmail)}`, { cache: 'no-store' })
-          if (!r.ok) throw new Error(`/hexes/by-owner returned ${r.status}`)
-          const data = await r.json() as { hexes?: Array<{ hexId: string; baseTokenId?: number }> }
-          setHexLicenses((data.hexes ?? []).map(h => ({ id: h.hexId, chain: 'base' as const, tokenId: h.baseTokenId })))
+
+          // Primary: look up by email (direct Stripe purchase stores email)
+          const emailResp = await fetch(`${API_BASE}/hexes/by-owner?email=${encodeURIComponent(loggedInEmail)}`, { cache: 'no-store' })
+          if (!emailResp.ok) throw new Error(`/hexes/by-owner returned ${emailResp.status}`)
+          const emailData = await emailResp.json() as { hexes?: Array<{ hexId: string; baseTokenId?: number }> }
+          const emailHexes = emailData.hexes ?? []
+
+          // Fallback: Stripe webhook mints to the Magic custodial EVM address via
+          // adminSecureNode — look that up too and merge results.
+          let evmHexes: Array<{ hexId: string; baseTokenId?: number }> = []
+          if (magic) {
+            try {
+              const info = await magic.user.getInfo()
+              const evmAddr = info.wallets?.ethereum?.publicAddress
+              if (evmAddr) {
+                const evmResp = await fetch(`${API_BASE}/hexes/by-owner?evmAddress=${encodeURIComponent(evmAddr)}`, { cache: 'no-store' })
+                if (evmResp.ok) {
+                  const evmData = await evmResp.json() as { hexes?: Array<{ hexId: string; baseTokenId?: number }> }
+                  evmHexes = evmData.hexes ?? []
+                }
+              }
+            } catch { /* non-fatal */ }
+          }
+
+          // Merge, deduplicate by hexId
+          const merged = [...emailHexes]
+          for (const h of evmHexes) {
+            if (!merged.some(m => m.hexId === h.hexId)) merged.push(h)
+          }
+          setHexLicenses(merged.map(h => ({ id: h.hexId, chain: 'base' as const, tokenId: h.baseTokenId })))
 
         } else if (authMethod === 'evm') {
           if (!activeEvmAddress) { setHexLicenses([]); return }
