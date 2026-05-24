@@ -6,7 +6,7 @@ import DocsHubScrollSpy from './DocsHubScrollSpy'
 export const metadata: Metadata = {
   title: 'Documentation · Mālama Labs',
   description:
-    'Genesis 200 documentation hub — MLMA tokenomics, pricing dynamics, Phase 1 timeline, operator guide. Aligned to Tokenomics Whitepaper v3.6.',
+    'Genesis 200 documentation hub. MLMA tokenomics, pricing dynamics, Phase 1 timeline, operator guide. Aligned to Tokenomics Whitepaper v3.6.',
 }
 
 /**
@@ -27,17 +27,21 @@ export default function DocsOverviewPage() {
       {/* document switcher */}
       <div className="crumb">
         <div className="crumb-inner">
-          <Link className="back" href="/">
-            ← Mālama Labs
-          </Link>
+          <a className="back" href="https://malamalabs.com" target="_blank" rel="noopener noreferrer">
+            ← malamalabs.com
+          </a>
           <div className="switcher">
             <Link href="/docs" className="current">
               Overview
             </Link>
+            <Link href="/whitepaper">Whitepaper v1.0</Link>
             <Link href="/docs/tokenomics">Tokenomics</Link>
             <Link href="/docs/pricing-roi">Pricing &amp; Dynamics</Link>
             <Link href="/docs/phase-1-timeline">Phase 1 Timeline</Link>
             <Link href="/docs/operators">Operator Guide</Link>
+            <Link href="/docs/data-demand-score-methodology">Data Demand Score</Link>
+            <Link href="/docs/pricing">Genesis Pricing</Link>
+            <Link href="/docs/validator-fees">Validator Fees</Link>
           </div>
         </div>
       </div>
@@ -74,7 +78,7 @@ export default function DocsOverviewPage() {
             </h1>
             <p className="lede">
               Hardware-signed truth for the physical economy. Genesis 200 bootstraps a
-              globally distributed validation layer for real-world data — hex-zoned nodes
+              globally distributed validation layer for real-world data. Hex-zoned nodes
               that validate enterprise sensor data across carbon, AI compute emissions,
               parametric insurance, supply chain, and more.
             </p>
@@ -95,7 +99,7 @@ export default function DocsOverviewPage() {
             </div>
             <div className="row">
               <span className="k">Pages</span>
-              <span className="v">5</span>
+              <span className="v">9</span>
             </div>
             <div className="row">
               <span className="k">Owner</span>
@@ -133,11 +137,42 @@ export default function DocsOverviewPage() {
 
           <div className="docs-meta-strip">
             <span>Documents in this hub</span>
-            <span className="count">5 pages</span>
+            <span className="count">9 pages</span>
           </div>
 
-          {/* doc cards */}
+          {/* doc cards — whitepaper spans full width as first item */}
           <div className="doc-grid">
+
+            {/* ── Featured: Institutional Whitepaper ── */}
+            <Link
+              href="/whitepaper"
+              className="doc-card"
+              style={{
+                gridColumn: '1 / -1',
+                background: 'linear-gradient(135deg, rgba(196,240,97,0.06) 0%, rgba(196,240,97,0.02) 100%)',
+                borderColor: 'rgba(196,240,97,0.22)',
+              }}
+            >
+              <div className="topline">
+                <span className="id">WP · v1.0</span>
+                <span className="status" style={{ color: 'var(--mlma-accent)', borderColor: 'rgba(196,240,97,0.3)', background: 'rgba(196,240,97,0.08)' }}>
+                  Institutional · May 2026
+                </span>
+              </div>
+              <h3>Whitepaper v1.0 — Six-Layer DePIN</h3>
+              <p>
+                The canonical institutional document. Hardware-verified truth for climate markets and AI
+                compute. Covers the full six-layer DePIN architecture, seven verticals (carbon dMRV,
+                energy telemetry, parametric insurance, AI compute accountability, supply chain, LCO₂
+                clearing, prediction markets), tokenomics, regulatory posture, and operational threat
+                model. 33 pages · Document MLM-WP-v1.0.
+              </p>
+              <div className="footline">
+                <span>Architecture · tokenomics · regulatory posture · appendices</span>
+                <span className="read" style={{ color: 'var(--mlma-accent)' }}>Read + Download →</span>
+              </div>
+            </Link>
+
             <Link className="doc-card" href="/docs/tokenomics">
               <div className="topline">
                 <span className="id">DOCS · 01</span>
@@ -178,7 +213,7 @@ export default function DocsOverviewPage() {
               </div>
               <h3>Phase 1 Timeline</h3>
               <p>
-                From reservation through Year 1 milestone vesting. Six phases — reservation,
+                From reservation through Year 1 milestone vesting. Six phases. Reservation,
                 hardware ship, boot &amp; audit, PONO qualify, and three operational
                 milestones.
               </p>
@@ -203,6 +238,57 @@ export default function DocsOverviewPage() {
                 <span className="read">Read →</span>
               </div>
             </Link>
+
+            <Link className="doc-card" href="/docs/data-demand-score-methodology">
+              <div className="topline">
+                <span className="id">DOCS · 05</span>
+                <span className="status">v1.0 · Ratified</span>
+              </div>
+              <h3>Data Demand Score</h3>
+              <p>
+                Five-component scoring framework (0-100) measuring the commercial and
+                regulatory value of hardware-signed data from each hex. Inputs, update cadence,
+                multiplier formula, and worked examples.
+              </p>
+              <div className="footline">
+                <span>Score · multipliers · examples</span>
+                <span className="read">Read →</span>
+              </div>
+            </Link>
+
+            <Link className="doc-card" href="/docs/pricing">
+              <div className="topline">
+                <span className="id">DOCS · 06</span>
+                <span className="status">v1.0 · Ratified</span>
+              </div>
+              <h3>Genesis Pricing</h3>
+              <p>
+                Genesis reserve price ($2,000 flat), listing reference price formula,
+                three-multiplier reward calculation, cohort normalization, milestone vesting,
+                and buyer protections.
+              </p>
+              <div className="footline">
+                <span>Reserve · rewards · vesting</span>
+                <span className="read">Read →</span>
+              </div>
+            </Link>
+
+            <Link className="doc-card" href="/docs/validator-fees">
+              <div className="topline">
+                <span className="id">DOCS · 07</span>
+                <span className="status">v0.1 · Draft</span>
+              </div>
+              <h3>Validator Fees</h3>
+              <p>
+                USDC-denominated protocol revenue distributed to Genesis 200 operators from
+                commercial buyer relationships. Separate from MLMA emissions. Accrual logic,
+                distribution mechanics, and interaction with MLMA milestone vesting.
+              </p>
+              <div className="footline">
+                <span>Revenue · accruals · USDC</span>
+                <span className="read">Read →</span>
+              </div>
+            </Link>
           </div>
 
           {/* §01 How the system fits together */}
@@ -221,10 +307,9 @@ export default function DocsOverviewPage() {
             <div className="clause-body">
               <p>
                 Mālama Labs builds the measurement layer for markets that depend on
-                physical-world data. The same hardware-signed primitive — a sensor reading,
+                physical-world data. The same hardware-signed primitive. A sensor reading,
                 signed at the silicon level by an{' '}
-                <strong>ATECC608B-class secure element</strong> and anchored to Cardano —
-                produces verifiable evidence across seven markets:
+                <strong>ATECC608B-class secure element</strong> and anchored to Cardano. Produces verifiable evidence across seven markets:
               </p>
               <ul>
                 <li>Carbon dMRV</li>
@@ -337,7 +422,7 @@ export default function DocsOverviewPage() {
                 <span className="tag">▲ Informational only</span>
                 <p>
                   Documentation is informational. Specific reservation, participation, and
-                  token terms are governed by the agreements signed at reservation — the{' '}
+                  token terms are governed by the agreements signed at reservation. The{' '}
                   <Link href="/legal/terms" style={{ color: 'var(--mlma-accent)' }}>
                     Terms &amp; Conditions
                   </Link>
@@ -360,7 +445,7 @@ export default function DocsOverviewPage() {
               </div>
 
               <div className="sig-strip">
-                <div className="label">— DOCUMENTATION HUB · v4</div>
+                <div className="label">- DOCUMENTATION HUB · v4</div>
                 <p className="text">
                   Mālama Labs, Inc. · Genesis 200 Documentation · Aligned to MLMA Tokenomics
                   Whitepaper v3.6

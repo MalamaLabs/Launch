@@ -71,7 +71,7 @@ export default async function GenesisHexDetailPage({ params }: Props) {
     const [lat, lng] = cellToLatLng(hexId)
     return {
       hexId,
-      region: 'dallas' as const,
+      region: 'south' as const,
       regionLabel: 'Unknown',
       lat,
       lng,

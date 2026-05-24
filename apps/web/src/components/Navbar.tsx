@@ -6,11 +6,10 @@ import { IMAGES } from '@/lib/api'
 
 const topNavLinks = [
   { href: '/presale', label: 'Reserve', active: (p: string) => p.startsWith('/presale') },
-  { href: '/docs', label: 'Docs', active: (p: string) => p.startsWith('/docs') },
+  { href: '/docs', label: 'Docs', active: (p: string) => p.startsWith('/docs') || p === '/whitepaper' },
   { href: '/timeline', label: 'Timeline', active: (p: string) => p.startsWith('/timeline') },
   { href: '/explorer', label: 'Explorer', active: (p: string) => p === '/explorer' || p.startsWith('/explorer/') },
-  { href: '/partners', label: 'Become A Launch Partner', active: (p: string) => p.startsWith('/partners') },
-  { href: '/dashboard', label: 'My Node', active: (p: string) => p.startsWith('/dashboard') },
+  { href: '/partners', label: 'Partners', active: (p: string) => p.startsWith('/partners') },
 ]
 
 export default function Navbar() {

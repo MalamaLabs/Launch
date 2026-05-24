@@ -98,7 +98,14 @@ export default function HexMap() {
     m.on('load', async () => {
       try {
         const res = await fetch(`${API_BASE}/hexes/geojson`)
-        const data = await res.json()
+        let data = await res.json()
+        const hasNewRegions = Array.isArray(data.features) && data.features.some((feature: any) =>
+          ['west', 'pacific', 'mountain', 'midwest', 'south'].includes(String(feature?.properties?.region ?? ''))
+        )
+        if (!hasNewRegions) {
+          const fallback = await fetch('/api/hexes')
+          if (fallback.ok) data = await fallback.json()
+        }
 
         // Omnichain Local State Synchronization
         // Reads purchased nodes from the decoupled payment gateway and visibly renders them active.
@@ -268,14 +275,18 @@ export default function HexMap() {
         const [lat, lng] = cellToLatLng(id)
         const baseItem: GenesisHexListItem = {
           hexId:          id,
-          region:         String(props.region ?? 'idaho') as GenesisHexListItem['region'],
+          region:         String(props.region ?? 'south') as GenesisHexListItem['region'],
           regionLabel:    String(props.regionLabel ?? props.zoneName ?? ''),
           lat,
           lng,
           status:         props.status === 'reserved' ? 'reserved' : 'available',
           sold:           props.sold === true || props.sold === 'true',
           chain:          String(props.chain ?? 'base') as 'base' | 'cardano',
-          isHQ:           props.isHQ === true || props.isHQ === 'true',
+          isMalamaReserved:
+            props.isMalamaReserved === true ||
+            props.isMalamaReserved === 'true' ||
+            props.isHQ === true ||
+            props.isHQ === 'true',
           dataScore:      Number(props.dataScore ?? 0),
           startingBid:    Number(props.startingBid ?? 0),
           activeSensors:  Number(props.activeSensors ?? 0),
@@ -338,10 +349,11 @@ export default function HexMap() {
   }
 
   const regions = [
-    { name: 'Core Alpha (Idaho)', center: [-112.5, 43.5], zoom: 6 },
-    { name: 'Nexus Prime (NYC)', center: [-74.0060, 40.7128], zoom: 10 },
-    { name: 'Thames Node (London)', center: [-0.1278, 51.5074], zoom: 10 },
-    { name: 'Neo-Sovereign (Tokyo)', center: [139.6503, 35.6762], zoom: 10 }
+    { name: 'West Coast', center: [-118.2437, 34.0522], zoom: 6 },
+    { name: 'Pacific & Alaska', center: [-156.3044, 20.9208], zoom: 6 },
+    { name: 'Mountain West', center: [-115.5, 43.75], zoom: 6 },
+    { name: 'Midwest', center: [-87.1267, 45.1891], zoom: 6 },
+    { name: 'South & East', center: [-96.7970, 32.7767], zoom: 6 },
   ]
 
   return (
