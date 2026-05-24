@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { IMAGES } from '@/lib/api'
 
 const topNavLinks = [
   { href: '/presale', label: 'Reserve', active: (p: string) => p.startsWith('/presale') },
@@ -12,6 +11,8 @@ const topNavLinks = [
   { href: '/partners', label: 'Partners', active: (p: string) => p.startsWith('/partners') },
 ]
 
+const CORPORATE_URL = process.env.NEXT_PUBLIC_CORPORATE_URL || 'https://malamalabs.com'
+
 export default function Navbar() {
   const pathname = usePathname()
 
@@ -20,21 +21,19 @@ export default function Navbar() {
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-5 py-[14px] sm:px-10">
         <Link
           href="/"
-          className="flex shrink-0 items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-malama-accent/50"
+          className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-malama-accent/50"
         >
-          {/* Served from dagwelldev-api/static/images via IMAGES.logo (api.ts).
-              Using a plain <img> here because next/image's optimizer goes
-              through /_next/image which would itself need an allowlist for
-              api.dagwelldev.com — and the logo is small + already
-              year-cached at the source. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={IMAGES.logo}
-            alt="Mālama Labs Logo"
-            width={700}
-            height={300}
-            className="h-9 w-auto max-w-[min(100%,15rem)] object-contain object-left drop-shadow-[0_0_18px_rgba(196,240,97,0.18)] transition-[filter] duration-300 hover:drop-shadow-[0_0_26px_rgba(196,240,97,0.35)] sm:h-11 sm:max-w-[20rem] md:h-12 md:max-w-[24rem]"
+            src="/logo-mark.png"
+            alt="Mālama Labs Logo Mark"
+            width={32}
+            height={32}
+            className="shrink-0 drop-shadow-[0_0_10px_rgba(101,217,165,0.3)] transition-[filter] duration-300 hover:drop-shadow-[0_0_18px_rgba(101,217,165,0.5)]"
           />
+          <span className="font-black tracking-tight text-white text-[1.05rem] leading-none drop-shadow-[0_0_18px_rgba(101,217,165,0.18)] transition-[filter] duration-300 hover:drop-shadow-[0_0_26px_rgba(101,217,165,0.35)]">
+            Mālama Labs
+          </span>
         </Link>
 
         <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-2">
@@ -49,6 +48,19 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
+
+          <a
+            href={CORPORATE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden lg:inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm px-3 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-malama-ink-faint hover:text-malama-accent transition-colors sm:px-4"
+          >
+            malamalabs.com
+            <svg className="w-2.5 h-2.5 opacity-60" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M1 9L9 1M9 1H3M9 1V7"/>
+            </svg>
+          </a>
+
           <Link
             href="/dashboard"
             className={`ml-1 shrink-0 whitespace-nowrap rounded-malama-sm px-[18px] py-[11px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-px sm:ml-2 ${
@@ -57,7 +69,7 @@ export default function Navbar() {
                 : 'bg-malama-accent text-malama-bg hover:shadow-[0_8px_24px_rgba(196,240,97,0.2)]'
             }`}
           >
-            Launch App
+            SIGN IN
           </Link>
         </div>
       </div>
