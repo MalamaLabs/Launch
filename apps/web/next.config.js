@@ -64,6 +64,16 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Allow the PDF to be embedded in an iframe on the same origin.
+        // Vercel injects X-Frame-Options: DENY globally; this override scopes
+        // it to SAMEORIGIN for the whitepaper PDF only so /whitepaper renders.
+        source: '/whitepaper.pdf',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Disposition', value: 'inline' },
+        ],
+      },
     ]
   },
 
