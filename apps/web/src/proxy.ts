@@ -9,7 +9,9 @@ function isPublicPath(pathname: string) {
     pathname === '/password' ||
     pathname.startsWith('/api/auth/password') ||
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/favicon')
+    pathname.startsWith('/favicon') ||
+    // Static public assets — PDFs, images, fonts, etc. must never hit the gate
+    /\.(pdf|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|otf|mp4|webm)$/i.test(pathname)
   )
 }
 

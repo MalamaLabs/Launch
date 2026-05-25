@@ -66,34 +66,14 @@ export default function WhitepaperPage() {
         </div>
       </div>
 
-      {/*
-        * <object> is used intentionally instead of <iframe>.
-        * Vercel injects X-Frame-Options: DENY at the edge for all responses,
-        * which blocks <iframe> embeds. X-Frame-Options only applies to
-        * <iframe>/<frame>/<frameset> — <object> is not subject to it.
-        */}
       <div className="mx-auto max-w-7xl px-5 pb-16 sm:px-10">
         <div className="overflow-hidden rounded-2xl border border-malama-line shadow-2xl">
-          <object
-            data="/whitepaper.pdf"
-            type="application/pdf"
+          <iframe
+            src="/whitepaper.pdf"
+            title="Mālama Labs Whitepaper v1.0"
             className="w-full"
             style={{ height: 'calc(100vh - 12rem)', minHeight: 600 }}
-          >
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <p className="mb-4 font-mono text-sm text-malama-ink-dim">
-                Your browser cannot display the PDF inline.
-              </p>
-              <a
-                href="/whitepaper.pdf"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg border border-malama-accent/40 bg-malama-accent/10 px-4 py-2 font-mono text-sm text-malama-accent transition-colors hover:bg-malama-accent/20"
-              >
-                Open PDF directly →
-              </a>
-            </div>
-          </object>
+          />
         </div>
 
         <p className="mt-4 text-center font-mono text-[11px] text-malama-ink-faint">
