@@ -174,6 +174,9 @@ export default function Dashboard() {
 
   const [hexLicenses, setHexLicenses] = useState<HexLicense[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
+  // Incremented to retry resolveAssets when the Cardano wallet is connected
+  // but not yet fully initialised (getChangeAddress returns null on first call).
+  const [walletRetryTick, setWalletRetryTick] = useState(0)
 
   const isAuthenticated = authMethod !== null
 
@@ -198,9 +201,11 @@ export default function Dashboard() {
           const changeAddr = await cardanoWallet.getChangeAddress().catch(() => null as string | null)
 
           if (!changeAddr) {
-            // Wallet connected but can't vend an address yet — bail and wait
-            // for the next render cycle (Mesh may still be initialising).
+            // Wallet connected but can't vend an address yet — Mesh is still
+            // initialising internally. Schedule a retry so the effect re-runs
+            // once the wallet is ready rather than silently giving up.
             setHexLicenses([])
+            setTimeout(() => setWalletRetryTick(t => t + 1), 400)
             return
           }
 
@@ -322,7 +327,7 @@ export default function Dashboard() {
       }
     }
     resolveAssets()
-  }, [authMethod, isCardanoConnected, cardanoWallet, loggedInEmail, activeEvmAddress, publicClient])
+  }, [authMethod, isCardanoConnected, cardanoWallet, loggedInEmail, activeEvmAddress, publicClient, walletRetryTick])
 
   return (
     <div className="relative min-h-screen bg-black p-6 font-sans text-gray-200 md:p-12">
