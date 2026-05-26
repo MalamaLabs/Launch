@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sun Rack Nano — Affordable Entry Points</title>
+<style>
+  :root {
+    --bg: #050c14; --surface: #0b1a2b; --surface2: #0f2137;
+    --border: #1a3a56; --accent: #00d4aa; --accent2: #f59e0b;
+    --accent3: #6366f1; --red: #ef4444; --text: #e2e8f0; --muted: #7a9ab5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6; min-height: 100vh;
+  }
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(5,12,20,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2rem; height: 56px;
+  }
+  .nav-logo { font-weight: 700; font-size: 1rem; color: var(--accent); letter-spacing: 0.05em; }
+  .back-link {
+    font-size: 0.82rem; color: var(--muted); text-decoration: none;
+    display: flex; align-items: center; gap: 0.4rem; transition: color .2s;
+  }
+  .back-link:hover { color: var(--accent); }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 4rem 2rem 6rem; }
+  .page-label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--accent); margin-bottom: 0.6rem;
+  }
+  h1 {
+    font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 800; line-height: 1.15;
+    margin-bottom: 0.75rem;
+  }
+  .page-desc { color: var(--muted); max-width: 600px; margin-bottom: 3rem; }
+
+  .tier-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+  .tier-card {
+    background: var(--surface); border: 2px solid var(--border);
+    border-radius: 20px; padding: 2rem; position: relative;
+    transition: border-color .2s, transform .2s;
+  }
+  .tier-card:hover { transform: translateY(-3px); }
+  .tier-card.flagship {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, var(--surface) 0%, rgba(0,212,170,0.05) 100%);
+  }
+  .flagship-badge {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #000; font-size: 0.68rem; font-weight: 800;
+    padding: 0.2rem 0.9rem; border-radius: 999px; white-space: nowrap;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .tier-name {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); margin-bottom: 0.4rem;
+  }
+  .tier-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.25rem; }
+  .tier-price {
+    font-size: 2.2rem; font-weight: 800; color: var(--accent);
+    margin: 0.75rem 0;
+  }
+  .tier-price span { font-size: 1rem; color: var(--muted); font-weight: 400; }
+  .tier-desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 1.25rem; line-height: 1.6; }
+  .spec-list { list-style: none; margin-bottom: 1.5rem; }
+  .spec-list li {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 0.45rem 0; border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .spec-list li:last-child { border-bottom: none; }
+  .spec-key { color: var(--muted); }
+  .spec-val { font-weight: 600; color: var(--text); text-align: right; }
+  .tier-tag {
+    display: inline-block; background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.25); border-radius: 999px;
+    padding: 0.2rem 0.75rem; font-size: 0.68rem; color: var(--accent3);
+  }
+  .tier-tag.green {
+    background: rgba(0,212,170,0.1); border-color: rgba(0,212,170,0.25); color: var(--accent);
+  }
+  .tier-tag.amber {
+    background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.25); color: var(--accent2);
+  }
+
+  .note-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    border-radius: 12px; padding: 1.25rem 1.5rem;
+    font-size: 0.85rem; color: var(--muted); margin-bottom: 2rem;
+  }
+  .note-box strong { color: var(--text); }
+
+  .refurb-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 2rem; margin-bottom: 2rem;
+  }
+  .refurb-section h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .refurb-section p { font-size: 0.85rem; color: var(--muted); margin-bottom: 1rem; }
+  .source-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .chip {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.35rem 0.75rem;
+    font-size: 0.75rem; color: var(--text);
+  }
+
+  .cta-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.75rem 1.75rem; border-radius: 8px; font-size: 0.9rem;
+    font-weight: 600; cursor: pointer; text-decoration: none; border: none;
+    transition: all .2s;
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: #00f0c0; transform: translateY(-1px); }
+  .btn-outline {
+    background: transparent; color: var(--text); border: 1px solid var(--border);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-logo">☀ SUN RACK NANO</span>
+  <a href="/SunRack" class="back-link">← Back to Full Blueprint</a>
+</nav>
+
+<div class="page">
+  <div class="page-label">Affordable Entry Points</div>
+  <h1>Right-Size Your<br/>Deployment</h1>
+  <p class="page-desc">The solar and power infrastructure is identical across all tiers — same 3.6kW array, same 14.3kWh battery, same AIO inverter. The only variable is the compute stack inside the rack.</p>
+
+  <div class="note-box">
+    <strong>The solar system is the same on every tier.</strong> Once a community deploys any Nano node, they can upgrade the compute in place years later without touching a single solar cable. The ~$6,400 power infrastructure is a one-time, permanent investment.
+  </div>
+
+  <div class="tier-grid">
+
+    <!-- Nano Core -->
+    <div class="tier-card">
+      <div class="tier-name">Tier 1</div>
+      <div class="tier-title">Nano Core</div>
+      <div class="tier-price">~$11K <span>all-in</span></div>
+      <div class="tier-desc">Community pilot node. Proven 64-core server platform, refurbished from hyperscaler data centers — validated for 24/7 uptime before it ever arrives on-site.</div>
+      <ul class="spec-list">
+        <li><span class="spec-key">CPU</span><span class="spec-val">Refurb EPYC 7003 (64-core)</span></li>
+        <li><span class="spec-key">GPU</span><span class="spec-val">Single RTX 4070</span></li>
+        <li><span class="spec-key">RAM</span><span class="spec-val">128GB DDR4 ECC</span></li>
+        <li><span class="spec-key">Storage</span><span class="spec-val">12TB NVMe</span></li>
+        <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">~88 (upgradable)</span></li>
+        <li><span class="spec-key">Solar / Battery</span><span class="spec-val">3.6kW / 14.3kWh ✓</span></li>
+      </ul>
+      <span class="tier-tag green">Best for: Pilot Deploys</span>
+    </div>
+
+    <!-- Nano Pro -->
+    <div class="tier-card">
+      <div class="tier-name">Tier 2</div>
+      <div class="tier-title">Nano Pro</div>
+      <div class="tier-price">~$16K <span>all-in</span></div>
+      <div class="tier-desc">Regional hub node. Refurbished EPYC 9654 — full SP5 platform with 128 PCIe 5.0 lanes, dual GPU capacity, and DDR5 ECC for long-term expandability.</div>
+      <ul class="spec-list">
+        <li><span class="spec-key">CPU</span><span class="spec-val">Refurb EPYC 9654 (96-core)</span></li>
+        <li><span class="spec-key">GPU</span><span class="spec-val">Dual RTX 4070</span></li>
+        <li><span class="spec-key">RAM</span><span class="spec-val">256GB DDR5 ECC</span></li>
+        <li><span class="spec-key">Storage</span><span class="spec-val">24TB NVMe</span></li>
+        <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">128 PCIe 5.0</span></li>
+        <li><span class="spec-key">Solar / Battery</span><span class="spec-val">3.6kW / 14.3kWh ✓</span></li>
+      </ul>
+      <span class="tier-tag amber">Best for: Regional Hubs</span>
+    </div>
+
+    <!-- Nano Max -->
+    <div class="tier-card flagship">
+      <div class="flagship-badge">Flagship</div>
+      <div class="tier-name">Tier 3</div>
+      <div class="tier-title">Nano Max</div>
+      <div class="tier-price">~$18.4K <span>all-in</span></div>
+      <div class="tier-desc">Enterprise mini-datacenter. New hardware throughout. Maximum PCIe headroom, full NVMe RAID-Z2 protection, and upgraded solar capacity for demanding continuous-uptime workloads.</div>
+      <ul class="spec-list">
+        <li><span class="spec-key">CPU</span><span class="spec-val">New EPYC 9654 (96-core)</span></li>
+        <li><span class="spec-key">GPU</span><span class="spec-val">Dual RTX 4070</span></li>
+        <li><span class="spec-key">RAM</span><span class="spec-val">512GB DDR5 ECC</span></li>
+        <li><span class="spec-key">Storage</span><span class="spec-val">48TB NVMe RAID-Z2</span></li>
+        <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">128 PCIe 5.0</span></li>
+        <li><span class="spec-key">Solar / Battery</span><span class="spec-val">3.6kW / 14.3kWh ✓</span></li>
+      </ul>
+      <span class="tier-tag green">Best for: Enterprise / Sovereign</span>
+    </div>
+
+  </div>
+
+  <div class="refurb-section">
+    <h2>On Refurbished Hardware</h2>
+    <p>EPYC server-grade CPUs are designed from the factory for 24/7 hyperscaler workloads. Units pulled from cloud data center rotations typically have low cumulative hours relative to their rated lifecycle, arrive with full BIOS and firmware support, and are available with 1–3 year warranties from certified resellers. For the Nano Core and Nano Pro tiers, refurb is the recommended path — not a cost-cut, but a smart sourcing strategy.</p>
+    <div class="source-chips">
+      <span class="chip">ServerMonkey</span>
+      <span class="chip">Wired Zone</span>
+      <span class="chip">GoHardDrive</span>
+      <span class="chip">Bargain Hardware</span>
+      <span class="chip">eBay Business &amp; Industrial</span>
+    </div>
+  </div>
+
+  <div class="cta-row">
+    <a href="/SunRack" class="btn btn-primary">← View Full Blueprint</a>
+    <a href="/SunRack#roi" class="btn btn-outline">📊 ROI Calculator</a>
+  </div>
+</div>
+
+</body>
+</html>
