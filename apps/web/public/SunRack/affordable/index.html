@@ -141,10 +141,10 @@
 <div class="page">
   <div class="page-label">Affordable Entry Points</div>
   <h1>Right-Size Your<br/>Deployment</h1>
-  <p class="page-desc">The solar and power infrastructure is identical across all tiers — same 3.6kW array, same 14.3kWh battery, same AIO inverter. The only variable is the compute stack inside the rack.</p>
+  <p class="page-desc">The solar and power infrastructure scales with each compute tier — panels and battery are sized to match the continuous GPU load. The AIO inverter and wiring topology are identical across all tiers, making in-place compute upgrades straightforward without redesigning the power system.</p>
 
   <div class="note-box">
-    <strong>The solar system is the same on every tier.</strong> Once a community deploys any Nano node, they can upgrade the compute in place years later without touching a single solar cable. The ~$6,400 power infrastructure is a one-time, permanent investment.
+    <strong>Once a community deploys any Nano node,</strong> upgrading compute later requires only adding panels and battery capacity — the inverter, wiring harness, and mounting infrastructure never change. The power system is an expandable permanent asset.
   </div>
 
   <div class="tier-grid">
@@ -170,7 +170,7 @@
     <div class="tier-card">
       <div class="tier-name">Tier 2</div>
       <div class="tier-title">Nano Pro</div>
-      <div class="tier-price">~$16K <span>all-in</span></div>
+      <div class="tier-price">~$18K <span>all-in</span></div>
       <div class="tier-desc">Regional hub node. Refurbished EPYC 9654 — full SP5 platform with 128 PCIe 5.0 lanes, dual GPU capacity, and DDR5 ECC for long-term expandability.</div>
       <ul class="spec-list">
         <li><span class="spec-key">CPU</span><span class="spec-val">Refurb EPYC 9654 (96-core)</span></li>
@@ -178,7 +178,7 @@
         <li><span class="spec-key">RAM</span><span class="spec-val">256GB DDR5 ECC</span></li>
         <li><span class="spec-key">Storage</span><span class="spec-val">24TB NVMe</span></li>
         <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">128 PCIe 5.0</span></li>
-        <li><span class="spec-key">Solar / Battery</span><span class="spec-val">3.6kW / 14.3kWh ✓</span></li>
+        <li><span class="spec-key">Solar / Battery</span><span class="spec-val">5.4kW / 20kWh ✓</span></li>
       </ul>
       <span class="tier-tag amber">Best for: Regional Hubs</span>
     </div>
@@ -188,7 +188,7 @@
       <div class="flagship-badge">Flagship</div>
       <div class="tier-name">Tier 3</div>
       <div class="tier-title">Nano Max</div>
-      <div class="tier-price">~$18.4K <span>all-in</span></div>
+      <div class="tier-price">~$23K <span>all-in</span></div>
       <div class="tier-desc">Enterprise mini-datacenter. New hardware throughout. Maximum PCIe headroom, full NVMe RAID-Z2 protection, and upgraded solar capacity for demanding continuous-uptime workloads.</div>
       <ul class="spec-list">
         <li><span class="spec-key">CPU</span><span class="spec-val">New EPYC 9654 (96-core)</span></li>
@@ -196,7 +196,7 @@
         <li><span class="spec-key">RAM</span><span class="spec-val">512GB DDR5 ECC</span></li>
         <li><span class="spec-key">Storage</span><span class="spec-val">48TB NVMe RAID-Z2</span></li>
         <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">128 PCIe 5.0</span></li>
-        <li><span class="spec-key">Solar / Battery</span><span class="spec-val">3.6kW / 14.3kWh ✓</span></li>
+        <li><span class="spec-key">Solar / Battery</span><span class="spec-val">7.2kW / 28kWh ✓</span></li>
       </ul>
       <span class="tier-tag green">Best for: Enterprise / Sovereign</span>
     </div>

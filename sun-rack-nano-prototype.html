@@ -459,10 +459,11 @@
 
   /* ── SCROLL FADE ── */
   .fade-in {
-    opacity: 0; transform: translateY(24px);
+    opacity: 1; transform: none;
     transition: opacity 0.6s ease, transform 0.6s ease;
   }
-  .fade-in.visible { opacity: 1; transform: none; }
+  .js-ready .fade-in { opacity: 0; transform: translateY(24px); }
+  .js-ready .fade-in.visible { opacity: 1; transform: none; }
 
   /* ── TABS ── */
   .tab-bar {
@@ -973,6 +974,9 @@ window.addEventListener('load', () => {
     bar.textContent = '17 kWh generated today';
   }, 400);
 });
+
+// ── Mark JS as ready (enables fade-in animation)
+document.documentElement.classList.add('js-ready');
 
 // ── Intersection observer for fade-in
 const observer = new IntersectionObserver((entries) => {

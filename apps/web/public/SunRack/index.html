@@ -459,10 +459,11 @@
 
   /* ── SCROLL FADE ── */
   .fade-in {
-    opacity: 0; transform: translateY(24px);
+    opacity: 1; transform: none;
     transition: opacity 0.6s ease, transform 0.6s ease;
   }
-  .fade-in.visible { opacity: 1; transform: none; }
+  .js-ready .fade-in { opacity: 0; transform: translateY(24px); }
+  .js-ready .fade-in.visible { opacity: 1; transform: none; }
 
   /* ── TABS ── */
   .tab-bar {
@@ -652,7 +653,8 @@
           <li><span class="spec-key">Daily Output</span><span class="spec-val">16–18 kWh typical</span></li>
           <li><span class="spec-key">Connector</span><span class="spec-val">MC4 plug-and-play</span></li>
         </ul>
-        <div class="comp-price"><span class="price-label">Estimated Cost</span><span class="price-val">~$1,800</span></div>
+        <div class="comp-price"><span class="price-label">Estimated Cost (Nano Core)</span><span class="price-val">~$1,800</span></div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:0.6rem;line-height:1.7;">Nano Pro: +$900 (5.4kW total) · Nano Max: +$1,800 (7.2kW total)</div>
       </div>
 
       <div class="comp-card">
@@ -671,7 +673,8 @@
           <li><span class="spec-key">Cold Weather</span><span class="spec-val">Self-heating BMS (&lt;0°C)</span></li>
           <li><span class="spec-key">Comms</span><span class="spec-val">RS485 / CAN bus to inverter</span></li>
         </ul>
-        <div class="comp-price"><span class="price-label">Estimated Cost</span><span class="price-val">~$3,200</span></div>
+        <div class="comp-price"><span class="price-label">Estimated Cost (Nano Core)</span><span class="price-val">~$3,200</span></div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:0.6rem;line-height:1.7;">Nano Pro: +$1,200 (20kWh total) · Nano Max: +$2,800 (28kWh total)</div>
       </div>
 
       <div class="comp-card">
@@ -716,12 +719,12 @@
     <div style="margin-top:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
       <div>
         <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Total Solar + Power Infrastructure</div>
-        <div style="font-size:2rem;font-weight:800;color:var(--accent);">~$6,400</div>
+        <div style="font-size:1.3rem;font-weight:800;color:var(--accent);">Core ~$6,400 · Pro ~$8,500 · Max ~$11,000</div>
         <div style="font-size:0.78rem;color:var(--muted);">Panels + Battery + Inverter + mounting hardware + wiring</div>
       </div>
       <div>
         <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Total System (incl. compute)</div>
-        <div style="font-size:2rem;font-weight:800;color:var(--text);">~$18,400</div>
+        <div style="font-size:1.3rem;font-weight:800;color:var(--text);">Core ~$11K · Pro ~$18K · Max ~$23K</div>
         <div style="font-size:0.78rem;color:var(--muted);">All-in cost. Operates at $0.00/mo electricity forever.</div>
         <a href="/SunRack/affordable" style="display:inline-block;margin-top:0.5rem;font-size:0.72rem;color:var(--muted);text-decoration:none;border-bottom:1px dashed var(--border);" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">Explore affordable entry points →</a>
       </div>
@@ -798,7 +801,7 @@
             <td class="row-label">Year-1 TCO (compute equiv.)</td>
             <td class="bad">$54,000+</td>
             <td class="bad">$30,000–50,000</td>
-            <td class="good">$18,400 one-time</td>
+            <td class="good">$11K–$23K one-time (tier dependent)</td>
           </tr>
         </tbody>
       </table>
@@ -978,6 +981,9 @@ window.addEventListener('load', () => {
   }, 400);
 });
 
+// ── Mark JS as ready (enables fade-in animation)
+document.documentElement.classList.add('js-ready');
+
 // ── Intersection observer for fade-in
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
@@ -1041,24 +1047,4 @@ function updateROI() {
   const srnPct = Math.min((sunRackCost / maxVal) * 100, 100);
   const savPct = Math.min((totalSaving / maxVal) * 100, 100);
 
-  document.getElementById('roiBars').innerHTML = `
-    <div class="roi-bar-row">
-      <div class="rbl">Cloud spend</div>
-      <div class="roi-bar-track"><div class="roi-bar-fill aws" style="width:${awsPct}%">${fmt(cloudTotal)}</div></div>
-    </div>
-    <div class="roi-bar-row">
-      <div class="rbl">Sun Rack cost</div>
-      <div class="roi-bar-track"><div class="roi-bar-fill srn" style="width:${srnPct}%">${fmt(sunRackCost)}</div></div>
-    </div>
-    <div class="roi-bar-row">
-      <div class="rbl">Net savings</div>
-      <div class="roi-bar-track"><div class="roi-bar-fill savings" style="width:${savPct}%">${fmt(totalSaving)}</div></div>
-    </div>
-  `;
-}
-
-// Init
-updateROI();
-</script>
-</body>
-</html>
+  document.get
