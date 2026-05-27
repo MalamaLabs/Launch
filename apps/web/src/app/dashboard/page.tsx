@@ -7,7 +7,7 @@ import { parseAbiItem } from 'viem'
 import { injected } from 'wagmi/connectors'
 import {
   ShieldCheck, Cpu, MapPin, CheckCircle2, Box, Radio,
-  AlertCircle, TrendingUp, Lock, Mail, Loader2, LogOut, KeyRound,
+  AlertCircle, TrendingUp, Lock, Mail, Loader2, LogOut, KeyRound, Package,
 } from 'lucide-react'
 import Link from 'next/link'
 import { API_BASE, nftImageUrl } from '@/lib/api'
@@ -109,6 +109,76 @@ export default function Dashboard() {
     }).catch(() => {})
   }, [magic])
 
+  // Load existing shipping profile once auth is known
+  useEffect(() => {
+    if (!authMethod) return
+    const wallet = authMethod === 'evm' ? evmAddress : authMethod === 'magic' ? (magicAddress ?? undefined) : undefined
+    const email  = authMethod === 'magic' ? loggedInEmail ?? '' : ''
+    const param  = wallet ? `wallet=${encodeURIComponent(wallet)}` : email ? `email=${encodeURIComponent(email)}` : null
+    if (!param) return
+
+    fetch(`/api/shipping?${param}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: any) => {
+        if (!data) return
+        if (data.notificationEmail) setNotifEmail(data.notificationEmail)
+        if (data.shipping) {
+          setShipName(data.shipping.name ?? '')
+          setShipLine1(data.shipping.line1 ?? '')
+          setShipLine2(data.shipping.line2 ?? '')
+          setShipCity(data.shipping.city ?? '')
+          setShipState(data.shipping.state ?? '')
+          setShipPostal(data.shipping.postalCode ?? '')
+          setShipCountry(data.shipping.country ?? 'US')
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authMethod, evmAddress, magicAddress, loggedInEmail])
+
+  // Pre-fill notification email from Magic session
+  useEffect(() => {
+    if (loggedInEmail && !notifEmail) setNotifEmail(loggedInEmail)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedInEmail])
+
+  async function saveShipping() {
+    setShipSaving(true)
+    setShipError('')
+    setShipSaved(false)
+    try {
+      const wallet = authMethod === 'evm' ? evmAddress : authMethod === 'magic' ? (magicAddress ?? undefined) : undefined
+      const body: Record<string, unknown> = {
+        email: notifEmail.trim() || undefined,
+        wallet,
+        shipping: {
+          name:       shipName,
+          line1:      shipLine1,
+          line2:      shipLine2,
+          city:       shipCity,
+          state:      shipState,
+          postalCode: shipPostal,
+          country:    shipCountry,
+        },
+      }
+      const res = await fetch('/api/shipping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(typeof d.error === 'string' ? d.error : 'Save failed')
+      }
+      setShipSaved(true)
+      setTimeout(() => setShipSaved(false), 3000)
+    } catch (e) {
+      setShipError(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setShipSaving(false)
+    }
+  }
+
   async function handleCardanoConnect() {
     const win = window as any
     const detected = Object.keys(win.cardano ?? {})
@@ -171,6 +241,19 @@ export default function Dashboard() {
     setMagicEmail('')
     setMagicError('')
   }
+
+  // ── Shipping + notification email ────────────────────────────────────────
+  const [shipName,    setShipName]    = useState('')
+  const [shipLine1,   setShipLine1]   = useState('')
+  const [shipLine2,   setShipLine2]   = useState('')
+  const [shipCity,    setShipCity]    = useState('')
+  const [shipState,   setShipState]   = useState('')
+  const [shipPostal,  setShipPostal]  = useState('')
+  const [shipCountry, setShipCountry] = useState('US')
+  const [notifEmail,  setNotifEmail]  = useState('')
+  const [shipSaving,  setShipSaving]  = useState(false)
+  const [shipSaved,   setShipSaved]   = useState(false)
+  const [shipError,   setShipError]   = useState('')
 
   const [hexLicenses, setHexLicenses] = useState<HexLicense[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
@@ -577,10 +660,22 @@ export default function Dashboard() {
             <section className="rounded-3xl border border-gray-800 bg-malama-card p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-3">
                 <KeyRound className="h-5 w-5 text-purple-400" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Wallet Key</h2>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Magic Wallet</h2>
               </div>
+              {loggedInEmail && (
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Email</p>
+                  <p className="mt-0.5 font-mono text-xs text-purple-300 break-all">{loggedInEmail}</p>
+                </div>
+              )}
+              {magicAddress && (
+                <div className="mb-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">EVM Address</p>
+                  <p className="mt-0.5 font-mono text-xs text-gray-300 break-all">{magicAddress}</p>
+                </div>
+              )}
               <p className="mb-4 text-xs text-gray-500 leading-relaxed">
-                Export your Magic wallet private key to import into MetaMask or any other wallet. Only you can see this.
+                Export your private key to import into MetaMask or any other wallet. Only you can see this.
               </p>
               <button
                 type="button"

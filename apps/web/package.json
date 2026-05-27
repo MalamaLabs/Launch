@@ -25,7 +25,8 @@
     "tailwind-merge": "^2.2.0",
     "viem": "^2.9.0",
     "magic-sdk": "^33.6.3",
-    "wagmi": "^2.5.0"
+    "wagmi": "^2.5.0",
+    "mongoose": "^8.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
