@@ -13,7 +13,7 @@ const RevealPrivateKey = () => {
     try {
       // magic-sdk v29.x uses revealPrivateKey()
       // If you upgrade to v31+, rename this to magic.user.revealEVMPrivateKey()
-      await magic.user.revealPrivateKey();
+      await magic.user.revealEVMPrivateKey();
     } catch (e: any) {
       console.error('Reveal private key error:', e);
       showToast({

@@ -584,7 +584,7 @@ export default function Dashboard() {
               </p>
               <button
                 type="button"
-                onClick={() => void magic?.user.revealPrivateKey()}
+                onClick={() => void magic?.user.revealEVMPrivateKey()}
                 disabled={!magic}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 py-3 text-sm font-bold text-purple-400 transition hover:bg-purple-500/20 disabled:opacity-40"
               >
