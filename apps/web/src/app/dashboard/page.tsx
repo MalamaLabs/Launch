@@ -7,7 +7,7 @@ import { parseAbiItem } from 'viem'
 import { injected } from 'wagmi/connectors'
 import {
   ShieldCheck, Cpu, MapPin, CheckCircle2, Box, Radio,
-  AlertCircle, TrendingUp, Lock, Mail, Loader2, LogOut,
+  AlertCircle, TrendingUp, Lock, Mail, Loader2, LogOut, KeyRound,
 } from 'lucide-react'
 import Link from 'next/link'
 import { API_BASE, nftImageUrl } from '@/lib/api'
@@ -572,6 +572,26 @@ export default function Dashboard() {
               <CheckCircle2 className="h-4 w-4" /> Reserve a Node
             </Link>
           </section>
+
+          {authMethod === 'magic' && (
+            <section className="rounded-3xl border border-gray-800 bg-malama-card p-6 shadow-xl">
+              <div className="mb-4 flex items-center gap-3">
+                <KeyRound className="h-5 w-5 text-purple-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Wallet Key</h2>
+              </div>
+              <p className="mb-4 text-xs text-gray-500 leading-relaxed">
+                Export your Magic wallet private key to import into MetaMask or any other wallet. Only you can see this.
+              </p>
+              <button
+                type="button"
+                onClick={() => void magic?.user.revealPrivateKey()}
+                disabled={!magic}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 py-3 text-sm font-bold text-purple-400 transition hover:bg-purple-500/20 disabled:opacity-40"
+              >
+                <KeyRound className="h-4 w-4" /> Export Private Key
+              </button>
+            </section>
+          )}
         </div>
       </div>
     </div>
