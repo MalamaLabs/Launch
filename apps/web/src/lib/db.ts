@@ -8,8 +8,11 @@
 
 import mongoose from 'mongoose'
 
+const DB_NAME    = process.env.MONGO_DB_NAME ?? 'dagwelldev'
 const MONGODB_URI =
-  process.env.MONGODB_URI ?? 'mongodb://localhost:27017/malama'
+  process.env.MONGO_URI ??
+  process.env.MONGODB_URI ??
+  `mongodb://127.0.0.1:27017/${DB_NAME}`
 
 // Extend the Node.js global type so TypeScript doesn't complain about the cache
 declare global {

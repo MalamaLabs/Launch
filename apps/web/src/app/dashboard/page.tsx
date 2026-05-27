@@ -687,6 +687,77 @@ export default function Dashboard() {
               </button>
             </section>
           )}
+
+          {/* Shipping & Updates — visible for all auth methods */}
+          <section className="rounded-3xl border border-gray-800 bg-malama-card p-6 shadow-xl">
+            <div className="mb-5 flex items-center gap-3">
+              <Package className="h-5 w-5 text-malama-accent" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Shipping &amp; Updates</h2>
+            </div>
+            <p className="mb-4 text-xs text-gray-500 leading-relaxed">
+              We&apos;ll ship your sensor here and send order updates to the email below.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">Notification email</label>
+                <input type="email" value={notifEmail} onChange={e => setNotifEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">Full name</label>
+                <input type="text" value={shipName} onChange={e => setShipName(e.target.value)}
+                  placeholder="Jane Smith"
+                  className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">Address line 1</label>
+                <input type="text" value={shipLine1} onChange={e => setShipLine1(e.target.value)}
+                  placeholder="123 Main St"
+                  className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">Address line 2 <span className="text-gray-700 font-normal">(optional)</span></label>
+                <input type="text" value={shipLine2} onChange={e => setShipLine2(e.target.value)}
+                  placeholder="Apt 4B"
+                  className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">City</label>
+                  <input type="text" value={shipCity} onChange={e => setShipCity(e.target.value)}
+                    placeholder="San Francisco"
+                    className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">State</label>
+                  <input type="text" value={shipState} onChange={e => setShipState(e.target.value)}
+                    placeholder="CA"
+                    className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">ZIP / Postal</label>
+                  <input type="text" value={shipPostal} onChange={e => setShipPostal(e.target.value)}
+                    placeholder="94105"
+                    className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">Country</label>
+                  <input type="text" value={shipCountry} onChange={e => setShipCountry(e.target.value)}
+                    placeholder="US"
+                    className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-malama-accent/60 focus:outline-none" />
+                </div>
+              </div>
+            </div>
+            {shipError && <p className="mt-3 text-xs text-red-400">{shipError}</p>}
+            <button type="button" onClick={() => void saveShipping()} disabled={shipSaving}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-malama-accent/50 bg-malama-accent/10 py-3 text-sm font-bold text-malama-accent transition hover:bg-malama-accent/20 disabled:opacity-50">
+              {shipSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+              {shipSaving ? 'Saving…' : shipSaved ? '✓ Saved' : 'Save shipping info'}
+            </button>
+          </section>
         </div>
       </div>
     </div>
