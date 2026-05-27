@@ -29,8 +29,12 @@ const WalletMethods = ({ token, setToken }: LoginProps) => {
       <Divider />
       <GetMetadata />
       <Divider />
-      <RevealPrivateKey />
-      <Divider />
+      {loginMethod && (
+        <>
+          <RevealPrivateKey />
+          <Divider />
+        </>
+      )}
       <Disconnect token={token} setToken={setToken} />
     </Card>
   );
