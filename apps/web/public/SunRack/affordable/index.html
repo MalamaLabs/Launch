@@ -116,6 +116,27 @@
     font-size: 0.75rem; color: var(--text);
   }
 
+
+  /* ── AI SERVING SECTION ── */
+  .ai-divider {
+    border: none; border-top: 1px solid var(--border);
+    margin: 1rem 0 0.75rem;
+  }
+  .ai-section-header {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem;
+  }
+  .spec-val.replaces {
+    color: var(--accent2); font-weight: 700;
+  }
+  .ai-note {
+    font-size: 0.72rem; color: var(--muted); font-style: italic;
+    line-height: 1.6; margin-top: 0.75rem; margin-bottom: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    background: rgba(99,102,241,0.06);
+    border-left: 2px solid rgba(99,102,241,0.3);
+    border-radius: 0 6px 6px 0;
+  }
   .cta-row { display: flex; gap: 1rem; flex-wrap: wrap; }
   .btn {
     display: inline-flex; align-items: center; gap: 0.5rem;
@@ -163,7 +184,17 @@
         <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">~88 (upgradable)</span></li>
         <li><span class="spec-key">Solar / Battery</span><span class="spec-val">3.6kW / 14.3kWh ✓</span></li>
       </ul>
-      <span class="tier-tag green">Best for: Pilot Deploys</span>
+      <hr class="ai-divider"/>
+      <div class="ai-section-header">🤖 AI Serving</div>
+      <ul class="spec-list">
+        <li><span class="spec-key">AI Model</span><span class="spec-val">Llama 3.1 8B (Q4) — single inference lane</span></li>
+        <li><span class="spec-key">Throughput</span><span class="spec-val">~80–100 tok/s</span></li>
+        <li><span class="spec-key">Concurrent</span><span class="spec-val">6–10 simultaneous requests</span></li>
+        <li><span class="spec-key">Daily Users</span><span class="spec-val">50–200 active users</span></li>
+        <li><span class="spec-key">GPU Power Mode</span><span class="spec-val">Power-capped 180W (solar-optimized)</span></li>
+        <li><span class="spec-key">Replaces</span><span class="spec-val replaces">ChatGPT Team · $25/user/mo</span></li>
+      </ul>
+      <span class="tier-tag green">Best for: Pilot Deploys · SMBs up to 15 employees</span>
     </div>
 
     <!-- Nano Pro -->
@@ -180,7 +211,18 @@
         <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">128 PCIe 5.0</span></li>
         <li><span class="spec-key">Solar / Battery</span><span class="spec-val">5.4kW / 20kWh ✓</span></li>
       </ul>
-      <span class="tier-tag amber">Best for: Regional Hubs</span>
+      <hr class="ai-divider"/>
+      <div class="ai-section-header">🤖 AI Serving</div>
+      <ul class="spec-list">
+        <li><span class="spec-key">AI Model</span><span class="spec-val">Dual lane — GPU 0: chat/RAG · GPU 1: code/vision</span></li>
+        <li><span class="spec-key">Models</span><span class="spec-val">Llama 3.1 8B Q4 + CodeLlama 13B Q4 (simultaneous)</span></li>
+        <li><span class="spec-key">Throughput</span><span class="spec-val">~160–200 tok/s combined</span></li>
+        <li><span class="spec-key">Concurrent</span><span class="spec-val">12–20 simultaneous requests</span></li>
+        <li><span class="spec-key">Daily Users</span><span class="spec-val">200–600 active users</span></li>
+        <li><span class="spec-key">GPU Power Mode</span><span class="spec-val">2× power-capped 180W (solar-optimized)</span></li>
+        <li><span class="spec-key">Replaces</span><span class="spec-val replaces">ChatGPT Team + GitHub Copilot Business · ~$80/user/mo</span></li>
+      </ul>
+      <span class="tier-tag amber">Best for: Regional Hubs · SMBs 15–50 employees · Co-ops</span>
     </div>
 
     <!-- Nano Max -->
@@ -198,7 +240,18 @@
         <li><span class="spec-key">PCIe Lanes</span><span class="spec-val">128 PCIe 5.0</span></li>
         <li><span class="spec-key">Solar / Battery</span><span class="spec-val">7.2kW / 28kWh ✓</span></li>
       </ul>
-      <span class="tier-tag green">Best for: Enterprise / Sovereign</span>
+      <hr class="ai-divider"/>
+      <div class="ai-section-header">🤖 AI Serving</div>
+      <ul class="spec-list">
+        <li><span class="spec-key">AI Model</span><span class="spec-val">Llama 3.3 70B Q4 (tensor parallel across both GPUs)</span></li>
+        <li><span class="spec-key">Throughput</span><span class="spec-val">~40–70 tok/s (GPT-4 class quality)</span></li>
+        <li><span class="spec-key">Concurrent</span><span class="spec-val">8–16 simultaneous requests</span></li>
+        <li><span class="spec-key">Daily Users</span><span class="spec-val">50–200 power users · 500–2000 async/RAG queries</span></li>
+        <li><span class="spec-key">GPU Power Mode</span><span class="spec-val">Full TDP — requires 7.2kW solar array</span></li>
+        <li><span class="spec-key">Replaces</span><span class="spec-val replaces">AWS Bedrock + Kendra + OpenAI API · $2,000–5,000/mo</span></li>
+      </ul>
+      <p class="ai-note">Note: Nano Max runs full TDP GPUs — the 7.2kW solar array and 28kWh battery are required for sustained 24/7 inference. PCIe bandwidth limits tensor parallel efficiency ~30% vs NVLink; acceptable for this power envelope and price point.</p>
+      <span class="tier-tag green">Best for: Enterprise · Sovereign Nations · 50–200 users · Orgs replacing $2K–5K/mo cloud AI spend</span>
     </div>
 
   </div>
