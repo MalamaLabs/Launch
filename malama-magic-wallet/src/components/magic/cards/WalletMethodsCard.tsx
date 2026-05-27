@@ -9,6 +9,7 @@ import CardHeader from '@/components/ui/CardHeader';
 import { LoginMethod } from '@/utils/common';
 
 import UpdateEmail from '../wallet-methods/UpdateEmail'
+import RevealPrivateKey from '../wallet-methods/RevealPrivateKey'
 
 const WalletMethods = ({ token, setToken }: LoginProps) => {
   const [loginMethod, setLoginMethod] = useState<LoginMethod | null>(
@@ -27,6 +28,8 @@ const WalletMethods = ({ token, setToken }: LoginProps) => {
       <GetIdToken />
       <Divider />
       <GetMetadata />
+      <Divider />
+      <RevealPrivateKey />
       <Divider />
       <Disconnect token={token} setToken={setToken} />
     </Card>
