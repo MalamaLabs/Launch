@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useWallet } from '@meshsdk/react'
-import { useAccount, useDisconnect, usePublicClient } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
 import { parseAbiItem } from 'viem'
 import {
   Cpu, MapPin, CheckCircle2, Box, Radio,
@@ -48,11 +48,9 @@ export default function Dashboard() {
     connected: isCardanoConnected,
     wallet: cardanoWallet,
     connect: connectCardano,
-    disconnect: disconnectCardano,
   } = useWallet()
 
   const { isConnected: isEvmConnected, address: evmAddress } = useAccount()
-  const { disconnect: disconnectEvm } = useDisconnect()
   const publicClient = usePublicClient()
   const { magic } = useMagic()
 
@@ -263,10 +261,36 @@ export default function Dashboard() {
         if (authMethod === 'email') {
           const email = loggedInEmail ?? userAccount?.email
           if (!email) { setHexLicenses([]); return }
-          const r = await fetch(`${API_BASE}/hexes/by-owner?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
-          if (!r.ok) { setHexLicenses([]); return }
-          const d = await r.json() as { hexes?: Array<{ hexId: string; baseTokenId?: number }> }
-          setHexLicenses((d.hexes ?? []).map(h => ({ id: h.hexId, chain: 'base' as const, tokenId: h.baseTokenId })))
+
+          // Pull assets across every identity linked to this email account so a
+          // buyer sees their hex regardless of which lane they purchased through
+          // (email/Stripe, a Base wallet, or a Cardano wallet). The linked
+          // wallet addresses come from the MongoDB UserAccount record.
+          type OwnedHex = { hexId: string; baseTokenId?: number; chain?: 'cardano' | 'base' }
+          const queries: Array<{ q: string; chain: 'cardano' | 'base' }> = [
+            { q: `email=${encodeURIComponent(email)}`, chain: 'base' },
+          ]
+          for (const a of userAccount?.evmAddresses ?? [])
+            queries.push({ q: `evmAddress=${encodeURIComponent(a)}`, chain: 'base' })
+          for (const a of userAccount?.cardanoAddresses ?? [])
+            queries.push({ q: `cardanoAddress=${encodeURIComponent(a)}`, chain: 'cardano' })
+
+          const found: HexLicense[] = []
+          await Promise.all(queries.map(async ({ q, chain: srcChain }) => {
+            try {
+              const r = await fetch(`${API_BASE}/hexes/by-owner?${q}`, { cache: 'no-store' })
+              if (!r.ok) return
+              const d = await r.json() as { hexes?: OwnedHex[] }
+              for (const h of d.hexes ?? []) {
+                if (found.some(f => f.id === h.hexId)) continue
+                // Prefer the chain the backend records for the hex; fall back to
+                // the chain implied by the lookup key.
+                const chain = h.chain === 'cardano' || h.chain === 'base' ? h.chain : srcChain
+                found.push({ id: h.hexId, chain, tokenId: h.baseTokenId })
+              }
+            } catch { /* non-fatal */ }
+          }))
+          setHexLicenses(found)
 
         } else if (authMethod === 'cardano') {
           if (!isCardanoConnected || !cardanoWallet) { setHexLicenses([]); return }
@@ -372,7 +396,7 @@ export default function Dashboard() {
     }
     resolveAssets()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authMethod, isCardanoConnected, cardanoWallet, loggedInEmail, activeEvmAddress, publicClient, walletRetryTick, userAccount?.email])
+  }, [authMethod, isCardanoConnected, cardanoWallet, loggedInEmail, activeEvmAddress, publicClient, walletRetryTick, userAccount?.email, userAccount?.evmAddresses?.length, userAccount?.cardanoAddresses?.length])
 
   // ── Redirect to /auth when not authenticated ─────────────────────────────
   // Wait 600 ms for wallet auto-detect effects to settle before redirecting.
@@ -388,27 +412,6 @@ export default function Dashboard() {
     return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authMethod])
-
-  // ── Auth actions ──────────────────────────────────────────────────────────
-  const handleLogout = async () => {
-    loggedOutRef.current = true
-    if (authMethod === 'magic' && magic) {
-      try { await magic.user.logout() } catch { /* ignore */ }
-      setMagicAddress(null)
-    }
-    if (authMethod === 'email' || authMethod === 'magic') {
-      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
-    }
-    if (authMethod === 'evm') disconnectEvm()
-    if (authMethod === 'cardano') disconnectCardano()
-    setAuthMethod(null)
-    setLoggedInEmail(null)
-    setUserAccount(null)
-    setHexLicenses([])
-    setBannerDismissed(false)
-    sessionStorage.setItem('malama:logged_out', '1')
-    router.push('/auth')
-  }
 
   // ── Save email to UserAccount (from banner or shipping form) ─────────────
   const saveEmailToAccount = async (email: string) => {
@@ -531,13 +534,6 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-bold text-gray-400 transition hover:border-red-500/40 hover:text-red-400"
-              >
-                Sign out
-              </button>
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-malama-accent/30 bg-malama-deep shadow-[0_0_15px_rgba(196,240,97,0.2)]">
                 <Cpu className="h-6 w-6 text-malama-accent" />
               </div>

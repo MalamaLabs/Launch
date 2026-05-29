@@ -583,17 +583,20 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
                   {/* Cardano wallet tile — always selectable; styling driven by paymentMode + connection */}
                   <div
-                    className={`flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border p-6 text-center transition-all ${
-                      paymentMode === 'cardano' && cardanoReady
-                        ? 'border-malama-accent/40 bg-malama-accent/10 shadow-[0_0_20px_rgba(196,240,97,0.1)]'
-                        : paymentMode === 'cardano'
-                          ? 'border-malama-accent/30 bg-malama-accent/5'
-                          : cardanoReady
-                            ? 'border-malama-accent/20 bg-malama-accent/5 hover:border-malama-accent/30'
-                            : 'border-gray-800 bg-malama-deep hover:border-gray-700'
+                    className={`relative flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border-2 p-6 text-center transition-all ${
+                      paymentMode === 'cardano'
+                        ? 'border-malama-accent bg-malama-accent/10 ring-2 ring-malama-accent/60 shadow-[0_0_28px_rgba(196,240,97,0.3)]'
+                        : cardanoReady
+                          ? 'border-malama-accent/20 bg-malama-accent/5 hover:border-malama-accent/40'
+                          : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                     }`}
                     onClick={() => setPaymentMode('cardano')}
                   >
+                    {paymentMode === 'cardano' && (
+                      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-malama-accent px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">
+                        <CheckCircle2 className="h-3 w-3" /> Selected
+                      </span>
+                    )}
                     <div className={`flex h-14 w-14 items-center justify-center rounded-full ${cardanoReady ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
                       <Wallet className={`h-7 w-7 ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`} />
                     </div>
@@ -651,17 +654,20 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
                   {/* Base wallet tile — always selectable; independent of Cardano state */}
                   <div
-                    className={`flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border p-6 text-center transition-all ${
-                      paymentMode === 'base' && evmConnected
-                        ? 'border-blue-500/40 bg-blue-500/10 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
-                        : paymentMode === 'base'
-                          ? 'border-blue-500/30 bg-blue-500/5'
-                          : evmConnected
-                            ? 'border-blue-500/20 bg-blue-500/5 hover:border-blue-500/30'
-                            : 'border-gray-800 bg-malama-deep hover:border-gray-700'
+                    className={`relative flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border-2 p-6 text-center transition-all ${
+                      paymentMode === 'base'
+                        ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/60 shadow-[0_0_28px_rgba(59,130,246,0.3)]'
+                        : evmConnected
+                          ? 'border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40'
+                          : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                     }`}
                     onClick={() => setPaymentMode('base')}
                   >
+                    {paymentMode === 'base' && (
+                      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+                        <CheckCircle2 className="h-3 w-3" /> Selected
+                      </span>
+                    )}
                     <div className={`flex h-14 w-14 items-center justify-center rounded-full ${evmConnected ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
                       <Globe className={`h-7 w-7 ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`} />
                     </div>
@@ -719,12 +725,17 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     {/* ── Card A: Magic wallet (no hardware wallet needed) ── */}
                     <div
                       onClick={() => setStripeSubMode('magic')}
-                      className={`flex cursor-pointer flex-col items-center gap-4 rounded-2xl border p-6 text-center transition-all ${
+                      className={`relative flex cursor-pointer flex-col items-center gap-4 rounded-2xl border-2 p-6 text-center transition-all ${
                         stripeSubMode === 'magic'
-                          ? 'border-malama-accent/40 bg-malama-accent/5 shadow-[0_0_20px_rgba(196,240,97,0.1)]'
+                          ? 'border-malama-accent bg-malama-accent/10 ring-2 ring-malama-accent/60 shadow-[0_0_28px_rgba(196,240,97,0.3)]'
                           : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                       }`}
                     >
+                      {stripeSubMode === 'magic' && (
+                        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-malama-accent px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">
+                          <CheckCircle2 className="h-3 w-3" /> Selected
+                        </span>
+                      )}
                       <div className={`flex h-14 w-14 items-center justify-center rounded-full ${stripeSubMode === 'magic' ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
                         <CreditCard className={`h-7 w-7 ${stripeSubMode === 'magic' ? 'text-malama-accent' : 'text-gray-500'}`} />
                       </div>
@@ -765,12 +776,17 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     {/* ── Card B: Connected wallet (Cardano CIP-68 or Base ERC-721) ── */}
                     <div
                       onClick={() => setStripeSubMode('wallet')}
-                      className={`flex cursor-pointer flex-col items-center gap-4 rounded-2xl border p-6 text-center transition-all ${
+                      className={`relative flex cursor-pointer flex-col items-center gap-4 rounded-2xl border-2 p-6 text-center transition-all ${
                         stripeSubMode === 'wallet'
-                          ? 'border-malama-accent/40 bg-malama-accent/5 shadow-[0_0_20px_rgba(196,240,97,0.1)]'
+                          ? 'border-malama-accent bg-malama-accent/10 ring-2 ring-malama-accent/60 shadow-[0_0_28px_rgba(196,240,97,0.3)]'
                           : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                       }`}
                     >
+                      {stripeSubMode === 'wallet' && (
+                        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-malama-accent px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">
+                          <CheckCircle2 className="h-3 w-3" /> Selected
+                        </span>
+                      )}
                       <div className={`flex h-14 w-14 items-center justify-center rounded-full ${stripeSubMode === 'wallet' ? (cardanoReady ? 'bg-malama-accent/20' : 'bg-blue-500/20') : 'bg-gray-800'}`}>
                         <Wallet className={`h-7 w-7 ${stripeSubMode === 'wallet' ? (cardanoReady ? 'text-malama-accent' : 'text-blue-400') : 'text-gray-500'}`} />
                       </div>
@@ -931,13 +947,40 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               </div>
 
               <PurchaseLegalAcknowledgement value={legalAck} onChange={setLegalAck} />
-              <button onClick={() => setStep(4)} disabled={!legalComplete} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl">Confirm & Pay</button>
+              <div className="flex flex-col items-center gap-4">
+                <button onClick={() => setStep(4)} disabled={!legalComplete} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl disabled:opacity-50 disabled:cursor-not-allowed">Confirm &amp; Pay</button>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="text-sm font-bold text-gray-500 hover:text-gray-300"
+                  >
+                    ← Back to payment
+                  </button>
+                  <span className="text-gray-700">·</span>
+                  <Link href="/explorer" className="text-sm font-bold text-amber-400/80 hover:text-amber-400">
+                    Choose a different hex →
+                  </Link>
+                </div>
+              </div>
             </motion.div>
           )}
 
           {step === 4 && (
             <motion.div key="step4" className="space-y-8 text-center">
-              {error && <div className="p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl">{error}</div>}
+              {error && (
+                <div className="space-y-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                  <p className="text-red-400">{error}</p>
+                  {/^.*(taken|sold|already|unavailable|reserved).*/i.test(error) && (
+                    <Link
+                      href="/explorer"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-sm font-black text-amber-300 transition hover:bg-amber-500/25"
+                    >
+                      <MapPin className="h-4 w-4" /> This hex is unavailable — pick another on the map →
+                    </Link>
+                  )}
+                </div>
+              )}
               <h2 className="text-4xl font-black text-white uppercase">{paymentMode} Payment</h2>
               {/* Keep the hex art visible so the operator confirms the right hex at signing */}
               {hexId && (
@@ -949,9 +992,23 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   />
                 </div>
               )}
-              <button onClick={handlePayment} disabled={loading} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl">
+              <button onClick={handlePayment} disabled={loading} className="w-full py-5 rounded-2xl bg-malama-accent text-black font-black text-xl disabled:opacity-50 disabled:cursor-not-allowed">
                 {submitLabel()}
               </button>
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  disabled={loading}
+                  className="text-sm font-bold text-gray-500 hover:text-gray-300 disabled:opacity-40"
+                >
+                  ← Back to review
+                </button>
+                <span className="text-gray-700">·</span>
+                <Link href="/explorer" className="text-sm font-bold text-amber-400/80 hover:text-amber-400">
+                  Choose a different hex →
+                </Link>
+              </div>
             </motion.div>
           )}
 
