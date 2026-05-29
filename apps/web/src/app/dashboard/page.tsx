@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useWallet } from '@meshsdk/react'
-import { useAccount, useConnect, useDisconnect, usePublicClient } from 'wagmi'
+import { useAccount, useDisconnect, usePublicClient } from 'wagmi'
 import { parseAbiItem } from 'viem'
-import { injected } from 'wagmi/connectors'
 import {
-  ShieldCheck, Cpu, MapPin, CheckCircle2, Box, Radio,
-  AlertCircle, TrendingUp, Lock, Mail, Loader2, KeyRound, Package,
+  Cpu, MapPin, CheckCircle2, Box, Radio,
+  AlertCircle, TrendingUp, Lock, Loader2, KeyRound, Package,
   User, Link2, AtSign,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { API_BASE, nftImageUrl } from '@/lib/api'
 import { useMagic } from '@/components/magic/MagicProvider'
 
@@ -49,33 +49,20 @@ export default function Dashboard() {
     wallet: cardanoWallet,
     connect: connectCardano,
     disconnect: disconnectCardano,
-    connecting: isCardanoConnecting,
   } = useWallet()
 
   const { isConnected: isEvmConnected, address: evmAddress } = useAccount()
-  const { connect: connectEvm, isPending: isEvmConnecting } = useConnect()
   const { disconnect: disconnectEvm } = useDisconnect()
   const publicClient = usePublicClient()
   const { magic } = useMagic()
 
   const loggedOutRef = useRef(false)
+  const router = useRouter()
 
   // ── Auth state ────────────────────────────────────────────────────────────
   const [authMethod, setAuthMethod]       = useState<AuthMethod>(null)
   const [loggedInEmail, setLoggedInEmail] = useState<string | null>(null)
   const [magicAddress, setMagicAddress]   = useState<string | null>(null)
-
-  // Magic OTP login
-  const [magicEmail, setMagicEmail]       = useState('')
-  const [magicLoading, setMagicLoading]   = useState(false)
-  const [magicError, setMagicError]       = useState('')
-  const [showMagicInput, setShowMagicInput] = useState(false)
-
-  // Pure email-session login (no Magic SDK, no wallet required)
-  const [emailInput, setEmailInput]         = useState('')
-  const [emailLoginLoading, setEmailLoginLoading] = useState(false)
-  const [emailLoginError, setEmailLoginError]     = useState('')
-  const [showEmailLogin, setShowEmailLogin]       = useState(false)
 
   // Email-capture banner (shown after wallet connect when no email on file)
   const [bannerEmail, setBannerEmail]       = useState('')
@@ -387,69 +374,22 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authMethod, isCardanoConnected, cardanoWallet, loggedInEmail, activeEvmAddress, publicClient, walletRetryTick, userAccount?.email])
 
-  // ── Auth actions ──────────────────────────────────────────────────────────
-  async function handleCardanoConnect() {
-    const win = window as any
-    const detected = Object.keys(win.cardano ?? {})
-    if (detected.length === 0) return
-    loggedOutRef.current = false
-    sessionStorage.removeItem('malama:logged_out')
-    await connectCardano(detected[0])
-    setAuthMethod('cardano')
-  }
-
-  function handleEvmConnect() {
-    loggedOutRef.current = false
-    sessionStorage.removeItem('malama:logged_out')
-    connectEvm({ connector: injected() })
-    setAuthMethod('evm')
-  }
-
-  const signInWithMagic = async () => {
-    if (!magic) return
-    const email = magicEmail.trim()
-    if (!EMAIL_RE.test(email)) { setMagicError('Enter a valid email address'); return }
-    setMagicLoading(true); setMagicError('')
-    try {
-      await magic.auth.loginWithEmailOTP({ email })
-      const info = await magic.user.getInfo()
-      const addr = info.wallets?.ethereum?.publicAddress
-      if (addr) {
-        sessionStorage.removeItem('malama:logged_out')
-        setMagicAddress(addr)
-        setLoggedInEmail(email)
-        setAuthMethod('magic')
-        setShowMagicInput(false)
-      } else {
-        setMagicError('Could not retrieve wallet address — try again.')
-      }
-    } catch { setMagicError('Sign-in cancelled or failed — try again.') }
-    finally { setMagicLoading(false) }
-  }
-
-  // Pure email-session login — no Magic SDK, no OTP, no wallet needed.
-  // Creates a signed cookie that the backend uses to identify the user on /api/user.
-  const signInWithEmail = async () => {
-    const email = emailInput.trim()
-    if (!EMAIL_RE.test(email)) { setEmailLoginError('Enter a valid email address'); return }
-    setEmailLoginLoading(true); setEmailLoginError('')
-    try {
-      const res = await fetch('/api/auth/email-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+  // ── Redirect to /auth when not authenticated ─────────────────────────────
+  // Wait 600 ms for wallet auto-detect effects to settle before redirecting.
+  useEffect(() => {
+    if (authMethod !== null) return
+    const t = setTimeout(() => {
+      // Re-check inside the timeout — authMethod may have been set since
+      setAuthMethod(prev => {
+        if (prev === null) router.replace('/auth')
+        return prev
       })
-      if (!res.ok) throw new Error('Sign-in failed')
-      setLoggedInEmail(email)
-      setAuthMethod('email')
-      setShowEmailLogin(false)
-      // Load / create MongoDB account
-      const userRes = await fetch('/api/user', { credentials: 'include' })
-      if (userRes.ok) { const d = await userRes.json(); setUserAccount(d.account ?? null) }
-    } catch { setEmailLoginError('Could not sign in — try again.') }
-    finally { setEmailLoginLoading(false) }
-  }
+    }, 600)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authMethod])
 
+  // ── Auth actions ──────────────────────────────────────────────────────────
   const handleLogout = async () => {
     loggedOutRef.current = true
     if (authMethod === 'magic' && magic) {
@@ -466,11 +406,8 @@ export default function Dashboard() {
     setUserAccount(null)
     setHexLicenses([])
     setBannerDismissed(false)
-    setShowMagicInput(false)
-    setShowEmailLogin(false)
-    setMagicEmail(''); setMagicError('')
-    setEmailInput(''); setEmailLoginError('')
     sessionStorage.setItem('malama:logged_out', '1')
+    router.push('/auth')
   }
 
   // ── Save email to UserAccount (from banner or shipping form) ─────────────
@@ -581,23 +518,18 @@ export default function Dashboard() {
           {isAuthenticated ? (
             <div className="flex flex-wrap items-center gap-3">
               <div className="hidden text-right sm:block">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Network Status</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Signed in</p>
                 <div className="flex items-center gap-2">
                   {authMethod === 'evm'     && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
                   {authMethod === 'cardano' && <span className="h-2 w-2 animate-pulse rounded-full bg-malama-accent" />}
                   {authMethod === 'magic'   && <span className="h-2 w-2 animate-pulse rounded-full bg-purple-400" />}
                   {authMethod === 'email'   && <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />}
-                  <p className="text-lg font-bold text-white">{currentStatus}</p>
-                </div>
-                {loggedInEmail && (
-                  <p className={`font-mono text-[10px] ${authMethod === 'magic' ? 'text-purple-400' : 'text-amber-400'}`}>
-                    {loggedInEmail}
+                  <p className="text-sm font-bold text-white">
+                    {authMethod === 'cardano' && 'Cardano wallet'}
+                    {authMethod === 'evm' && evmAddress && `${evmAddress.slice(0,6)}…${evmAddress.slice(-4)}`}
+                    {(authMethod === 'magic' || authMethod === 'email') && (loggedInEmail ?? 'Email')}
                   </p>
-                )}
-                {authMethod === 'cardano' && <p className="font-mono text-[10px] text-malama-accent">Cardano wallet</p>}
-                {(authMethod === 'evm') && evmAddress && (
-                  <p className="font-mono text-[10px] text-blue-400">{evmAddress.slice(0,6)}…{evmAddress.slice(-4)}</p>
-                )}
+                </div>
               </div>
               <button
                 type="button"
@@ -611,115 +543,16 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => void handleCardanoConnect()} disabled={isCardanoConnecting || isEvmConnecting}
-                className="rounded-lg border border-malama-accent/50 bg-malama-accent/20 px-4 py-2 font-bold text-malama-accent transition-colors hover:bg-malama-accent hover:text-black disabled:opacity-50">
-                Lace / Cardano
-              </button>
-              <button type="button" onClick={handleEvmConnect} disabled={isCardanoConnecting || isEvmConnecting}
-                className="rounded-lg border border-blue-500/50 bg-blue-500/20 px-4 py-2 font-bold text-blue-400 transition-colors hover:bg-blue-500 hover:text-white disabled:opacity-50">
-                MetaMask / Base
-              </button>
-              {magic && (
-                <button type="button" onClick={() => setShowMagicInput(v => !v)}
-                  className="rounded-lg border border-purple-500/50 bg-purple-500/20 px-4 py-2 font-bold text-purple-400 transition-colors hover:bg-purple-500 hover:text-white">
-                  Card buyer
-                </button>
-              )}
-              <button type="button" onClick={() => { setShowEmailLogin(v => !v); setShowMagicInput(false) }}
-                className="rounded-lg border border-amber-500/50 bg-amber-500/20 px-4 py-2 font-bold text-amber-400 transition-colors hover:bg-amber-500 hover:text-black">
-                Look up by email
-              </button>
-            </div>
+            <Link href="/auth"
+              className="rounded-lg border border-malama-accent/50 bg-malama-accent/10 px-4 py-2 font-bold text-malama-accent transition hover:bg-malama-accent hover:text-black">
+              Sign in →
+            </Link>
           )}
         </div>
       </header>
 
-      {/* ── Login modal ── */}
-      {!isAuthenticated && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 pt-32 backdrop-blur-md">
-          <div className="mx-4 max-w-md rounded-3xl border border-gray-800 bg-malama-card p-8 text-center shadow-2xl md:p-10">
-            <ShieldCheck className="mx-auto mb-6 h-20 w-20 text-malama-accent drop-shadow-[0_0_20px_rgba(196,240,97,0.3)]" />
-            <h2 className="mb-2 text-2xl font-black tracking-tight text-white">Access Node Command Center</h2>
-            <p className="mb-6 leading-relaxed text-gray-400">
-              Connect a wallet, look up by order email, or sign in with the email from your card checkout.
-            </p>
-            <div className="space-y-3">
-              {/* Cardano */}
-              <button type="button" onClick={() => void handleCardanoConnect()} disabled={isCardanoConnecting || isEvmConnecting || magicLoading || emailLoginLoading}
-                className="w-full rounded-xl border-2 border-malama-accent/50 bg-malama-accent/10 py-4 font-black text-malama-accent shadow-xl transition hover:bg-malama-accent hover:text-black disabled:opacity-50">
-                {isCardanoConnecting ? 'Connecting…' : 'Cardano — Lace / Eternl / Nami'}
-              </button>
-
-              {/* Base / EVM */}
-              <button type="button" onClick={handleEvmConnect} disabled={isCardanoConnecting || isEvmConnecting || magicLoading || emailLoginLoading}
-                className="w-full rounded-xl border-2 border-blue-500/50 bg-blue-500/10 py-4 font-black text-blue-400 shadow-xl transition hover:bg-blue-500 hover:text-white disabled:opacity-50">
-                {isEvmConnecting ? 'Connecting…' : 'Base — MetaMask / Injected'}
-              </button>
-
-              {/* Email lookup (no Magic, no wallet) */}
-              <div className="rounded-xl border-2 border-amber-500/40 bg-amber-500/5 p-4 text-left">
-                <button type="button" onClick={() => { setShowEmailLogin(v => !v); setShowMagicInput(false) }}
-                  className="flex w-full items-center justify-center gap-2 font-black text-amber-400 hover:text-amber-300">
-                  <AtSign className="h-4 w-4" /> Look up account by email
-                </button>
-                <p className="mt-1 text-center text-[11px] text-gray-600">No wallet needed — find your purchases by order email</p>
-                {showEmailLogin && (
-                  <div className="mt-3 space-y-2">
-                    <input
-                      type="email"
-                      value={emailInput}
-                      onChange={e => setEmailInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') void signInWithEmail() }}
-                      placeholder="you@example.com"
-                      className="w-full rounded-lg border border-amber-500/30 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:border-amber-500/60 focus:outline-none"
-                    />
-                    {emailLoginError && <p className="text-xs text-red-400">{emailLoginError}</p>}
-                    <button type="button" onClick={() => void signInWithEmail()} disabled={emailLoginLoading}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 py-2.5 font-black text-black transition hover:bg-amber-400 disabled:opacity-50">
-                      {emailLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AtSign className="h-4 w-4" />}
-                      {emailLoginLoading ? 'Looking up…' : 'Find my account'}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Magic OTP (card buyers with Magic wallet) */}
-              {magic ? (
-                <div className="rounded-xl border-2 border-purple-500/40 bg-purple-500/5 p-4">
-                  <button type="button" onClick={() => { setShowMagicInput(v => !v); setShowEmailLogin(false) }}
-                    className="flex w-full items-center justify-center gap-2 font-black text-purple-400 hover:text-purple-300">
-                    <Mail className="h-4 w-4" /> Card buyer — sign in with Magic
-                  </button>
-                  <p className="mt-1 text-center text-[11px] text-gray-600">Opens a Magic OTP flow and restores your custodial wallet</p>
-                  {showMagicInput && (
-                    <div className="mt-3 space-y-2">
-                      <input type="email" value={magicEmail}
-                        onChange={e => setMagicEmail(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') void signInWithMagic() }}
-                        placeholder="you@example.com"
-                        className="w-full rounded-lg border border-purple-500/30 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:border-purple-500/60 focus:outline-none" />
-                      {magicError && <p className="text-xs text-red-400">{magicError}</p>}
-                      <button type="button" onClick={() => void signInWithMagic()} disabled={magicLoading}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 font-black text-white transition hover:bg-purple-700 disabled:opacity-50">
-                        {magicLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                        {magicLoading ? 'Sending OTP…' : 'Send one-time code'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-center text-xs text-yellow-500/80">
-                  Magic card-buyer sign-in requires <code>NEXT_PUBLIC_MAGIC_API_KEY</code>.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Main grid ── */}
-      <div className={`mx-auto grid max-w-6xl grid-cols-1 gap-8 transition-opacity duration-500 lg:grid-cols-3 ${!isAuthenticated ? 'pointer-events-none opacity-20' : 'opacity-100'}`}>
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="space-y-8 lg:col-span-2">
           {/* Node Activation Protocol */}
           <section className="relative overflow-hidden rounded-3xl border border-gray-800 bg-malama-card p-8 shadow-2xl">
