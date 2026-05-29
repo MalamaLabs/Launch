@@ -1,30 +1,30 @@
 /**
- * User account — persistent identity record in KV.
+ * User account — persistent identity record in MongoDB.
  *
  * userId  = sha256(email)          when email is the anchor
  *         = sha256(evmAddress)     for wallet-only users (no email yet)
  *
- * KV key schema:
- *   user:{userId}              → UserAccount  (canonical record)
- *   user:email:{email}         → userId       (lookup by email)
- *   user:evm:{address}         → userId       (lookup by EVM address)
- *   user:cardano:{address}     → userId       (lookup by Cardano address)
+ * Lookup paths:
+ *   by userId       → direct _id query
+ *   by email        → index on `email`
+ *   by EVM address  → index on `evmAddresses` array field
+ *   by Cardano addr → index on `cardanoAddresses` array field
  */
 
 import { createHash } from 'crypto'
-import { kv } from '@/lib/kv'
+import { connectDB } from '@/lib/db'
+import { UserAccountModel } from '@/lib/models/UserAccount'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type UserAccount = {
-  userId: string
-  email?: string
-  evmAddresses: string[]
+  userId:           string
+  email?:           string
+  evmAddresses:     string[]
   cardanoAddresses: string[]
-  /** Authoritative owned-hex inventory — appended on every purchase */
-  hexIds: string[]
-  createdAt: string
-  updatedAt: string
+  hexIds:           string[]
+  createdAt:        string
+  updatedAt:        string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -33,101 +33,135 @@ export function makeUserId(identifier: string): string {
   return createHash('sha256').update(identifier.toLowerCase().trim()).digest('hex')
 }
 
-const K = {
-  user:    (id: string)   => `user:${id}`,
-  email:   (e: string)    => `user:email:${e.toLowerCase().trim()}`,
-  evm:     (a: string)    => `user:evm:${a.toLowerCase()}`,
-  cardano: (a: string)    => `user:cardano:${a.toLowerCase()}`,
+function docToAccount(doc: InstanceType<typeof UserAccountModel>): UserAccount {
+  return {
+    userId:           doc.userId,
+    email:            doc.email,
+    evmAddresses:     doc.evmAddresses,
+    cardanoAddresses: doc.cardanoAddresses,
+    hexIds:           doc.hexIds,
+    createdAt:        (doc.createdAt as Date).toISOString(),
+    updatedAt:        (doc.updatedAt as Date).toISOString(),
+  }
 }
 
 // ── Core ops ──────────────────────────────────────────────────────────────────
 
 export async function getUserById(userId: string): Promise<UserAccount | null> {
-  return kv.get<UserAccount>(K.user(userId))
+  await connectDB()
+  const doc = await UserAccountModel.findOne({ userId }).lean()
+  if (!doc) return null
+  return {
+    userId:           doc.userId,
+    email:            doc.email,
+    evmAddresses:     doc.evmAddresses,
+    cardanoAddresses: doc.cardanoAddresses,
+    hexIds:           doc.hexIds,
+    createdAt:        (doc.createdAt as Date).toISOString(),
+    updatedAt:        (doc.updatedAt as Date).toISOString(),
+  }
 }
 
 export async function getUserByEmail(email: string): Promise<UserAccount | null> {
-  const userId = await kv.get<string>(K.email(email))
-  if (!userId) return null
-  return getUserById(userId)
+  await connectDB()
+  const doc = await UserAccountModel.findOne({ email: email.toLowerCase().trim() }).lean()
+  if (!doc) return null
+  return {
+    userId:           doc.userId,
+    email:            doc.email,
+    evmAddresses:     doc.evmAddresses,
+    cardanoAddresses: doc.cardanoAddresses,
+    hexIds:           doc.hexIds,
+    createdAt:        (doc.createdAt as Date).toISOString(),
+    updatedAt:        (doc.updatedAt as Date).toISOString(),
+  }
 }
 
 export async function getUserByEvmAddress(address: string): Promise<UserAccount | null> {
-  const userId = await kv.get<string>(K.evm(address))
-  if (!userId) return null
-  return getUserById(userId)
+  await connectDB()
+  const doc = await UserAccountModel.findOne({ evmAddresses: address.toLowerCase() }).lean()
+  if (!doc) return null
+  return {
+    userId:           doc.userId,
+    email:            doc.email,
+    evmAddresses:     doc.evmAddresses,
+    cardanoAddresses: doc.cardanoAddresses,
+    hexIds:           doc.hexIds,
+    createdAt:        (doc.createdAt as Date).toISOString(),
+    updatedAt:        (doc.updatedAt as Date).toISOString(),
+  }
 }
 
 export async function getUserByCardanoAddress(address: string): Promise<UserAccount | null> {
-  const userId = await kv.get<string>(K.cardano(address))
-  if (!userId) return null
-  return getUserById(userId)
+  await connectDB()
+  const doc = await UserAccountModel.findOne({ cardanoAddresses: address.toLowerCase() }).lean()
+  if (!doc) return null
+  return {
+    userId:           doc.userId,
+    email:            doc.email,
+    evmAddresses:     doc.evmAddresses,
+    cardanoAddresses: doc.cardanoAddresses,
+    hexIds:           doc.hexIds,
+    createdAt:        (doc.createdAt as Date).toISOString(),
+    updatedAt:        (doc.updatedAt as Date).toISOString(),
+  }
 }
 
 /**
  * Create or update a user account.
- * - If an account already exists for the email, merges addresses and hexIds.
- * - Writes all lookup indexes atomically.
+ * Finds the existing record by email, EVM address, or Cardano address (in that
+ * priority order) and merges any new identifiers and hexIds into it.
  */
 export async function upsertUserAccount(opts: {
-  email?: string
-  evmAddress?: string
+  email?:          string
+  evmAddress?:     string
   cardanoAddress?: string
-  hexId?: string
+  hexId?:          string
 }): Promise<UserAccount> {
-  const { email, evmAddress, cardanoAddress, hexId } = opts
+  await connectDB()
+
+  const email         = opts.email?.toLowerCase().trim()
+  const evmAddress    = opts.evmAddress?.toLowerCase()
+  const cardanoAddress = opts.cardanoAddress?.toLowerCase()
+  const { hexId }     = opts
 
   const anchor = email ?? evmAddress ?? cardanoAddress
-  if (!anchor) throw new Error('upsertUserAccount: at least one identifier is required')
+  if (!anchor) throw new Error('upsertUserAccount: at least one identifier required')
 
+  // Find existing record by any of the provided identifiers
+  const orClauses: object[] = []
+  if (email)         orClauses.push({ email })
+  if (evmAddress)    orClauses.push({ evmAddresses: evmAddress })
+  if (cardanoAddress) orClauses.push({ cardanoAddresses: cardanoAddress })
+
+  const existing = await UserAccountModel.findOne({ $or: orClauses })
+
+  if (existing) {
+    // Merge new values in — MongoDB $addToSet keeps arrays deduplicated
+    const update: Record<string, unknown> = {}
+    if (email && existing.email !== email)             update['email'] = email
+    if (evmAddress)    update['$addToSet'] = { ...(update['$addToSet'] as object ?? {}), evmAddresses: evmAddress }
+    if (cardanoAddress) update['$addToSet'] = { ...(update['$addToSet'] as object ?? {}), cardanoAddresses: cardanoAddress }
+    if (hexId)         update['$addToSet'] = { ...(update['$addToSet'] as object ?? {}), hexIds: hexId }
+
+    const updated = await UserAccountModel.findByIdAndUpdate(
+      existing._id,
+      update,
+      { new: true, runValidators: true },
+    )
+    return docToAccount(updated!)
+  }
+
+  // Create new account
   const userId = makeUserId(anchor)
-
-  let existing: UserAccount | null = null
-  if (email) {
-    existing = await getUserByEmail(email)
-  }
-  if (!existing && evmAddress) {
-    existing = await getUserByEvmAddress(evmAddress)
-  }
-  if (!existing && cardanoAddress) {
-    existing = await getUserByCardanoAddress(cardanoAddress)
-  }
-
-  const now = new Date().toISOString()
-
-  const account: UserAccount = existing
-    ? {
-        ...existing,
-        email: email ?? existing.email,
-        evmAddresses: evmAddress && !existing.evmAddresses.includes(evmAddress.toLowerCase())
-          ? [...existing.evmAddresses, evmAddress.toLowerCase()]
-          : existing.evmAddresses,
-        cardanoAddresses: cardanoAddress && !existing.cardanoAddresses.includes(cardanoAddress.toLowerCase())
-          ? [...existing.cardanoAddresses, cardanoAddress.toLowerCase()]
-          : existing.cardanoAddresses,
-        hexIds: hexId && !existing.hexIds.includes(hexId)
-          ? [...existing.hexIds, hexId]
-          : existing.hexIds,
-        updatedAt: now,
-      }
-    : {
-        userId,
-        email,
-        evmAddresses: evmAddress ? [evmAddress.toLowerCase()] : [],
-        cardanoAddresses: cardanoAddress ? [cardanoAddress.toLowerCase()] : [],
-        hexIds: hexId ? [hexId] : [],
-        createdAt: now,
-        updatedAt: now,
-      }
-
-  await Promise.all([
-    kv.set(K.user(account.userId), account),
-    ...(account.email ? [kv.set(K.email(account.email), account.userId)] : []),
-    ...account.evmAddresses.map((a) => kv.set(K.evm(a), account.userId)),
-    ...account.cardanoAddresses.map((a) => kv.set(K.cardano(a), account.userId)),
-  ])
-
-  return account
+  const created = await UserAccountModel.create({
+    userId,
+    email,
+    evmAddresses:     evmAddress    ? [evmAddress]    : [],
+    cardanoAddresses: cardanoAddress ? [cardanoAddress] : [],
+    hexIds:           hexId          ? [hexId]          : [],
+  })
+  return docToAccount(created)
 }
 
 /**
@@ -135,12 +169,28 @@ export async function upsertUserAccount(opts: {
  * No-op if the account doesn't exist or already has the hex.
  */
 export async function addHexToAccount(userId: string, hexId: string): Promise<void> {
-  const account = await getUserById(userId)
-  if (!account || account.hexIds.includes(hexId)) return
-  const updated: UserAccount = {
-    ...account,
-    hexIds: [...account.hexIds, hexId],
-    updatedAt: new Date().toISOString(),
+  await connectDB()
+  await UserAccountModel.updateOne({ userId }, { $addToSet: { hexIds: hexId } })
+}
+
+/**
+ * Link a wallet address to an existing email-anchored account.
+ */
+export async function linkWalletToAccount(
+  userId: string,
+  opts: { evmAddress?: string; cardanoAddress?: string },
+): Promise<UserAccount | null> {
+  await connectDB()
+  const update: Record<string, unknown> = {}
+  if (opts.evmAddress)    update['$addToSet'] = { evmAddresses: opts.evmAddress.toLowerCase() }
+  if (opts.cardanoAddress) {
+    update['$addToSet'] = {
+      ...(update['$addToSet'] as object ?? {}),
+      cardanoAddresses: opts.cardanoAddress.toLowerCase(),
+    }
   }
-  await kv.set(K.user(userId), updated)
+  if (!Object.keys(update).length) return getUserById(userId)
+  const doc = await UserAccountModel.findOneAndUpdate({ userId }, update, { new: true })
+  if (!doc) return null
+  return docToAccount(doc)
 }

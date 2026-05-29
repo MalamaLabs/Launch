@@ -92,6 +92,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [magicVerifyError, setMagicVerifyError]         = useState('')
   const [cardEmail, setCardEmail]   = useState('')
   const [stripeDeliveryAddress, setStripeDeliveryAddress] = useState('')
+  // null = auto (cardano preferred when connected), 'base' = force Base EVM delivery
+  const [stripeDeliveryChain, setStripeDeliveryChain] = useState<'cardano' | 'base' | null>(null)
   const [mmImportOpen, setMmImportOpen] = useState(false)
   const [mmCopied, setMmCopied]     = useState<'address' | 'tokenId' | null>(null)
   // IPFS URL returned from cardano/prepare-tx — baked into the on-chain datum,
@@ -162,8 +164,14 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     // cardanoReady = Mesh SDK connected OR raw CIP-30 API available.
     // Either gives us enough to sign/submit the mint tx.
     paymentMode === 'cardano' ? cardanoReady :
-    // Stripe: email required + wallet required when "connected wallet" sub-mode chosen
-    cardEmailOk && (stripeSubMode === 'magic' ? !!magicDeliveryAddress : (cardanoReady || evmConnected))
+    // Stripe: email required + delivery resolved (magic OTP, or a connected/typed address)
+    cardEmailOk && (
+      stripeSubMode === 'magic'
+        ? !!magicDeliveryAddress
+        : stripeDeliveryChain === 'base'
+          ? (evmConnected || stripeEvmOk)
+          : (cardanoReady || evmConnected)
+    )
   )
 
   const syncNodeToMap = (id: string | null) => {
@@ -399,14 +407,18 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
     const origin = window.location.origin
 
-    // Resolve delivery address: connected Cardano → Cardano chain.
-    // Connected/typed EVM → Base chain. Neither → try Magic OTP.
-    // When Magic sub-mode is explicitly chosen, skip wallet delivery so Magic runs.
+    // Resolve delivery address based on user's explicit chain choice.
+    // stripeDeliveryChain==='base' forces Base even when Cardano is connected.
+    // null/'cardano' = prefer Cardano if connected, otherwise fall back to EVM.
     const useMagicMode = stripeSubMode === 'magic'
-    let deliveryEvm: string | undefined = (!useMagicMode && stripeEvmOk) ? stripeEvmAddr : undefined
-    const deliveryCardano = (!useMagicMode && cardanoConnected)
+    const forceBase = stripeDeliveryChain === 'base'
+    const deliveryCardano = (!useMagicMode && !forceBase && cardanoConnected)
       ? await cardanoWallet?.getChangeAddress().catch(() => undefined)
       : undefined
+    let deliveryEvm: string | undefined =
+      (!useMagicMode && (forceBase || !deliveryCardano) && stripeEvmOk)
+        ? stripeEvmAddr
+        : undefined
 
     // Use the address captured in the pre-payment Magic verify step.
     // handleMagicVerify() must complete before this handler runs — the buy
@@ -614,7 +626,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                           Connect Lace / Cardano
                         </button>
                         {showCardanoPicker && cardanoWallets.length > 0 && (
-                          <div className="absolute bottom-full left-0 z-50 mb-2 w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl">
+                          <div className="w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl">
+                            <p className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Choose wallet</p>
                             {cardanoWallets.map(w => (
                               <button key={w.name} type="button"
                                 onClick={async () => { setShowCardanoPicker(false); await connectCardanoWallet(w.name) }}
@@ -627,7 +640,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                           </div>
                         )}
                         {showCardanoPicker && cardanoWallets.length === 0 && (
-                          <div className="absolute bottom-full left-0 z-50 mb-2 w-full rounded-xl border border-gray-700 bg-gray-900 p-4 text-center shadow-xl">
+                          <div className="w-full rounded-xl border border-gray-700 bg-gray-900 p-4 text-center shadow-xl">
                             <p className="text-xs text-gray-400">No Cardano wallet detected.<br />Install Lace or Eternl.</p>
                           </div>
                         )}
@@ -778,12 +791,54 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                       </div>
 
                       {(cardanoReady || evmConnected) ? (
-                        <div className={`w-full rounded-lg border py-2 text-xs font-bold text-center ${
-                          cardanoReady
-                            ? 'border-malama-accent/50 bg-malama-accent/20 text-malama-accent'
-                            : 'border-blue-500/50 bg-blue-500/20 text-blue-400'
-                        }`}>
-                          {cardanoReady ? `₳ Mint to ${cardanoWalletName ?? 'Cardano'}` : `⬡ Mint to Base wallet`}
+                        <div className="w-full space-y-2">
+                          {/* Primary delivery chain status */}
+                          <div className={`w-full rounded-lg border py-2 text-xs font-bold text-center ${
+                            stripeDeliveryChain !== 'base' && cardanoReady
+                              ? 'border-malama-accent/50 bg-malama-accent/20 text-malama-accent'
+                              : evmConnected
+                                ? 'border-blue-500/50 bg-blue-500/20 text-blue-400'
+                                : 'border-gray-700 bg-gray-900/60 text-gray-500'
+                          }`}>
+                            {stripeDeliveryChain !== 'base' && cardanoReady
+                              ? `₳ Mint to ${cardanoWalletName ?? 'Cardano'}`
+                              : evmConnected
+                                ? `⬡ Mint to ${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}`
+                                : 'Connect MetaMask for Base delivery'}
+                          </div>
+                          {/* Toggle to Base when Cardano is the default */}
+                          {cardanoReady && stripeDeliveryChain !== 'base' && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); setStripeDeliveryChain('base') }}
+                              className="w-full rounded-lg border border-blue-500/30 bg-blue-500/10 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-colors"
+                            >
+                              Send to Base instead →
+                            </button>
+                          )}
+                          {/* When Base is chosen: connect MetaMask or toggle back */}
+                          {stripeDeliveryChain === 'base' && (
+                            <>
+                              {!evmConnected && (
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); connectEVM({ connector: injected() }) }}
+                                  className="w-full rounded-lg border border-blue-500/40 bg-blue-500/10 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-colors"
+                                >
+                                  Connect MetaMask / Base
+                                </button>
+                              )}
+                              {cardanoReady && (
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); setStripeDeliveryChain(null) }}
+                                  className="w-full rounded-lg border border-malama-accent/30 bg-malama-accent/10 py-1.5 text-xs font-bold text-malama-accent hover:bg-malama-accent/20 transition-colors"
+                                >
+                                  ← Send to Cardano instead
+                                </button>
+                              )}
+                            </>
+                          )}
                         </div>
                       ) : (
                         /* Neither wallet connected — show both connect buttons */
@@ -792,6 +847,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                             type="button"
                             onClick={async () => {
                               setStripeSubMode('wallet')
+                              setStripeDeliveryChain(null)
                               const win = window as any
                               const detected = Object.entries(win.cardano ?? {}).map(([key, w]: any) => ({ name: key, icon: w.icon ?? '' }))
                               if (detected.length === 1) { await connectCardanoWallet(detected[0].name) }
@@ -803,7 +859,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => { setStripeSubMode('wallet'); connectEVM({ connector: injected() }) }}
+                            onClick={() => { setStripeSubMode('wallet'); setStripeDeliveryChain('base'); connectEVM({ connector: injected() }) }}
                             className="w-full rounded-lg border border-blue-500/30 bg-blue-500/10 py-2 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-colors"
                           >
                             Connect MetaMask / Base

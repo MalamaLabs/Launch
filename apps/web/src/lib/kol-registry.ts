@@ -1,67 +1,76 @@
 /**
- * KOL (Key Opinion Leader) / Partner referral registry.
- *
- * Backed by Upstash Redis via kv.ts (in-memory fallback when no credentials).
- *
- * Key schema:
- *   kol:partner:{id}              → KOLPartner object
- *   kol:partners:index            → Set<kolId>
- *   kol:wallet:{addr}             → kolId  (reverse lookup)
- *   kol:commission:{id}           → ReferralCommission object
- *   kol:commissions:by-kol:{id}   → Set<commissionId>
- *   kol:commissions:all           → Set<commissionId>
- *   kol:clicks:{id}               → number (click counter)
+ * KOL (Key Opinion Leader) / Partner referral registry — MongoDB-backed.
  */
 
-import { kv } from '@/lib/kv'
-import { randomUUID } from 'crypto'
+import { connectDB } from '@/lib/db'
+import { KOLPartnerModel, KOLCommissionModel } from '@/lib/models/KOLPartner'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types (re-exported for callers) ─────────────────────────────────────────
 
 export type KOLPartner = {
-  /** URL-safe slug — used in ?ref=<id> and /ref/<id> vanity links */
-  id: string
-  /** Base wallet address for USDC payout */
-  walletAddress: string
-  email?: string
-  displayName: string
-  bio?: string
+  id:             string
+  walletAddress:  string
+  email?:         string
+  displayName:    string
+  bio?:           string
   twitterHandle?: string
-  /** Commission in basis points: 1000 = 10%, 1500 = 15%, 2000 = 20% */
-  commissionBps: number
-  /** Must be true before referral links go live */
-  approved: boolean
-  createdAt: number
-  updatedAt: number
+  commissionBps:  number
+  approved:       boolean
+  createdAt:      number
+  updatedAt:      number
 }
 
 export type ReferralCommission = {
-  id: string
-  kolId: string
-  claimId: string
-  hexId: string
-  buyerEmail: string
-  chain: 'base' | 'cardano'
-  saleAmountUsd: number
-  commissionUsd: number
-  commissionBps: number
-  status: 'pending' | 'paid' | 'cancelled'
-  txHash?: string
+  id:               string
+  kolId:            string
+  claimId:          string
+  hexId:            string
+  buyerEmail:       string
+  chain:            'base' | 'cardano'
+  saleAmountUsd:    number
+  commissionUsd:    number
+  commissionBps:    number
+  status:           'pending' | 'paid' | 'cancelled'
+  txHash?:          string
   stripeSessionId?: string
-  createdAt: number
-  paidAt?: number
+  createdAt:        number
+  paidAt?:          number
 }
 
-// ── KV key helpers ───────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-const K = {
-  partner: (id: string) => `kol:partner:${id}`,
-  partnerIndex: 'kol:partners:index',
-  walletIndex: (addr: string) => `kol:wallet:${addr.toLowerCase()}`,
-  commission: (id: string) => `kol:commission:${id}`,
-  commissionsByKol: (kolId: string) => `kol:commissions:by-kol:${kolId}`,
-  commissionsAll: 'kol:commissions:all',
-  clicks: (kolId: string) => `kol:clicks:${kolId}`,
+function docToPartner(doc: InstanceType<typeof KOLPartnerModel>): KOLPartner {
+  return {
+    id:            doc.id,
+    walletAddress: doc.walletAddress,
+    email:         doc.email,
+    displayName:   doc.displayName,
+    bio:           doc.bio,
+    twitterHandle: doc.twitterHandle,
+    commissionBps: doc.commissionBps,
+    approved:      doc.approved,
+    createdAt:     (doc.createdAt as Date).getTime(),
+    updatedAt:     (doc.updatedAt as Date).getTime(),
+  }
+}
+
+function docToCommission(doc: InstanceType<typeof KOLCommissionModel>): ReferralCommission {
+  return {
+    id:              (doc._id as object).toString(),
+    kolId:           doc.kolId,
+    claimId:         doc.claimId,
+    hexId:           doc.hexId,
+    buyerEmail:      doc.buyerEmail,
+    chain:           doc.chain,
+    saleAmountUsd:   doc.saleAmountUsd,
+    commissionUsd:   doc.commissionUsd,
+    commissionBps:   doc.commissionBps,
+    status:          doc.status,
+    txHash:          doc.txHash,
+    stripeSessionId: doc.stripeSessionId,
+    createdAt:       (doc.createdAt as Date).getTime(),
+    paidAt:          doc.paidAt ? (doc.paidAt as Date).getTime() : undefined,
+  }
 }
 
 // ── Partner CRUD ─────────────────────────────────────────────────────────────
@@ -69,59 +78,61 @@ const K = {
 export async function registerKOL(
   input: Omit<KOLPartner, 'createdAt' | 'updatedAt'>
 ): Promise<KOLPartner> {
-  const partner: KOLPartner = {
+  await connectDB()
+  const id = input.id.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
+  const doc = await KOLPartnerModel.create({
     ...input,
-    id: input.id.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+    id,
     commissionBps: input.commissionBps ?? 1000,
     approved: input.approved ?? false,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }
-  await kv.set(K.partner(partner.id), partner)
-  await kv.sadd(K.partnerIndex, partner.id)
-  await kv.set(K.walletIndex(partner.walletAddress), partner.id)
-  return partner
-}
-
-export async function getKOLByWallet(address: string): Promise<KOLPartner | null> {
-  const kolId = await kv.get<string>(K.walletIndex(address.toLowerCase()))
-  if (!kolId) return null
-  return getKOL(kolId)
+  })
+  return docToPartner(doc)
 }
 
 export async function getKOL(id: string): Promise<KOLPartner | null> {
-  return kv.get<KOLPartner>(K.partner(id.toLowerCase()))
+  await connectDB()
+  const doc = await KOLPartnerModel.findOne({ id: id.toLowerCase() })
+  return doc ? docToPartner(doc) : null
+}
+
+export async function getKOLByWallet(address: string): Promise<KOLPartner | null> {
+  await connectDB()
+  const doc = await KOLPartnerModel.findOne({ walletAddress: address.toLowerCase() })
+  return doc ? docToPartner(doc) : null
 }
 
 export async function updateKOL(
   id: string,
   patch: Partial<Omit<KOLPartner, 'id' | 'createdAt'>>
 ): Promise<KOLPartner | null> {
-  const existing = await getKOL(id)
-  if (!existing) return null
-  const updated: KOLPartner = { ...existing, ...patch, id: existing.id, updatedAt: Date.now() }
-  await kv.set(K.partner(existing.id), updated)
-  return updated
+  await connectDB()
+  const doc = await KOLPartnerModel.findOneAndUpdate(
+    { id: id.toLowerCase() },
+    { $set: patch },
+    { new: true },
+  )
+  return doc ? docToPartner(doc) : null
 }
 
 export async function listKOLs(): Promise<KOLPartner[]> {
-  const ids = await kv.smembers(K.partnerIndex)
-  if (!ids.length) return []
-  const results = await Promise.all(ids.map((id) => kv.get<KOLPartner>(K.partner(id))))
-  return (results.filter(Boolean) as KOLPartner[]).sort((a, b) => b.createdAt - a.createdAt)
+  await connectDB()
+  const docs = await KOLPartnerModel.find().sort({ createdAt: -1 })
+  return docs.map(docToPartner)
 }
 
 // ── Commissions ──────────────────────────────────────────────────────────────
 
 export async function issueKOLCommission(input: {
-  kolId: string
-  claimId: string
-  hexId: string
-  buyerEmail: string
-  chain: 'base' | 'cardano'
-  saleAmountUsd: number
+  kolId:           string
+  claimId:         string
+  hexId:           string
+  buyerEmail:      string
+  chain:           'base' | 'cardano'
+  saleAmountUsd:   number
   stripeSessionId?: string
 }): Promise<ReferralCommission | null> {
+  await connectDB()
+
   const partner = await getKOL(input.kolId)
   if (!partner) {
     console.warn(`[kol] Commission skipped — unknown KOL: ${input.kolId}`)
@@ -135,68 +146,72 @@ export async function issueKOLCommission(input: {
   const commissionBps = partner.commissionBps
   const commissionUsd = Math.round((input.saleAmountUsd * commissionBps) / 10_000 * 100) / 100
 
-  const commission: ReferralCommission = {
-    id: randomUUID(),
-    kolId: input.kolId,
-    claimId: input.claimId,
-    hexId: input.hexId,
-    buyerEmail: input.buyerEmail,
-    chain: input.chain,
-    saleAmountUsd: input.saleAmountUsd,
+  const doc = await KOLCommissionModel.create({
+    kolId:           input.kolId,
+    claimId:         input.claimId,
+    hexId:           input.hexId,
+    buyerEmail:      input.buyerEmail,
+    chain:           input.chain,
+    saleAmountUsd:   input.saleAmountUsd,
     commissionUsd,
     commissionBps,
-    status: 'pending',
+    status:          'pending',
     stripeSessionId: input.stripeSessionId,
-    createdAt: Date.now(),
-  }
+  })
 
-  await kv.set(K.commission(commission.id), commission)
-  await kv.sadd(K.commissionsByKol(input.kolId), commission.id)
-  await kv.sadd(K.commissionsAll, commission.id)
-
-  console.log(`[kol] Commission issued ${commission.id}: $${commissionUsd} to ${input.kolId} (${input.hexId})`)
-  return commission
+  console.log(`[kol] Commission issued ${doc._id}: $${commissionUsd} to ${input.kolId} (${input.hexId})`)
+  return docToCommission(doc)
 }
 
 export async function getKOLCommissions(kolId: string): Promise<ReferralCommission[]> {
-  const ids = await kv.smembers(K.commissionsByKol(kolId))
-  if (!ids.length) return []
-  const results = await Promise.all(ids.map((id) => kv.get<ReferralCommission>(K.commission(id))))
-  return (results.filter(Boolean) as ReferralCommission[]).sort((a, b) => b.createdAt - a.createdAt)
+  await connectDB()
+  const docs = await KOLCommissionModel.find({ kolId }).sort({ createdAt: -1 })
+  return docs.map(docToCommission)
 }
 
 export async function listAllCommissions(): Promise<ReferralCommission[]> {
-  const ids = await kv.smembers(K.commissionsAll)
-  if (!ids.length) return []
-  const results = await Promise.all(ids.map((id) => kv.get<ReferralCommission>(K.commission(id))))
-  return (results.filter(Boolean) as ReferralCommission[]).sort((a, b) => b.createdAt - a.createdAt)
+  await connectDB()
+  const docs = await KOLCommissionModel.find().sort({ createdAt: -1 })
+  return docs.map(docToCommission)
 }
 
 export async function markCommissionPaid(id: string, txHash: string): Promise<ReferralCommission | null> {
-  const commission = await kv.get<ReferralCommission>(K.commission(id))
-  if (!commission) return null
-  const updated: ReferralCommission = { ...commission, status: 'paid', txHash, paidAt: Date.now() }
-  await kv.set(K.commission(id), updated)
-  return updated
+  await connectDB()
+  const doc = await KOLCommissionModel.findByIdAndUpdate(
+    id,
+    { $set: { status: 'paid', txHash, paidAt: new Date() } },
+    { new: true },
+  )
+  return doc ? docToCommission(doc) : null
 }
 
 export async function cancelCommission(id: string): Promise<ReferralCommission | null> {
-  const commission = await kv.get<ReferralCommission>(K.commission(id))
-  if (!commission) return null
-  const updated: ReferralCommission = { ...commission, status: 'cancelled' }
-  await kv.set(K.commission(id), updated)
-  return updated
+  await connectDB()
+  const doc = await KOLCommissionModel.findByIdAndUpdate(
+    id,
+    { $set: { status: 'cancelled' } },
+    { new: true },
+  )
+  return doc ? docToCommission(doc) : null
 }
 
-// ── Click tracking ───────────────────────────────────────────────────────────
+// ── Click tracking ────────────────────────────────────────────────────────────
+// Stored as a field on the KOLPartner document rather than a separate key.
 
 export async function trackKOLClick(kolId: string): Promise<number> {
-  return kv.incr(K.clicks(kolId))
+  await connectDB()
+  const doc = await KOLPartnerModel.findOneAndUpdate(
+    { id: kolId.toLowerCase() },
+    { $inc: { clickCount: 1 } },
+    { new: true },
+  )
+  return (doc as unknown as { clickCount?: number })?.clickCount ?? 0
 }
 
 export async function getKOLClickCount(kolId: string): Promise<number> {
-  const count = await kv.get<number>(K.clicks(kolId))
-  return count ?? 0
+  await connectDB()
+  const doc = await KOLPartnerModel.findOne({ id: kolId.toLowerCase() }).select('clickCount').lean()
+  return (doc as unknown as { clickCount?: number } | null)?.clickCount ?? 0
 }
 
 export async function getKOLStats(kolId: string) {
@@ -207,12 +222,14 @@ export async function getKOLStats(kolId: string) {
   ])
   if (!partner) return null
 
-  const totalEarned = commissions.reduce((s, c) => s + c.commissionUsd, 0)
+  const totalEarned   = commissions.reduce((s, c) => s + c.commissionUsd, 0)
   const pendingEarned = commissions.filter((c) => c.status === 'pending').reduce((s, c) => s + c.commissionUsd, 0)
-  const paidEarned = commissions.filter((c) => c.status === 'paid').reduce((s, c) => s + c.commissionUsd, 0)
+  const paidEarned    = commissions.filter((c) => c.status === 'paid').reduce((s, c) => s + c.commissionUsd, 0)
 
   return { partner, clicks, conversions: commissions.length, totalEarned, pendingEarned, paidEarned, commissions }
 }
+
+// ── URL helpers ───────────────────────────────────────────────────────────────
 
 export function buildReferralUrl(kolId: string, baseUrl?: string): string {
   const base = baseUrl ?? (process.env.NEXT_PUBLIC_APP_URL ?? 'https://launch.malamalabs.com')

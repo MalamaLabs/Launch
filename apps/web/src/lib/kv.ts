@@ -1,9 +1,8 @@
 /**
- * KV client — Upstash Redis with in-memory fallback.
- *
- * Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in .env to persist
- * KOL referral data. Without them the app still works — data is in-memory
- * (fine for dev; not for production).
+ * In-memory KV shim — kept for any code that still imports it.
+ * user-account and kol-registry now use MongoDB directly; this is a
+ * lightweight fallback for anything else (e.g. test helpers).
+ * Data is NOT persisted across process restarts.
  */
 
 export interface KVClient {
@@ -15,33 +14,37 @@ export interface KVClient {
   del(...keys: string[]): Promise<number>
 }
 
-// ── In-memory fallback ────────────────────────────────────────────────────────
+const _strings = new Map<string, { value: string; expiresAt?: number }>()
+const _sets    = new Map<string, Set<string>>()
 
-const _strings = new Map<string, string>()
-const _sets = new Map<string, Set<string>>()
-
-const memKv: KVClient = {
+export const kv: KVClient = {
   async get<T>(key: string): Promise<T | null> {
-    const v = _strings.get(key)
-    return v !== undefined ? (JSON.parse(v) as T) : null
+    const entry = _strings.get(key)
+    if (!entry) return null
+    if (entry.expiresAt && Date.now() > entry.expiresAt) { _strings.delete(key); return null }
+    return JSON.parse(entry.value) as T
   },
-  async set(key: string, value: unknown): Promise<'OK'> {
-    _strings.set(key, JSON.stringify(value))
+  async set(key: string, value: unknown, opts?: { ex?: number }): Promise<'OK'> {
+    const expiresAt = opts?.ex ? Date.now() + opts.ex * 1000 : undefined
+    _strings.set(key, { value: JSON.stringify(value), expiresAt })
     return 'OK'
   },
   async incr(key: string): Promise<number> {
-    const cur = parseInt(_strings.get(key) ?? '0', 10)
+    const entry = _strings.get(key)
+    let cur = 0
+    if (entry) {
+      if (entry.expiresAt && Date.now() > entry.expiresAt) { _strings.delete(key) }
+      else { try { cur = parseInt(JSON.parse(entry.value), 10) } catch { cur = 0 } }
+    }
     const next = cur + 1
-    _strings.set(key, String(next))
+    _strings.set(key, { value: JSON.stringify(next) })
     return next
   },
   async sadd(key: string, ...members: string[]): Promise<number> {
     if (!_sets.has(key)) _sets.set(key, new Set())
     const s = _sets.get(key)!
     let added = 0
-    for (const m of members) {
-      if (!s.has(m)) { s.add(m); added++ }
-    }
+    for (const m of members) { if (!s.has(m)) { s.add(m); added++ } }
     return added
   },
   async smembers(key: string): Promise<string[]> {
@@ -56,53 +59,3 @@ const memKv: KVClient = {
     return n
   },
 }
-
-// ── Upstash Redis adapter ─────────────────────────────────────────────────────
-
-function makeUpstashKv(url: string, token: string): KVClient {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Redis } = require('@upstash/redis') as typeof import('@upstash/redis')
-  const redis = new Redis({ url, token })
-
-  return {
-    get: <T>(key: string) => redis.get<T>(key),
-    set: async (key: string, value: unknown, opts?: { ex?: number }): Promise<'OK'> => {
-      if (opts?.ex) await redis.set(key, value, { ex: opts.ex })
-      else await redis.set(key, value)
-      return 'OK'
-    },
-    incr: (key: string) => redis.incr(key),
-    sadd: async (key: string, ...members: string[]): Promise<number> => {
-      if (!members.length) return 0
-      const result = await redis.sadd(key, members[0], ...members.slice(1))
-      return result as number
-    },
-    smembers: (key: string) => redis.smembers(key),
-    del: async (...keys: string[]): Promise<number> => {
-      if (!keys.length) return 0
-      const result = await redis.del(keys[0], ...keys.slice(1))
-      return result as number
-    },
-  }
-}
-
-function makeKv(): KVClient {
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
-
-  if (!url || !token) {
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('[kv] No Upstash Redis credentials — KOL data will not persist across restarts. Add UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN to .env')
-    }
-    return memKv
-  }
-
-  try {
-    return makeUpstashKv(url, token)
-  } catch (e) {
-    console.warn('[kv] @upstash/redis init failed — falling back to in-memory store:', e)
-    return memKv
-  }
-}
-
-export const kv: KVClient = makeKv()
