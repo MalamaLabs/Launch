@@ -9,6 +9,7 @@ export interface IKOLPartner extends Document {
   twitterHandle?: string
   commissionBps:  number
   approved:       boolean
+  clickCount:     number
   createdAt:      Date
   updatedAt:      Date
 }
