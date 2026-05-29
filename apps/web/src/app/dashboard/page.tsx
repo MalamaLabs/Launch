@@ -7,7 +7,7 @@ import { parseAbiItem } from 'viem'
 import { injected } from 'wagmi/connectors'
 import {
   ShieldCheck, Cpu, MapPin, CheckCircle2, Box, Radio,
-  AlertCircle, TrendingUp, Lock, Mail, Loader2, LogOut, KeyRound, Package,
+  AlertCircle, TrendingUp, Lock, Mail, Loader2, KeyRound, Package,
 } from 'lucide-react'
 import Link from 'next/link'
 import { API_BASE, nftImageUrl } from '@/lib/api'
@@ -441,10 +441,6 @@ export default function Dashboard() {
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-malama-accent/30 bg-malama-deep shadow-[0_0_15px_rgba(196,240,97,0.2)]">
                 <Cpu className="h-6 w-6 text-malama-accent" />
               </div>
-              <button type="button" onClick={() => void handleLogout()}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-xs font-bold text-gray-400 transition-colors hover:border-red-500/40 hover:text-red-400">
-                <LogOut className="h-3.5 w-3.5" /> Sign out
-              </button>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">

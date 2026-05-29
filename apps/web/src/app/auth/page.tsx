@@ -7,6 +7,7 @@ import { injected } from 'wagmi/connectors'
 import { useWallet } from '@meshsdk/react'
 import Link from 'next/link'
 import { Mail, Loader2, Wallet, Globe } from 'lucide-react'
+import { useMagic } from '@/components/magic/MagicProvider'
 
 type CardanoWallet = { name: string; icon: string }
 
@@ -15,6 +16,7 @@ export default function AuthPage() {
   const { isConnected: evmConnected } = useAccount()
   const { connect: connectEvm, isPending: isEvmConnecting } = useConnect()
   const { connect: meshConnect } = useWallet()
+  const { magic } = useMagic()
 
   const [email, setEmail]               = useState('')
   const [submitting, setSubmitting]     = useState(false)
@@ -25,45 +27,44 @@ export default function AuthPage() {
   const [cardanoWallets, setCardanoWallets]       = useState<CardanoWallet[]>([])
   const [showPicker, setShowPicker]               = useState(false)
 
-  // Already authenticated? Go straight to dashboard.
+  // Already authenticated via Magic? Go straight to dashboard.
   useEffect(() => {
-    fetch('/api/auth/session', { cache: 'no-store', credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { auth?: string | null } | null) => {
-        if (d?.auth === 'email') router.replace('/dashboard')
-      })
-      .catch(() => {})
-  }, [router])
+    if (!magic) return
+    magic.user.isLoggedIn().then((loggedIn: boolean) => {
+      if (loggedIn) {
+        sessionStorage.setItem('dashboardAuthMethod', 'magic')
+        router.replace('/dashboard')
+      }
+    }).catch(() => {})
+  }, [magic, router])
 
   // EVM wallet just connected → go to dashboard
   useEffect(() => {
     if (evmConnected) {
+      sessionStorage.setItem('dashboardAuthMethod', 'evm')
       window.dispatchEvent(new Event('malama:auth'))
       router.push('/dashboard')
     }
   }, [evmConnected, router])
 
-  // ── Email sign-in ─────────────────────────────────────────────────────────
+  // ── Email sign-in (Magic OTP) ─────────────────────────────────────────────
   async function handleEmail(e: FormEvent) {
     e.preventDefault()
     setEmailError(null)
     const trimmed = email.trim()
     if (!trimmed) { setEmailError('Email address is required'); return }
+    if (!magic) { setEmailError('Email sign-in is not configured — connect a wallet instead.'); return }
 
     setSubmitting(true)
     try {
-      const res = await fetch('/api/auth/email-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email: trimmed }),
-      })
-      const data = (await res.json()) as { ok?: boolean; error?: string }
-      if (!res.ok) { setEmailError(data.error ?? 'Sign-in failed'); return }
+      await magic.auth.loginWithEmailOTP({ email: trimmed })
+      const info = await magic.user.getInfo()
+      if (!info.wallets?.ethereum?.publicAddress) throw new Error('No wallet address returned.')
+      sessionStorage.setItem('dashboardAuthMethod', 'magic')
       window.dispatchEvent(new Event('malama:auth'))
       router.push('/dashboard')
-    } catch {
-      setEmailError('Network error — please try again')
+    } catch (err: unknown) {
+      setEmailError(err instanceof Error ? err.message : 'Sign-in failed — try again.')
     } finally {
       setSubmitting(false)
     }
@@ -90,6 +91,7 @@ export default function AuthPage() {
       // Also connect via MeshSDK so dashboard's isCardanoConnected stays true
       await meshConnect(walletKey).catch(() => {})
 
+      sessionStorage.setItem('dashboardAuthMethod', 'cardano')
       window.dispatchEvent(new Event('malama:auth'))
       router.push('/dashboard')
     } catch (err: unknown) {
@@ -180,7 +182,7 @@ export default function AuthPage() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !magic}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-malama-accent py-4 font-black text-malama-bg transition hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? (
@@ -189,6 +191,11 @@ export default function AuthPage() {
               <><Mail className="h-4 w-4" /> Continue with Email</>
             )}
           </button>
+          {!magic && (
+            <p className="text-center text-xs text-yellow-500/80">
+              Email sign-in requires <code>NEXT_PUBLIC_MAGIC_API_KEY</code> to be configured.
+            </p>
+          )}
         </form>
 
         {/* ── Divider ── */}

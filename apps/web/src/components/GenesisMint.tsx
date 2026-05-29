@@ -243,6 +243,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         abi: USDC_ABI,
         functionName: 'approve',
         args: [GENESIS_CONTRACT, priceRaw],
+        // Explicit gas ceiling — avoids MetaMask "exceeds max transaction gas
+        // limit" on first call when eth_estimateGas returns an inflated value
+        // for cold storage slots. 100k is a 2× safe margin for ERC-20 approve.
+        gas: BigInt(100_000),
       })
     } catch (e: any) {
       throw new Error('USDC approval rejected — please approve in your wallet')
@@ -264,6 +268,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         abi: MHNL_ABI,
         functionName: 'secureNode',
         args: [hexId],
+        // Explicit gas ceiling — same reason as approve above. ERC-721 mint
+        // with cold storage typically lands ~150-250k; 350k is a safe buffer
+        // that stays well below Base's block gas limit.
+        gas: BigInt(350_000),
       })
     } catch (e: any) {
       throw new Error('Mint transaction rejected or hex already taken on-chain')
