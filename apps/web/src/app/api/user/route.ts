@@ -74,16 +74,16 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  let body: { evmAddress?: string; cardanoAddress?: string }
+  let body: { evmAddress?: string; cardanoAddress?: string; email?: string }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { evmAddress, cardanoAddress } = body
-  if (!evmAddress && !cardanoAddress) {
-    return NextResponse.json({ error: 'evmAddress or cardanoAddress required' }, { status: 400 })
+  const { evmAddress, cardanoAddress, email: emailUpdate } = body
+  if (!evmAddress && !cardanoAddress && !emailUpdate) {
+    return NextResponse.json({ error: 'evmAddress, cardanoAddress, or email required' }, { status: 400 })
   }
 
   // Resolve the anchor to find the existing account
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   if (!existing && cardanoParam) existing = await getUserByCardanoAddress(cardanoParam)
 
   const account = await upsertUserAccount({
-    email:          existing?.email ?? email ?? undefined,
+    email:          emailUpdate?.toLowerCase().trim() ?? existing?.email ?? email ?? undefined,
     evmAddress:     evmAddress     ?? evmParam     ?? undefined,
     cardanoAddress: cardanoAddress ?? cardanoParam ?? undefined,
   })
