@@ -59,10 +59,15 @@ export default function Dashboard() {
   const [magicError, setMagicError]         = useState('')
   const [showMagicInput, setShowMagicInput] = useState(false)
 
-  // Restore authMethod from sessionStorage on first render
+  // Restore authMethod from sessionStorage on first render.
+  // A saved dashboardAuthMethod means the user explicitly logged in via /auth —
+  // that always overrides any stale logout guard.
   useEffect(() => {
     const saved = sessionStorage.getItem('dashboardAuthMethod') as AuthMethod
-    if (saved) setAuthMethod(saved)
+    if (saved) {
+      sessionStorage.removeItem('malama:logged_out')
+      setAuthMethod(saved)
+    }
   }, [])
 
   // Keep sessionStorage in sync
@@ -77,9 +82,11 @@ export default function Dashboard() {
   // Auto-detect an existing wallet connection when no sessionStorage entry
   // exists — handles the case where the user arrives from an external link or
   // browser-session recovery (wagmi/Mesh persist their state independently).
+  // Skipped when the user explicitly signed out (guard survives navigation).
   useEffect(() => {
-    if (authMethod !== null) return          // already set — don't override
-    if (loggedOutRef.current) return         // don't re-detect while wagmi/Mesh are still unwinding
+    if (authMethod !== null) return
+    if (loggedOutRef.current) return
+    if (sessionStorage.getItem('malama:logged_out') === '1') return
     if (isEvmConnected) setAuthMethod('evm')
     else if (isCardanoConnected) setAuthMethod('cardano')
     // Magic session is handled by its own effect below
@@ -93,9 +100,11 @@ export default function Dashboard() {
     }
   }, [isEvmConnected, isCardanoConnected])
 
-  // Re-hydrate a persisted Magic session after page refresh
+  // Re-hydrate a persisted Magic session after page refresh.
+  // Skipped if the user explicitly signed out this session.
   useEffect(() => {
     if (!magic) return
+    if (sessionStorage.getItem('malama:logged_out') === '1') return
     magic.user.isLoggedIn().then((loggedIn: boolean) => {
       if (!loggedIn) return
       magic.user.getInfo().then((info: any) => {
@@ -184,12 +193,14 @@ export default function Dashboard() {
     const detected = Object.keys(win.cardano ?? {})
     if (detected.length === 0) return
     loggedOutRef.current = false
+    sessionStorage.removeItem('malama:logged_out')
     await connectCardano(detected[0])
     setAuthMethod('cardano')
   }
 
   function handleEvmConnect() {
     loggedOutRef.current = false
+    sessionStorage.removeItem('malama:logged_out')
     connectEvm({ connector: injected() })
     setAuthMethod('evm')
   }
@@ -208,6 +219,7 @@ export default function Dashboard() {
       const info = await magic.user.getInfo()
       const addr = info.wallets?.ethereum?.publicAddress
       if (addr) {
+        sessionStorage.removeItem('malama:logged_out')
         setMagicAddress(addr)
         setLoggedInEmail(email)
         setAuthMethod('magic')

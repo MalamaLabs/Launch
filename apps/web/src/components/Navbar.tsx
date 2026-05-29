@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useWallet } from '@meshsdk/react'
+import { useMagic } from '@/components/magic/MagicProvider'
 
 type SessionData = { auth: 'email' | null; email?: string | null }
 
@@ -39,10 +40,12 @@ export default function Navbar() {
   const { address: evmAddress, isConnected: evmConnected } = useAccount()
   const { disconnect: disconnectEvm } = useDisconnect()
   const { connected: cardanoConnected, name: cardanoWalletName, disconnect: cardanoDisconnect } = useWallet()
+  const { magic } = useMagic()
 
   // ── Server session state ──────────────────────────────────────────────────
-  const [session, setSession] = useState<SessionData | undefined>(undefined)
+  const [session, setSession]       = useState<SessionData | undefined>(undefined)
   const [signingOut, setSigningOut] = useState(false)
+  const [magicEmail, setMagicEmail] = useState<string | null>(null)
 
   const fetchSession = useCallback(() => {
     fetch('/api/auth/session', { cache: 'no-store' })
@@ -61,13 +64,29 @@ export default function Navbar() {
     return () => window.removeEventListener('malama:auth', handler)
   }, [fetchSession])
 
+  // ── Magic session check ───────────────────────────────────────────────────
+  // Magic manages its own session independently of wagmi/Mesh, so we probe it
+  // here so the nav shows the right state for email/Magic-authenticated users.
+  useEffect(() => {
+    if (!magic) return
+    magic.user.isLoggedIn()
+      .then((ok: boolean) => {
+        if (!ok) { setMagicEmail(null); return }
+        return magic.user.getInfo().then((info: any) => {
+          setMagicEmail(info.email ?? null)
+        })
+      })
+      .catch(() => setMagicEmail(null))
+  }, [magic, pathname])
+
   // ── Combine all auth sources ──────────────────────────────────────────────
-  const isAuthed  = session?.auth != null || evmConnected || cardanoConnected
+  const isAuthed  = session?.auth != null || evmConnected || cardanoConnected || magicEmail != null
   const isLoading = session === undefined
 
   const authMethod: 'evm' | 'cardano' | 'email' | null =
     evmConnected      ? 'evm'     :
     cardanoConnected  ? 'cardano' :
+    magicEmail != null ? 'email'  :
     session?.auth === 'email' ? 'email' :
     null
 
@@ -76,6 +95,8 @@ export default function Navbar() {
     authIdentity = `${evmAddress.slice(0, 6)}…${evmAddress.slice(-4)}`
   } else if (cardanoConnected && cardanoWalletName) {
     authIdentity = cardanoWalletName.charAt(0).toUpperCase() + cardanoWalletName.slice(1)
+  } else if (magicEmail) {
+    authIdentity = magicEmail.length > 22 ? `${magicEmail.slice(0, 20)}…` : magicEmail
   } else if (session?.email) {
     authIdentity = session.email.length > 22
       ? `${session.email.slice(0, 20)}…`
@@ -88,6 +109,15 @@ export default function Navbar() {
     try {
       if (evmConnected) disconnectEvm()
       if (cardanoConnected) cardanoDisconnect()
+      if (magic) {
+        try { await magic.user.logout() } catch { /* ignore */ }
+        setMagicEmail(null)
+      }
+      // Clear dashboard auth state so the dashboard doesn't auto-restore the
+      // previous session on next visit, and set a guard that prevents the
+      // wallet auto-detect effect from immediately re-connecting.
+      sessionStorage.removeItem('dashboardAuthMethod')
+      sessionStorage.setItem('malama:logged_out', '1')
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
       setSession({ auth: null })
       window.dispatchEvent(new Event('malama:auth'))
