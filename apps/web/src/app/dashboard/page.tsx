@@ -8,6 +8,7 @@ import { injected } from 'wagmi/connectors'
 import {
   ShieldCheck, Cpu, MapPin, CheckCircle2, Box, Radio,
   AlertCircle, TrendingUp, Lock, Mail, Loader2, KeyRound, Package,
+  User, Link2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { API_BASE, nftImageUrl } from '@/lib/api'
@@ -117,6 +118,49 @@ export default function Dashboard() {
       }).catch(() => {})
     }).catch(() => {})
   }, [magic])
+
+  // Load MongoDB user account once auth is known
+  useEffect(() => {
+    if (!authMethod) { setUserAccount(null); return }
+    setAccountLoading(true)
+
+    const params = new URLSearchParams()
+    if (authMethod === 'evm' && evmAddress)          params.set('evmAddress', evmAddress)
+    else if (authMethod === 'magic' && magicAddress)  params.set('evmAddress', magicAddress)
+    // Cardano: address resolved asynchronously — skip here, loaded after wallet ready
+
+    const load = async () => {
+      try {
+        // Email-session cookie is sent automatically; wallet fallback via params
+        const url = `/api/user${params.toString() ? `?${params}` : ''}`
+        const res = await fetch(url, { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          setUserAccount(data.account ?? null)
+        }
+      } catch { /* non-fatal */ } finally {
+        setAccountLoading(false)
+      }
+    }
+    void load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authMethod, evmAddress, magicAddress])
+
+  // For Cardano auth: load account once the wallet can vend an address
+  useEffect(() => {
+    if (authMethod !== 'cardano' || !isCardanoConnected || !cardanoWallet) return
+    cardanoWallet.getChangeAddress().then(async (addr) => {
+      if (!addr) return
+      try {
+        const res = await fetch(`/api/user?cardanoAddress=${encodeURIComponent(addr)}`, { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          setUserAccount(data.account ?? null)
+        }
+      } catch { /* non-fatal */ }
+    }).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authMethod, isCardanoConnected, cardanoWallet])
 
   // Load existing shipping profile once auth is known
   useEffect(() => {
@@ -266,6 +310,16 @@ export default function Dashboard() {
   const [shipSaving,  setShipSaving]  = useState(false)
   const [shipSaved,   setShipSaved]   = useState(false)
   const [shipError,   setShipError]   = useState('')
+
+  // ── MongoDB user account (profile) ──────────────────────────────────────
+  const [userAccount, setUserAccount] = useState<{
+    userId: string
+    email?: string
+    evmAddresses: string[]
+    cardanoAddresses: string[]
+    hexIds: string[]
+  } | null>(null)
+  const [accountLoading, setAccountLoading] = useState(false)
 
   const [hexLicenses, setHexLicenses] = useState<HexLicense[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
@@ -663,6 +717,88 @@ export default function Dashboard() {
               <CheckCircle2 className="h-4 w-4" /> Reserve a Node
             </Link>
           </section>
+
+          {/* ── MongoDB Profile card ── */}
+          {isAuthenticated && (
+            <section className="rounded-3xl border border-gray-800 bg-malama-card p-6 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5 text-malama-accent" />
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Account</h2>
+                </div>
+                {accountLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-600" />}
+              </div>
+
+              {userAccount ? (
+                <div className="space-y-3">
+                  {userAccount.email && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Email</p>
+                      <p className="mt-0.5 font-mono text-xs text-gray-300 break-all">{userAccount.email}</p>
+                    </div>
+                  )}
+
+                  {userAccount.evmAddresses.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Base wallets</p>
+                      {userAccount.evmAddresses.map((a) => (
+                        <p key={a} className="mt-0.5 font-mono text-[11px] text-blue-400 break-all">
+                          {a.slice(0, 8)}…{a.slice(-6)}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {userAccount.cardanoAddresses.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Cardano wallets</p>
+                      {userAccount.cardanoAddresses.map((a) => (
+                        <p key={a} className="mt-0.5 font-mono text-[11px] text-malama-accent break-all">
+                          {a.slice(0, 12)}…{a.slice(-8)}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {userAccount.hexIds.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                        Hex records <span className="text-gray-700 font-normal">(DB)</span>
+                      </p>
+                      {userAccount.hexIds.map((h) => (
+                        <p key={h} className="mt-0.5 font-mono text-[11px] text-amber-400 truncate">{h}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Link a wallet to the account when signed in via email */}
+                  {authMethod === 'magic' && (evmAddress || isEvmConnected) && !userAccount.evmAddresses.includes((evmAddress ?? '').toLowerCase()) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!evmAddress) return
+                        const res = await fetch('/api/user', {
+                          method: 'PATCH',
+                          credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ evmAddress }),
+                        })
+                        if (res.ok) {
+                          const data = await res.json()
+                          setUserAccount(data.account ?? null)
+                        }
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 py-2 text-xs font-bold text-blue-400 transition hover:bg-blue-500/20"
+                    >
+                      <Link2 className="h-3.5 w-3.5" /> Link MetaMask wallet
+                    </button>
+                  )}
+                </div>
+              ) : !accountLoading ? (
+                <p className="text-xs text-gray-600">No account record found.</p>
+              ) : null}
+            </section>
+          )}
 
           {authMethod === 'magic' && (
             <section className="rounded-3xl border border-gray-800 bg-malama-card p-6 shadow-xl">

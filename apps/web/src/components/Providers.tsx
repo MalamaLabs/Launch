@@ -34,17 +34,12 @@ const MeshProviderDynamic = dynamic(
   () => import("@meshsdk/react").then((m) => m.MeshProvider),
   {
     ssr: false,
+    // Non-blocking: render a slim top-bar while WASM loads.
+    // The page is fully usable during this time — wallet connect buttons
+    // just won't fire until MeshProvider mounts.
     loading: () => (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center space-y-6 bg-malama-bg">
-        <div className="h-16 w-16 animate-spin rounded-full border-4 border-malama-accent border-t-transparent shadow-[0_0_30px_rgba(196,240,97,0.2)]" />
-        <div className="text-center">
-          <p className="animate-pulse font-black uppercase tracking-[0.3em] text-malama-accent text-xs">
-            Initializing Bridge
-          </p>
-          <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-malama-ink-faint">
-            Hydrating Cardano WASM Context
-          </p>
-        </div>
+      <div className="fixed top-0 left-0 right-0 z-[9999] h-0.5 overflow-hidden bg-gray-900">
+        <div className="h-full w-1/3 animate-[shimmer_1.5s_ease-in-out_infinite] bg-malama-accent/60" />
       </div>
     ),
   }
