@@ -806,82 +806,84 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                         </p>
                       </div>
 
-                      {(cardanoReady || evmConnected) ? (
-                        <div className="w-full space-y-2">
-                          {/* Primary delivery chain status */}
-                          <div className={`w-full rounded-lg border py-2 text-xs font-bold text-center ${
-                            stripeDeliveryChain !== 'base' && cardanoReady
-                              ? 'border-malama-accent/50 bg-malama-accent/20 text-malama-accent'
-                              : evmConnected
-                                ? 'border-blue-500/50 bg-blue-500/20 text-blue-400'
-                                : 'border-gray-700 bg-gray-900/60 text-gray-500'
-                          }`}>
-                            {stripeDeliveryChain !== 'base' && cardanoReady
-                              ? `₳ Mint to ${cardanoWalletName ?? 'Cardano'}`
-                              : evmConnected
-                                ? `⬡ Mint to ${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}`
-                                : 'Connect MetaMask for Base delivery'}
+                      {/* ── Explicit delivery-chain selector ── */}
+                      {/* baseChosen = user forced Base; otherwise Cardano is the
+                          default whenever a Cardano wallet is ready. */}
+                      {(() => {
+                        const baseChosen        = stripeDeliveryChain === 'base'
+                        const cardanoActive     = !baseChosen && cardanoReady
+                        const baseActive        = baseChosen || (!cardanoReady && evmConnected)
+                        return (
+                          <div className="w-full space-y-2" onClick={e => e.stopPropagation()}>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">
+                              Deliver NFT to
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Cardano option */}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setStripeSubMode('wallet')
+                                  setStripeDeliveryChain(null)
+                                  if (!cardanoReady) {
+                                    const win = window as any
+                                    const detected = Object.entries(win.cardano ?? {}).map(([key, w]: any) => ({ name: key, icon: w.icon ?? '' }))
+                                    if (detected.length === 1) { await connectCardanoWallet(detected[0].name) }
+                                    else { setCardanoWallets(detected); setShowCardanoPicker(true) }
+                                  }
+                                }}
+                                className={`flex flex-col items-center gap-1 rounded-xl border-2 px-3 py-2.5 text-xs font-black transition-all ${
+                                  cardanoActive
+                                    ? 'border-malama-accent bg-malama-accent/15 text-malama-accent ring-2 ring-malama-accent/50 shadow-[0_0_16px_rgba(196,240,97,0.2)]'
+                                    : 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-malama-accent/40'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1">
+                                  {cardanoActive && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  ₳ Cardano
+                                </span>
+                                <span className="text-[10px] font-bold opacity-80">
+                                  {cardanoReady ? (cardanoWalletName?.toUpperCase() ?? 'CONNECTED') : 'Tap to connect'}
+                                </span>
+                              </button>
+                              {/* Base option */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setStripeSubMode('wallet')
+                                  setStripeDeliveryChain('base')
+                                  if (!evmConnected) connectEVM({ connector: injected() })
+                                }}
+                                className={`flex flex-col items-center gap-1 rounded-xl border-2 px-3 py-2.5 text-xs font-black transition-all ${
+                                  baseActive
+                                    ? 'border-blue-500 bg-blue-500/15 text-blue-400 ring-2 ring-blue-500/50 shadow-[0_0_16px_rgba(59,130,246,0.2)]'
+                                    : 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-blue-500/40'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1">
+                                  {baseActive && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  ⬡ Base
+                                </span>
+                                <span className="text-[10px] font-bold opacity-80">
+                                  {evmConnected ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}` : 'Tap to connect'}
+                                </span>
+                              </button>
+                            </div>
+                            {/* Plain-language confirmation of the resolved destination */}
+                            <p className={`text-center text-[11px] font-bold ${
+                              cardanoActive ? 'text-malama-accent' : baseActive ? 'text-blue-400' : 'text-gray-500'
+                            }`}>
+                              {cardanoActive
+                                ? `✓ CIP-68 NFT mints to ${cardanoWalletName ?? 'your Cardano wallet'}`
+                                : baseActive
+                                  ? (evmConnected
+                                      ? `✓ ERC-721 NFT mints to ${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)} on Base`
+                                      : 'Connect MetaMask to receive the Base NFT')
+                                  : 'Choose a chain to receive your NFT'}
+                            </p>
                           </div>
-                          {/* Toggle to Base when Cardano is the default */}
-                          {cardanoReady && stripeDeliveryChain !== 'base' && (
-                            <button
-                              type="button"
-                              onClick={e => { e.stopPropagation(); setStripeDeliveryChain('base') }}
-                              className="w-full rounded-lg border border-blue-500/30 bg-blue-500/10 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-colors"
-                            >
-                              Send to Base instead →
-                            </button>
-                          )}
-                          {/* When Base is chosen: connect MetaMask or toggle back */}
-                          {stripeDeliveryChain === 'base' && (
-                            <>
-                              {!evmConnected && (
-                                <button
-                                  type="button"
-                                  onClick={e => { e.stopPropagation(); connectEVM({ connector: injected() }) }}
-                                  className="w-full rounded-lg border border-blue-500/40 bg-blue-500/10 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-colors"
-                                >
-                                  Connect MetaMask / Base
-                                </button>
-                              )}
-                              {cardanoReady && (
-                                <button
-                                  type="button"
-                                  onClick={e => { e.stopPropagation(); setStripeDeliveryChain(null) }}
-                                  className="w-full rounded-lg border border-malama-accent/30 bg-malama-accent/10 py-1.5 text-xs font-bold text-malama-accent hover:bg-malama-accent/20 transition-colors"
-                                >
-                                  ← Send to Cardano instead
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        /* Neither wallet connected — show both connect buttons */
-                        <div className="w-full space-y-2" onClick={e => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              setStripeSubMode('wallet')
-                              setStripeDeliveryChain(null)
-                              const win = window as any
-                              const detected = Object.entries(win.cardano ?? {}).map(([key, w]: any) => ({ name: key, icon: w.icon ?? '' }))
-                              if (detected.length === 1) { await connectCardanoWallet(detected[0].name) }
-                              else { setCardanoWallets(detected); setShowCardanoPicker(true) }
-                            }}
-                            className="w-full rounded-lg border border-malama-accent/40 bg-malama-accent/10 py-2 text-xs font-bold text-malama-accent hover:bg-malama-accent/20 transition-colors"
-                          >
-                            Connect Lace / Cardano
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setStripeSubMode('wallet'); setStripeDeliveryChain('base'); connectEVM({ connector: injected() }) }}
-                            className="w-full rounded-lg border border-blue-500/30 bg-blue-500/10 py-2 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-colors"
-                          >
-                            Connect MetaMask / Base
-                          </button>
-                        </div>
-                      )}
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>
