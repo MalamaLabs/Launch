@@ -146,6 +146,17 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
       .catch(() => {/* wallet not yet authorized for this origin — wait for manual click */})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // run once on mount only
+
+  // If the selected crypto lane has no wallet connected but the other does,
+  // auto-switch so the user isn't stuck on a disabled Continue button.
+  // Only fires when the user hasn't explicitly chosen a lane for this session
+  // (e.g. arriving at the page already logged in via Cardano on the dashboard).
+  useEffect(() => {
+    if (uiTab !== 'crypto') return
+    if (paymentMode === 'base'    && !evmConnected  && cardanoReady) setPaymentMode('cardano')
+    if (paymentMode === 'cardano' && !cardanoReady  && evmConnected) setPaymentMode('base')
+  }, [uiTab, paymentMode, evmConnected, cardanoReady])
+
   const isSetupComplete = !!hexId && (
     paymentMode === 'base'    ? evmConnected :
     // cardanoReady = Mesh SDK connected OR raw CIP-30 API available.
@@ -558,16 +569,18 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 /* ══ CRYPTO TAB: Tyler's exact two wallet tiles ══ */
                 <div className="grid gap-6 md:grid-cols-2">
 
-                  {/* Cardano wallet tile */}
+                  {/* Cardano wallet tile — always selectable; styling driven by paymentMode + connection */}
                   <div
-                    className={`flex flex-col items-center space-y-4 rounded-2xl border p-6 text-center transition-all ${
-                      cardanoReady
+                    className={`flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border p-6 text-center transition-all ${
+                      paymentMode === 'cardano' && cardanoReady
                         ? 'border-malama-accent/40 bg-malama-accent/10 shadow-[0_0_20px_rgba(196,240,97,0.1)]'
-                        : evmConnected
-                          ? 'border-gray-800 bg-gray-900 opacity-50'
-                          : 'border-gray-800 bg-malama-deep hover:border-gray-700'
+                        : paymentMode === 'cardano'
+                          ? 'border-malama-accent/30 bg-malama-accent/5'
+                          : cardanoReady
+                            ? 'border-malama-accent/20 bg-malama-accent/5 hover:border-malama-accent/30'
+                            : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                     }`}
-                    onClick={() => { if (!evmConnected) setPaymentMode('cardano') }}
+                    onClick={() => setPaymentMode('cardano')}
                   >
                     <div className={`flex h-14 w-14 items-center justify-center rounded-full ${cardanoReady ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
                       <Wallet className={`h-7 w-7 ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`} />
@@ -623,16 +636,18 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     )}
                   </div>
 
-                  {/* Base wallet tile */}
+                  {/* Base wallet tile — always selectable; independent of Cardano state */}
                   <div
-                    className={`flex flex-col items-center space-y-4 rounded-2xl border p-6 text-center transition-all ${
-                      evmConnected
+                    className={`flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border p-6 text-center transition-all ${
+                      paymentMode === 'base' && evmConnected
                         ? 'border-blue-500/40 bg-blue-500/10 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
-                        : cardanoConnected
-                          ? 'border-gray-800 bg-gray-900 opacity-50'
-                          : 'border-gray-800 bg-malama-deep hover:border-gray-700'
+                        : paymentMode === 'base'
+                          ? 'border-blue-500/30 bg-blue-500/5'
+                          : evmConnected
+                            ? 'border-blue-500/20 bg-blue-500/5 hover:border-blue-500/30'
+                            : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                     }`}
-                    onClick={() => { if (!cardanoConnected) setPaymentMode('base') }}
+                    onClick={() => setPaymentMode('base')}
                   >
                     <div className={`flex h-14 w-14 items-center justify-center rounded-full ${evmConnected ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
                       <Globe className={`h-7 w-7 ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`} />
@@ -655,13 +670,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     ) : (
                       <button
                         type="button"
-                        disabled={cardanoConnected}
                         onClick={e => { e.stopPropagation(); setPaymentMode('base'); connectEVM({ connector: injected() }) }}
-                        className={`w-full rounded-xl px-4 py-3 text-xs font-black shadow-lg transition-all ${
-                          cardanoConnected ? 'cursor-not-allowed bg-gray-800 text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
+                        className="w-full rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg transition-all hover:bg-blue-700"
                       >
-                        {cardanoConnected ? 'Cardano Active' : 'Connect MetaMask / CB'}
+                        Connect MetaMask / CB
                       </button>
                     )}
                   </div>
@@ -822,7 +834,11 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                       : 'cursor-not-allowed bg-gray-800 text-gray-600 opacity-50'
                   }`}
                 >
-                  {uiTab === 'crypto' ? 'Complete setup to continue' : 'Review Order'}
+                  {uiTab !== 'crypto' || isSetupComplete
+                    ? 'Review Order'
+                    : paymentMode === 'base'
+                      ? 'Connect MetaMask to continue'
+                      : 'Connect Lace / Cardano to continue'}
                 </button>
                 <p className="text-xs font-bold uppercase tracking-widest text-gray-600">
                   Mālama Genesis · 400 Total · 200 Base / 200 Cardano · One mint per hex
