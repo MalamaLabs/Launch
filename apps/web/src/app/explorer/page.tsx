@@ -11,12 +11,13 @@
  *   /explorer   → new HexMap + HexPanel (this file)
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 import { cellToLatLng, getResolution } from 'h3-js';
 
 import { HexPanel } from '@/explorer/components/HexPanel';
-import { REGION_DESTINATIONS } from '@/explorer/components/hex-map.constants';
+import { REGION_DESTINATIONS, type HexStatus } from '@/explorer/components/hex-map.constants';
 import { classifyZone, estimateWaterCoverage, detectRegion, REGION_LABELS } from '@/lib/hex-geo';
 import { API_BASE } from '@/lib/api';
 import type { HexMapHandle } from '@/explorer/components/HexMap';
@@ -54,20 +55,33 @@ const HexMap = dynamic(
   { ssr: false, loading: () => <MapLoading /> },
 );
 
+// useSearchParams requires a Suspense boundary in Next.js App Router
 export default function ExplorerPage() {
+  return (
+    <Suspense fallback={<MapLoading />}>
+      <ExplorerPageInner />
+    </Suspense>
+  );
+}
+
+function ExplorerPageInner() {
+  const searchParams = useSearchParams();
+  const hexParam = searchParams.get('hex');
+
   const [selected, setSelected] = useState<Phase1Hex | null>(null);
   const [activeRegion, setActiveRegion] = useState<string>(REGION_DESTINATIONS[0].name);
   const [manifest, setManifest] = useState<Phase1Manifest | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [listFilter, setListFilter] = useState<string>('all');
+  const [userHexIds, setUserHexIds] = useState<string[]>([]);
+  const [hexParamHandled, setHexParamHandled] = useState(false);
   const mapRef = useRef<HexMapHandle | null>(null);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '';
   const isPlaceholder =
     token === 'pk.your_token_here' || token === 'pk.your_mapbox_token_here';
 
-  // Prefer the dagwelldev-api catalog. During the region migration, fall back
-  // to Launch's local /api/hexes if the backend still serves the older catalog.
+  // Load the live Genesis hex catalog
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -84,13 +98,49 @@ export default function ExplorerPage() {
     };
   }, []);
 
+  // Fetch the logged-in user's owned hex IDs so we can colour them yellow
+  useEffect(() => {
+    fetch('/api/user', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { account?: { hexIds?: string[] } } | null) => {
+        if (d?.account?.hexIds?.length) setUserHexIds(d.account.hexIds);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Overlay user-owned hexes with 'reserved-user' status (yellow)
+  const enrichedManifest = useMemo<Phase1Manifest | null>(() => {
+    if (!manifest) return null;
+    if (!userHexIds.length) return manifest;
+    return {
+      ...manifest,
+      hexes: manifest.hexes.map((h) =>
+        userHexIds.includes(h.h3Index)
+          ? { ...h, status: 'reserved-user' as HexStatus }
+          : h,
+      ),
+    };
+  }, [manifest, userHexIds]);
+
+  // When ?hex=HEXID is present, fly to it and select it once map + manifest are ready
+  useEffect(() => {
+    if (!enrichedManifest || !hexParam || hexParamHandled) return;
+    const hex = enrichedManifest.hexes.find((h) => h.h3Index === hexParam);
+    if (!hex) return;
+    setSelected(hex);
+    setHexParamHandled(true);
+    setTimeout(() => {
+      mapRef.current?.flyTo([hex.centroidLng, hex.centroidLat], 8);
+    }, 800);
+  }, [enrichedManifest, hexParam, hexParamHandled]);
+
   if (!token || isPlaceholder) {
     return <MissingToken isPlaceholder={isPlaceholder} />;
   }
   if (loadError) {
     return <LoadError message={loadError} />;
   }
-  if (!manifest) {
+  if (!enrichedManifest) {
     return <MapLoading />;
   }
 
@@ -151,7 +201,7 @@ export default function ExplorerPage() {
               <HexMap
                 ref={mapRef}
                 accessToken={token}
-                manifest={manifest}
+                manifest={enrichedManifest}
                 landCells={{} as { r1?: LandCellSet; r3?: LandCellSet; r5?: LandCellSet }}
                 onHexClick={({ hex }) => setSelected(hex)}
               />
@@ -170,7 +220,7 @@ export default function ExplorerPage() {
           </>
         ) : (
           <HexListView
-            manifest={manifest}
+            manifest={enrichedManifest}
             selected={selected}
             filter={listFilter}
             onFilterChange={setListFilter}
@@ -323,6 +373,7 @@ function buildManifestFromApi(fc: {
       upcoming: 'Held back for a future wave',
       reserved: 'Purchased by an operator or held by Mālama HQ',
       'reserved-founding': 'Held by the Mālama Labs founding team',
+      'reserved-user': 'Your Genesis Hex',
       activated: 'Hardware booted and signing on-chain',
       'future-phase': 'Land cell not yet in any Phase',
       restricted: 'Sales prohibited in this jurisdiction',
@@ -431,11 +482,12 @@ function ReviewBanner({ inline = false }: { inline?: boolean }) {
 // ── Hex List View ─────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  'available':        '#3b82f6',
-  'reserved':         '#dc2626',
-  'reserved-founding':'#dc2626',
+  'available':        '#22c55e',
+  'reserved':         '#ef4444',
+  'reserved-founding':'#ef4444',
+  'reserved-user':    '#eab308',
   'activated':        '#c4f061',
-  'upcoming':         '#60a5fa',
+  'upcoming':         '#4ade80',
   'future-phase':     '#2a2a2a',
   'restricted':       '#2a2a2a',
 };
