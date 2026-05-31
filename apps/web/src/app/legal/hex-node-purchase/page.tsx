@@ -146,7 +146,7 @@ export default function HexNodePurchasePage() {
                 </div>
                 <div className="row">
                   <div className="k">MLMA allocation</div>
-                  <div className="v"><strong>125,000 MLMA</strong> per License. <strong>25%</strong> (31,250 MLMA) vests at verified hardware boot upon successful deployment registration. <strong>75%</strong> (93,750 MLMA) vests linearly over 12 months from the hardware boot date at approximately 7,813 MLMA per month. <em>The allocation does not vest at reservation — it vests at hardware boot.</em><span className="pill mutable">● Mutable</span></div>
+                  <div className="v"><strong>125,000 MLMA</strong> per License, milestone-vested across five tranches: <strong>15%</strong> (18,750 MLMA) at boot upon deployment registration, KYB, and first signed reading. <strong>15%</strong> (18,750 MLMA) at PONO 90-day qualification. <strong>20%</strong> (25,000 MLMA) at the 6-month milestone. <strong>20%</strong> (25,000 MLMA) at the 9-month milestone. <strong>30%</strong> (37,500 MLMA) at the 12-month milestone. Milestones require continuous PONO qualification, ≥99% uptime, and no tamper events. <em>Tokens are not vested at purchase. They are earned against operational milestones beginning at hardware boot. Validation compensation depends on network conditions and is not guaranteed.</em><span className="pill mutable">● Mutable</span></div>
                 </div>
                 <div className="row">
                   <div className="k">Genesis multiplier</div>
@@ -185,7 +185,7 @@ export default function HexNodePurchasePage() {
               <h3>Audit gate before emissions</h3>
               <div className="callout warn">
                 <span className="tag">▲ Audit · Rewards begin only after audit clearance</span>
-                <p>MLMA validation rewards <strong>do not begin automatically at hardware boot or at a fixed calendar date.</strong> They begin following an independent audit of the Genesis Hex Sale confirming that deployed nodes are operational, compliant, and properly registered. The audit is conducted in <strong>October 2026</strong>.</p>
+                <p>MLMA validation rewards <strong>do not begin automatically at hardware boot or at a fixed calendar date.</strong> They begin following an independent audit of the Genesis Hex Sale confirming that deployed nodes are operational, compliant, and properly registered. The audit is conducted in <strong>early 2027</strong>.</p>
                 <p>Nodes that do not pass the audit are notified and supported through remediation. <strong>Vesting of the 125,000 MLMA allocation is not affected by audit status — only validation rewards are withheld until compliance is confirmed.</strong></p>
               </div>
 
@@ -388,7 +388,7 @@ export default function HexNodePurchasePage() {
               <div className="sig-strip">
                 <div className="label">— END OF DOCUMENT</div>
                 <p className="text">Mālama Labs, Inc. · Hex Node Purchase &amp; Preorder Agreement · Effective April 11, 2026 · Last Updated April 28, 2026 (v2)</p>
-                <p className="footnote">This Agreement does not constitute investment advice or a guarantee of rewards. Beneficial Technology legal review required before external publication.</p>
+                <p className="footnote">This Agreement does not constitute investment advice or a guarantee of rewards. Review by qualified securities counsel is required before external publication.</p>
               </div>
             </div>
           </section>

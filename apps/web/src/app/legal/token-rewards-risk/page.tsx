@@ -597,7 +597,7 @@ export default function TokenRewardsRiskPage() {
               <h3>Audit gate before emissions</h3>
               <p>
                 MLMA validation rewards do not begin automatically at hardware boot. They
-                begin following a Genesis Hex Sale audit in <strong>October 2026</strong> that
+                begin following a Genesis Hex Sale audit in <strong>early 2027</strong> that
                 confirms your node is operational, compliant, and properly registered. If your
                 node does not pass the audit initially, rewards are withheld until compliance
                 is confirmed. Your 125,000 MLMA vesting allocation is not affected by audit
