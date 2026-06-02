@@ -103,7 +103,7 @@ export default function DocsOverviewPage() {
             </div>
             <div className="row">
               <span className="k">Owner</span>
-              <span className="v">Tyler Malin</span>
+              <span className="v">Mālama Labs</span>
             </div>
           </aside>
         </div>
