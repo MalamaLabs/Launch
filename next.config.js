@@ -6,16 +6,7 @@ const nextConfig = {
       'mapbox-gl': 'mapbox-gl',
     },
   },
-  allowedDevOrigins: ['192.168.1.126, dev.dagwelldev.com']
-  serverExternalPackages: [
-    '@meshsdk/react',
-    '@meshsdk/core',
-    '@meshsdk/core-cst',
-    '@meshsdk/wallet',
-    '@cardano-sdk/crypto',
-    'libsodium-wrappers-sumo',
-    'libsodium-wrappers',
-  ],
+  allowedDevOrigins: ['192.168.1.126', 'dev.dagwelldev.com'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'ipfs.io' },
