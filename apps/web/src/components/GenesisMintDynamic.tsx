@@ -4,16 +4,13 @@ import React from 'react'
 import dynamic from 'next/dynamic'
 
 // ── GenesisMint error boundary ────────────────────────────────────────────────
-// GenesisMint has a top-level `import { useWallet } from '@meshsdk/react'`.
-// Under Turbopack (or any bundler that fails to resolve the libsodium/WASM
-// chain), that module-level import throws before the component ever mounts.
-// next/dynamic propagates that error to React's nearest error boundary; without
-// one, it crashes the entire presale page tree.
+// GenesisMint is loaded via next/dynamic (ssr:false) and pulls in the wagmi /
+// viem wallet stack. If that chunk ever fails to load, next/dynamic propagates
+// the error to React's nearest error boundary; without one, it would crash the
+// entire presale page tree.
 //
 // This class-component boundary catches the failure and renders a recoverable
-// fallback so the page stays alive.  The real fix is running `next dev --webpack`
-// on the NAS so the libsodium dedupe aliases apply and @meshsdk/react loads
-// cleanly — but this boundary protects the presale page until that's confirmed.
+// fallback so the page stays alive.
 interface BoundaryState { error: Error | null }
 class GenesisMintBoundary extends React.Component<
   { children: React.ReactNode },

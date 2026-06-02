@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount, useConnect } from 'wagmi'
 import { injected } from 'wagmi/connectors'
-import { useWallet } from '@meshsdk/react'
 import { ShieldCheck, Mail, Loader2 } from 'lucide-react'
 import { useMagic } from '@/components/magic/MagicProvider'
 
@@ -16,7 +15,6 @@ function SignInForm() {
   const { magic } = useMagic()
   const { isConnected: isEvmConnected } = useAccount()
   const { connect: connectEvm, isPending: isEvmConnecting } = useConnect()
-  const { connect: connectCardano, connecting: isCardanoConnecting } = useWallet()
 
   const [email, setEmail]                         = useState('')
   const [emailSubmitting, setEmailSubmitting]     = useState(false)
@@ -50,19 +48,6 @@ function SignInForm() {
     }
   }
 
-  async function handleCardanoConnect() {
-    try {
-      const win = window as any
-      const detected = Object.keys(win.cardano ?? {})
-      if (detected.length === 0) { setEmailError('No Cardano wallet detected — install Lace or Eternl.'); return }
-      await connectCardano(detected[0])
-      sessionStorage.setItem('dashboardAuthMethod', 'cardano')
-      router.push(redirectTo)
-    } catch {
-      setEmailError('Cardano connection failed.')
-    }
-  }
-
   function handleEvmConnect() {
     setEvmConnectStarted(true)
     connectEvm({ connector: injected() })
@@ -74,7 +59,7 @@ function SignInForm() {
         <ShieldCheck className="mx-auto mb-6 h-20 w-20 text-malama-accent drop-shadow-[0_0_20px_rgba(196,240,97,0.3)]" />
         <h2 className="mb-2 text-2xl font-black tracking-tight text-white">Sign in to the app</h2>
         <p className="mb-8 leading-relaxed text-gray-400">
-          Sign in with your email, or connect <strong className="text-gray-300">Cardano</strong> (Lace / Eternl) / <strong className="text-gray-300">Base</strong> (MetaMask) to load your on-chain licenses.
+          Sign in with your email, or connect <strong className="text-gray-300">Base</strong> (MetaMask) to load your on-chain licenses.
         </p>
         <form onSubmit={signInWithEmail} className="mb-6 space-y-3 text-left">
           <label className="block">
@@ -98,11 +83,7 @@ function SignInForm() {
           </div>
         </div>
         <div className="space-y-3">
-          <button type="button" onClick={() => void handleCardanoConnect()} disabled={isCardanoConnecting || isEvmConnecting}
-            className="w-full rounded-xl border-2 border-malama-accent/50 bg-malama-accent/10 py-4 font-black text-malama-accent shadow-xl transition hover:bg-malama-accent hover:text-black disabled:opacity-50">
-            {isCardanoConnecting ? 'Connecting…' : 'Cardano — Lace / Eternl / Nami'}
-          </button>
-          <button type="button" onClick={handleEvmConnect} disabled={isCardanoConnecting || isEvmConnecting}
+          <button type="button" onClick={handleEvmConnect} disabled={isEvmConnecting}
             className="w-full rounded-xl border-2 border-blue-500/50 bg-blue-500/10 py-4 font-black text-blue-400 shadow-xl transition hover:bg-blue-500 hover:text-white disabled:opacity-50">
             {isEvmConnecting ? 'Connecting…' : 'Base — MetaMask / Injected'}
           </button>

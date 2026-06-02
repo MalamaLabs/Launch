@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAccount, useDisconnect } from 'wagmi'
-import { useWallet } from '@meshsdk/react'
 import { useMagic } from '@/components/magic/MagicProvider'
 
 type SessionData = { auth: 'email' | null; email?: string | null }
@@ -24,11 +23,8 @@ const NAV_BTN =
   'shrink-0 whitespace-nowrap rounded-malama-sm px-[18px] py-[11px] text-center font-mono text-[11px] font-semibold uppercase tracking-[0.1em] transition-all hover:-translate-y-px'
 
 // Small dot colored by auth method
-function AuthDot({ method }: { method: 'evm' | 'cardano' | 'email' }) {
-  const color =
-    method === 'evm'      ? 'bg-blue-400'     :
-    method === 'cardano'  ? 'bg-malama-accent' :
-                            'bg-emerald-400'
+function AuthDot({ method }: { method: 'evm' | 'email' }) {
+  const color = method === 'evm' ? 'bg-blue-400' : 'bg-emerald-400'
   return <span className={`inline-block h-1.5 w-1.5 rounded-full ${color} shrink-0`} />
 }
 
@@ -39,7 +35,6 @@ export default function Navbar() {
   // ── Wallet state (client-side) ────────────────────────────────────────────
   const { address: evmAddress, isConnected: evmConnected } = useAccount()
   const { disconnect: disconnectEvm } = useDisconnect()
-  const { connected: cardanoConnected, name: cardanoWalletName, disconnect: cardanoDisconnect } = useWallet()
   const { magic } = useMagic()
 
   // ── Server session state ──────────────────────────────────────────────────
@@ -80,12 +75,11 @@ export default function Navbar() {
   }, [magic, pathname])
 
   // ── Combine all auth sources ──────────────────────────────────────────────
-  const isAuthed  = session?.auth != null || evmConnected || cardanoConnected || magicEmail != null
+  const isAuthed  = session?.auth != null || evmConnected || magicEmail != null
   const isLoading = session === undefined
 
-  const authMethod: 'evm' | 'cardano' | 'email' | null =
+  const authMethod: 'evm' | 'email' | null =
     evmConnected      ? 'evm'     :
-    cardanoConnected  ? 'cardano' :
     magicEmail != null ? 'email'  :
     session?.auth === 'email' ? 'email' :
     null
@@ -93,8 +87,6 @@ export default function Navbar() {
   let authIdentity: string | null = null
   if (evmConnected && evmAddress) {
     authIdentity = `${evmAddress.slice(0, 6)}…${evmAddress.slice(-4)}`
-  } else if (cardanoConnected && cardanoWalletName) {
-    authIdentity = cardanoWalletName.charAt(0).toUpperCase() + cardanoWalletName.slice(1)
   } else if (magicEmail) {
     authIdentity = magicEmail.length > 22 ? `${magicEmail.slice(0, 20)}…` : magicEmail
   } else if (session?.email) {
@@ -108,7 +100,6 @@ export default function Navbar() {
     setSigningOut(true)
     try {
       if (evmConnected) disconnectEvm()
-      if (cardanoConnected) cardanoDisconnect()
       if (magic) {
         try { await magic.user.logout() } catch { /* ignore */ }
         setMagicEmail(null)

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useWallet } from '@meshsdk/react'
 import { useAccount, usePublicClient } from 'wagmi'
 import { parseAbiItem } from 'viem'
 import {
@@ -15,16 +14,7 @@ import { API_BASE, nftImageUrl } from '@/lib/api'
 import { useMagic } from '@/components/magic/MagicProvider'
 
 // 'email' = email-session cookie only (no wallet, no Magic SDK required)
-type AuthMethod = 'cardano' | 'evm' | 'magic' | 'email' | null
-
-function hexToAscii(hexStr: string | undefined) {
-  if (!hexStr || typeof hexStr !== 'string') return ''
-  let str = ''
-  for (let i = 0; i < hexStr.length; i += 2) {
-    str += String.fromCharCode(parseInt(hexStr.substr(i, 2), 16))
-  }
-  return str
-}
+type AuthMethod = 'evm' | 'magic' | 'email' | null
 
 interface HexLicense {
   id: string
@@ -44,12 +34,6 @@ type UserAccountData = {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Dashboard() {
-  const {
-    connected: isCardanoConnected,
-    wallet: cardanoWallet,
-    connect: connectCardano,
-  } = useWallet()
-
   const { isConnected: isEvmConnected, address: evmAddress } = useAccount()
   const publicClient = usePublicClient()
   const { magic } = useMagic()
@@ -76,7 +60,6 @@ export default function Dashboard() {
   // ── Hex licenses + shipping ───────────────────────────────────────────────
   const [hexLicenses, setHexLicenses]     = useState<HexLicense[]>([])
   const [loadingAssets, setLoadingAssets] = useState(false)
-  const [walletRetryTick, setWalletRetryTick] = useState(0)
 
   const [shipName,    setShipName]    = useState('')
   const [shipLine1,   setShipLine1]   = useState('')
@@ -155,14 +138,13 @@ export default function Dashboard() {
     if (authMethod !== null) return
     if (loggedOutRef.current) return
     if (sessionStorage.getItem('malama:logged_out') === '1') return
-    if (isEvmConnected)      setAuthMethod('evm')
-    else if (isCardanoConnected) setAuthMethod('cardano')
-  }, [authMethod, isEvmConnected, isCardanoConnected])
+    if (isEvmConnected) setAuthMethod('evm')
+  }, [authMethod, isEvmConnected])
 
-  // Clear logout guard once both providers have fully disconnected
+  // Clear logout guard once the wallet has fully disconnected
   useEffect(() => {
-    if (!isEvmConnected && !isCardanoConnected) loggedOutRef.current = false
-  }, [isEvmConnected, isCardanoConnected])
+    if (!isEvmConnected) loggedOutRef.current = false
+  }, [isEvmConnected])
 
   // Re-hydrate Magic session on refresh
   useEffect(() => {
@@ -184,7 +166,6 @@ export default function Dashboard() {
   // ── Load MongoDB user account ─────────────────────────────────────────────
   useEffect(() => {
     if (!authMethod || authMethod === 'email') return // email handled at mount
-    if (authMethod === 'cardano') return // handled in the wallet-ready effect below
     setAccountLoading(true)
     const params = new URLSearchParams()
     if (activeEvmAddress) params.set('evmAddress', activeEvmAddress)
@@ -195,20 +176,6 @@ export default function Dashboard() {
       .finally(() => setAccountLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authMethod, activeEvmAddress])
-
-  // Cardano: load account once wallet can vend an address
-  useEffect(() => {
-    if (authMethod !== 'cardano' || !isCardanoConnected || !cardanoWallet) return
-    cardanoWallet.getChangeAddress().then(async addr => {
-      if (!addr) return
-      setAccountLoading(true)
-      try {
-        const r = await fetch(`/api/user?cardanoAddress=${encodeURIComponent(addr)}`, { credentials: 'include' })
-        if (r.ok) { const d = await r.json(); setUserAccount(d.account ?? null) }
-      } catch { /* non-fatal */ } finally { setAccountLoading(false) }
-    }).catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authMethod, isCardanoConnected, cardanoWallet])
 
   // Pre-fill notification email from known email
   useEffect(() => {
@@ -292,54 +259,6 @@ export default function Dashboard() {
           }))
           setHexLicenses(found)
 
-        } else if (authMethod === 'cardano') {
-          if (!isCardanoConnected || !cardanoWallet) { setHexLicenses([]); return }
-          const changeAddr = await cardanoWallet.getChangeAddress().catch(() => null as string | null)
-          if (!changeAddr) {
-            setHexLicenses([])
-            setTimeout(() => setWalletRetryTick(t => t + 1), 400)
-            return
-          }
-          const found: HexLicense[] = []
-          // DB lookup — change address
-          try {
-            const r = await fetch(`${API_BASE}/hexes/by-owner?cardanoAddress=${encodeURIComponent(changeAddr)}`, { cache: 'no-store' })
-            if (r.ok) {
-              const d = await r.json() as { hexes?: Array<{ hexId: string }> }
-              for (const h of d.hexes ?? []) {
-                if (!found.some(f => f.id === h.hexId)) found.push({ id: h.hexId, chain: 'cardano' })
-              }
-            }
-          } catch { /* non-fatal */ }
-          // DB lookup — used addresses
-          const usedAddrs = await cardanoWallet.getUsedAddresses().catch(() => [] as string[])
-          await Promise.all(usedAddrs.filter(a => a !== changeAddr).map(async addr => {
-            try {
-              const r = await fetch(`${API_BASE}/hexes/by-owner?cardanoAddress=${encodeURIComponent(addr)}`, { cache: 'no-store' })
-              if (!r.ok) return
-              const d = await r.json() as { hexes?: Array<{ hexId: string }> }
-              for (const h of d.hexes ?? []) {
-                if (!found.some(f => f.id === h.hexId)) found.push({ id: h.hexId, chain: 'cardano' })
-              }
-            } catch { /* non-fatal */ }
-          }))
-          // On-chain CIP-68 label-222 scan
-          const rawAssets = await cardanoWallet.getAssets().catch(() => [] as Awaited<ReturnType<typeof cardanoWallet.getAssets>>)
-          const assets = Array.isArray(rawAssets) ? rawAssets : []
-          for (const asset of assets) {
-            if (asset?.unit && typeof asset.unit === 'string' && asset.unit.length >= 64) {
-              if (asset.unit.slice(56, 64) !== '000de140') continue
-              const assetNameHex = asset.unit.slice(64)
-              try {
-                const decoded = hexToAscii(assetNameHex)
-                if (/^[0-9a-f]{24}$/.test(decoded) && !found.some(f => f.id === decoded)) {
-                  found.push({ id: decoded, chain: 'cardano', assetName: assetNameHex })
-                }
-              } catch { /* skip malformed */ }
-            }
-          }
-          setHexLicenses(found)
-
         } else if (authMethod === 'magic' || authMethod === 'evm') {
           const emailToUse = loggedInEmail ?? userAccount?.email
           const evmAddr = activeEvmAddress
@@ -396,7 +315,7 @@ export default function Dashboard() {
     }
     resolveAssets()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authMethod, isCardanoConnected, cardanoWallet, loggedInEmail, activeEvmAddress, publicClient, walletRetryTick, userAccount?.email, userAccount?.evmAddresses?.length, userAccount?.cardanoAddresses?.length])
+  }, [authMethod, loggedInEmail, activeEvmAddress, publicClient, userAccount?.email, userAccount?.evmAddresses?.length, userAccount?.cardanoAddresses?.length])
 
   // ── Redirect to /auth when not authenticated ─────────────────────────────
   // Wait 600 ms for wallet auto-detect effects to settle before redirecting.
@@ -417,10 +336,6 @@ export default function Dashboard() {
   const saveEmailToAccount = async (email: string) => {
     const params = new URLSearchParams()
     if (activeEvmAddress) params.set('evmAddress', activeEvmAddress)
-    else if (authMethod === 'cardano' && cardanoWallet) {
-      const addr = await cardanoWallet.getChangeAddress().catch(() => '')
-      if (addr) params.set('cardanoAddress', addr)
-    }
     const res = await fetch(`/api/user${params.toString() ? `?${params}` : ''}`, {
       method: 'PATCH',
       credentials: 'include',
@@ -524,11 +439,9 @@ export default function Dashboard() {
                 <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Signed in</p>
                 <div className="flex items-center gap-2">
                   {authMethod === 'evm'     && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
-                  {authMethod === 'cardano' && <span className="h-2 w-2 animate-pulse rounded-full bg-malama-accent" />}
                   {authMethod === 'magic'   && <span className="h-2 w-2 animate-pulse rounded-full bg-purple-400" />}
                   {authMethod === 'email'   && <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />}
                   <p className="text-sm font-bold text-white">
-                    {authMethod === 'cardano' && 'Cardano wallet'}
                     {authMethod === 'evm' && evmAddress && `${evmAddress.slice(0,6)}…${evmAddress.slice(-4)}`}
                     {(authMethod === 'magic' || authMethod === 'email') && (loggedInEmail ?? 'Email')}
                   </p>
@@ -603,8 +516,7 @@ export default function Dashboard() {
                 <Lock className="mb-4 h-10 w-10 text-gray-600" />
                 <p className="mb-2 text-xl font-bold text-gray-400">No Genesis Licenses Discovered</p>
                 <p className="mb-6 max-w-md text-gray-500">
-                  {authMethod === 'cardano' && isCardanoConnected ? 'Your Cardano wallet holds 0 verified Genesis Node NFTs.'
-                    : authMethod === 'evm' ? 'Your EVM wallet holds 0 verified Genesis Node NFTs.'
+                  {authMethod === 'evm' ? 'Your EVM wallet holds 0 verified Genesis Node NFTs.'
                     : (authMethod === 'magic' || authMethod === 'email') && loggedInEmail ? `No purchases found for ${loggedInEmail}.`
                     : 'Connect a wallet above to scan for on-chain licenses.'} Reserve one below.
                 </p>

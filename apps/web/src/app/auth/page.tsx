@@ -4,12 +4,9 @@ import { useState, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccount, useConnect } from 'wagmi'
 import { injected } from 'wagmi/connectors'
-import { useWallet } from '@meshsdk/react'
 import Link from 'next/link'
-import { Mail, Loader2, Wallet, Globe, AtSign } from 'lucide-react'
+import { Mail, Loader2, Globe, AtSign } from 'lucide-react'
 import { useMagic } from '@/components/magic/MagicProvider'
-
-type CardanoWallet = { name: string; icon: string }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -17,7 +14,6 @@ export default function AuthPage() {
   const router = useRouter()
   const { isConnected: evmConnected } = useAccount()
   const { connect: connectEvm, isPending: isEvmConnecting } = useConnect()
-  const { connect: meshConnect } = useWallet()
   const { magic } = useMagic()
 
   // Magic OTP state
@@ -29,11 +25,6 @@ export default function AuthPage() {
   const [lookupEmail, setLookupEmail]     = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError]     = useState<string | null>(null)
-
-  const [cardanoConnecting, setCardanoConnecting] = useState(false)
-  const [cardanoError, setCardanoError]           = useState<string | null>(null)
-  const [cardanoWallets, setCardanoWallets]       = useState<CardanoWallet[]>([])
-  const [showPicker, setShowPicker]               = useState(false)
 
   // Already signed in? Skip to dashboard.
   useEffect(() => {
@@ -122,49 +113,6 @@ export default function AuthPage() {
     }
   }
 
-  // ── Cardano connect ───────────────────────────────────────────────────────
-  async function connectCardanoWallet(walletKey: string) {
-    setCardanoError(null)
-    setCardanoConnecting(true)
-    try {
-      const win = window as typeof window & {
-        cardano?: Record<string, { enable: () => Promise<unknown> }>
-      }
-      if (!win.cardano?.[walletKey]) throw new Error('not_found')
-      await Promise.race([
-        win.cardano[walletKey].enable(),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12_000)),
-      ])
-      await meshConnect(walletKey).catch(() => {})
-      sessionStorage.removeItem('malama:logged_out')
-      sessionStorage.setItem('dashboardAuthMethod', 'cardano')
-      window.dispatchEvent(new Event('malama:auth'))
-      router.push('/dashboard')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Connection rejected'
-      if (msg === 'timeout')   setCardanoError('Lace is still starting up — click Connect again in a moment.')
-      else if (msg === 'not_found') setCardanoError('Cardano wallet not detected. Install Lace at lace.io')
-      else if (/declined|rejected|cancelled|user denied/i.test(msg)) setCardanoError('Connection cancelled — please approve in your wallet.')
-      else setCardanoError(`Wallet error: ${msg}`)
-    } finally {
-      setCardanoConnecting(false)
-    }
-  }
-
-  function handleCardanoClick() {
-    setCardanoError(null); setShowPicker(false)
-    const win = window as typeof window & {
-      cardano?: Record<string, { name?: string; icon?: string; enable: () => Promise<unknown> }>
-    }
-    const detected: CardanoWallet[] = Object.entries(win.cardano ?? {}).map(([key, w]) => ({
-      name: key,
-      icon: (w as { icon?: string }).icon ?? '',
-    }))
-    if (detected.length === 0) { setCardanoError('No Cardano wallet detected. Install Lace at lace.io to continue.'); return }
-    if (detected.length === 1) { connectCardanoWallet(detected[0].name); return }
-    setCardanoWallets(detected); setShowPicker(true)
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-malama-bg px-6 py-12">
       <div className="w-full max-w-[440px] space-y-6">
@@ -184,39 +132,6 @@ export default function AuthPage() {
 
         {/* ── Wallet buttons ── */}
         <div className="space-y-3">
-          {/* Cardano */}
-          <div>
-            <button type="button" onClick={handleCardanoClick} disabled={cardanoConnecting}
-              className="flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-malama-accent/40 bg-malama-accent/10 py-4 font-black text-malama-accent transition hover:bg-malama-accent/20 disabled:opacity-50">
-              {cardanoConnecting
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Connecting…</>
-                : <><Wallet className="h-4 w-4" /> Cardano (Lace / Eternl)</>}
-            </button>
-            {showPicker && cardanoWallets.length > 0 && (
-              <div className="mt-2 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl">
-                <p className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Choose wallet</p>
-                {cardanoWallets.map(w => (
-                  <button key={w.name} onClick={() => { setShowPicker(false); connectCardanoWallet(w.name) }}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-gray-800">
-                    {w.icon && <img src={w.icon} alt={w.name} className="h-5 w-5 rounded" />}
-                    <span className="text-xs font-bold uppercase tracking-wider text-white">{w.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {cardanoError && (
-              <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
-                {cardanoError}
-                {cardanoError.includes('lace.io') && (
-                  <a href="https://lace.io" target="_blank" rel="noopener noreferrer"
-                    className="ml-2 font-bold text-malama-accent underline underline-offset-2">
-                    Install Lace →
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Base / EVM */}
           <button type="button" onClick={() => connectEvm({ connector: injected() })} disabled={isEvmConnecting}
             className="flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-blue-500/40 bg-blue-500/10 py-4 font-black text-blue-400 transition hover:bg-blue-500/20 disabled:opacity-50">
@@ -243,7 +158,7 @@ export default function AuthPage() {
             <p className="text-sm font-black text-white">Look up by order email</p>
           </div>
           <p className="mb-4 text-xs leading-relaxed text-malama-ink-dim">
-            Enter the email you used at checkout (Stripe, Cardano, or Base purchase).
+            Enter the email you used at checkout (card or Base purchase).
             No wallet or OTP needed — we&apos;ll load your purchases directly.
           </p>
           <form onSubmit={handleEmailLookup} className="space-y-3">

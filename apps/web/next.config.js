@@ -38,22 +38,6 @@ mergeRootEnv()
 const nextConfig = {
   reactStrictMode: true,
 
-  // Turbopack: resolveAlias prevents @cardano-sdk/core's CJS/ESM circular-dep
-  // from hanging the dynamic import that loads MeshProvider + Cardano WASM.
-  turbopack: {
-    resolveAlias: {
-      '@cardano-sdk/core': '@cardano-sdk/core',
-    },
-  },
-  webpack: (config) => {
-    // Mirror the same alias for webpack (used in production build).
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@cardano-sdk/core': require.resolve('@cardano-sdk/core'),
-    }
-    return config
-  },
-
   // Mapbox GL JS requires 'unsafe-eval' (uses new Function() for GLSL shader
   // compilation). Scoped tightly to /explorer only — all other routes unaffected.
   async headers() {

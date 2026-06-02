@@ -1,8 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useWallet as useCardanoWallet } from '@meshsdk/react'
 import {
   useAccount as useEVMWallet,
   useConnect as useEVMConnect,
@@ -11,30 +10,29 @@ import {
   usePublicClient,
 } from 'wagmi'
 import { injected } from 'wagmi/connectors'
-import { parseAbi, parseUnits, decodeEventLog } from 'viem'
+import { parseAbi, decodeEventLog } from 'viem'
 import {
-  MapPin, ShoppingCart, Wallet, Globe,
-  ChevronRight, CheckCircle2, AlertCircle, ExternalLink, Copy,
+  MapPin, Wallet, Globe,
+  CheckCircle2, ExternalLink,
   CreditCard, MessageCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 import regionsData from '@/data/regions.json'
 import { getGenesisPoolSlot } from '@/lib/genesis-hexes'
 import {
-  API_BASE,
   EXPLORER_BASE,
   reserveHexOnChain,
   reportMintObserved,
   createStripeCheckout,
-  prepareCardanoMintTx,
-  confirmCardanoMintTx,
   nftImageUrl,
 } from '@/lib/api'
 
-type PaymentLane = 'base' | 'cardano' | 'stripe'
+// Minting on Launch is Base-only. The buyer always receives a Base ERC-721;
+// the Cardano CIP-68 ref token is minted server-side (in reportMintObserved)
+// purely as a verification mirror — no Cardano wallet is involved client-side.
+type PaymentLane = 'base' | 'stripe'
 import {
   PurchaseLegalAcknowledgement,
-  LegalMintReminder,
   initialLegalAck,
   allLegalAcknowledged,
 } from '@/components/legal/PurchaseLegalAcknowledgement'
@@ -54,13 +52,12 @@ const MHNL_ABI = parseAbi([
 
 interface SuccessData {
   claimId: string; editionNumber: number; evmTokenId?: number; contractAddress?: `0x${string}`;
-  txHash: string; chain: 'base' | 'cardano'; explorerUrl: string; nftImageUrl: string;
-  openSeaUrl?: string; cnftUrl?: string; tokenName?: string; simulated?: boolean;
-  /** Dagwelldev explorer URL — only set for Cardano txs (queries local db-sync). */
+  txHash: string; chain: 'base'; explorerUrl: string; nftImageUrl: string;
+  openSeaUrl?: string; tokenName?: string; simulated?: boolean;
+  /** Dagwelldev explorer URL for the Cardano CIP-68 ref-token mirror — set
+   *  when the backend mints the verification mirror inline with the Base tx. */
   dagwelldevExplorerUrl?: string;
 }
-
-const shortHash = (h: string) => `${h.slice(0, 8)}...${h.slice(-6)}`
 
 function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
   return (
@@ -81,7 +78,6 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [evmTxStatus, setEvmTxStatus] = useState<'' | 'claiming' | 'approving' | 'minting'>('')
   const [error, setError]           = useState('')
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
-  const [copied, setCopied]         = useState(false)
   const [legalAck, setLegalAck]     = useState(initialLegalAck)
   const [paymentMode, setPaymentMode] = useState<PaymentLane>('base')
   // uiTab drives which toggle is visible; stripeSubMode picks the delivery card under Card tab
@@ -92,26 +88,9 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const [magicVerifyError, setMagicVerifyError]         = useState('')
   const [cardEmail, setCardEmail]   = useState('')
   const [stripeDeliveryAddress, setStripeDeliveryAddress] = useState('')
-  // null = auto (cardano preferred when connected), 'base' = force Base EVM delivery
-  const [stripeDeliveryChain, setStripeDeliveryChain] = useState<'cardano' | 'base' | null>(null)
-  const [mmImportOpen, setMmImportOpen] = useState(false)
-  const [mmCopied, setMmCopied]     = useState<'address' | 'tokenId' | null>(null)
-  // IPFS URL returned from cardano/prepare-tx — baked into the on-chain datum,
-  // so showing it in the success card means the buyer sees exactly what their wallet renders.
-  const [pendingNftImageUrl, setPendingNftImageUrl] = useState<string | null>(null)
 
   const legalComplete = allLegalAcknowledged(legalAck)
   const cardEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cardEmail.trim())
-
-  // ── Cardano Wallet Logic (Restored) ──────────────────────────────────────
-  const { connected: cardanoConnected, wallet: cardanoWallet, name: cardanoWalletName, connect: connectCardano } = useCardanoWallet()
-  const [cardanoWallets, setCardanoWallets] = useState<{ name: string; icon: string }[]>([])
-  const [showCardanoPicker, setShowCardanoPicker] = useState(false)
-  const [cardanoError, setCardanoError] = useState<string | null>(null)
-  const [cardanoCip30Api, setCardanoCip30Api] = useState<{
-    getChangeAddress: () => Promise<string>
-    signData: (address: string, payload: string) => Promise<{ signature: string; key: string }>
-  } | null>(null)
 
   const { address: evmAddress, isConnected: evmConnected } = useEVMWallet()
   const { magic } = useMagic()
@@ -125,53 +104,15 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
 
-  const cardanoReady = cardanoConnected || !!cardanoCip30Api
-
-  // ── Auto-reconnect the last-used Cardano wallet on fresh page load ────────
-  // LACE (and other CIP-30 wallets) register their connector by origin.  If the
-  // user previously authorized this origin, provider.enable() returns silently
-  // without a popup — giving us back the CIP-30 API and letting the Mesh SDK
-  // reconnect so `cardanoWallet` is populated when the buyer hits "Mint".
-  // Without this, every fresh session requires a manual re-click.
-  useEffect(() => {
-    const lastWallet = localStorage.getItem('malama_last_cardano_wallet')
-    if (!lastWallet || cardanoConnected) return
-    const win = window as any
-    const provider = win.cardano?.[lastWallet]
-    if (!provider) return
-    provider.enable()
-      .then((api: any) => {
-        setCardanoCip30Api(api)
-        // Re-connect via Mesh SDK so cardanoWallet (used for signTx/submitTx) is live.
-        connectCardano(lastWallet).catch(() => {/* no-op if wallet rejects */})
-      })
-      .catch(() => {/* wallet not yet authorized for this origin — wait for manual click */})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // run once on mount only
-
-  // If the selected crypto lane has no wallet connected but the other does,
-  // auto-switch so the user isn't stuck on a disabled Continue button.
-  // Only fires when the user hasn't explicitly chosen a lane for this session
-  // (e.g. arriving at the page already logged in via Cardano on the dashboard).
-  useEffect(() => {
-    if (uiTab !== 'crypto') return
-    if (paymentMode === 'base'    && !evmConnected  && cardanoReady) setPaymentMode('cardano')
-    if (paymentMode === 'cardano' && !cardanoReady  && evmConnected) setPaymentMode('base')
-  }, [uiTab, paymentMode, evmConnected, cardanoReady])
-
   const isSetupComplete = !!hexId && (
-    paymentMode === 'base'    ? evmConnected :
-    // cardanoReady = Mesh SDK connected OR raw CIP-30 API available.
-    // Either gives us enough to sign/submit the mint tx.
-    paymentMode === 'cardano' ? cardanoReady :
-    // Stripe: email required + delivery resolved (magic OTP, or a connected/typed address)
-    cardEmailOk && (
-      stripeSubMode === 'magic'
-        ? !!magicDeliveryAddress
-        : stripeDeliveryChain === 'base'
-          ? (evmConnected || stripeEvmOk)
-          : (cardanoReady || evmConnected)
-    )
+    paymentMode === 'base'
+      ? evmConnected
+      // Stripe: email required + delivery resolved (magic OTP, or a connected/typed Base address)
+      : cardEmailOk && (
+          stripeSubMode === 'magic'
+            ? !!magicDeliveryAddress
+            : (evmConnected || stripeEvmOk)
+        )
   )
 
   const syncNodeToMap = (id: string | null) => {
@@ -180,30 +121,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     if (!prev.includes(id)) localStorage.setItem('malamalabs_purchased_nodes', JSON.stringify([...prev, id]))
   }
 
-  const copyHash = (hash: string) => {
-    navigator.clipboard.writeText(hash).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  const connectCardanoWallet = async (walletKey: string) => {
-    setCardanoError(null)
-    const win = window as any
-    const provider = win.cardano?.[walletKey]
-    if (!provider) return
-    try {
-      const api = await provider.enable()
-      setCardanoCip30Api(api)
-      await connectCardano(walletKey).catch(() => {})
-      // Persist so the auto-reconnect useEffect can silently re-enable on next visit.
-      localStorage.setItem('malama_last_cardano_wallet', walletKey)
-    } catch (err) { setCardanoError('Connect failed') }
-  }
-
   const addToMetaMask = async (evmTokenId: number) => {
     const eth = (window as any).ethereum
-    setMmImportOpen(true)
     if (!eth) return
     try {
       await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x14a34' }] })
@@ -217,7 +136,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     } catch (e) { console.warn(e) }
   }
 
-  // ── Base Payment (Fixed with Auto-Fill Logic) ───────────────────────────
+  // ── Base Payment ─────────────────────────────────────────────────────────
   const handleBasePayment = async () => {
     if (!publicClient || !evmAddress || !hexId) throw new Error('Wallet not ready')
 
@@ -341,48 +260,6 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     }
   }
 
-  // ── Cardano Payment (Restored Atomic Logic) ─────────────────────────────
-  const handleCardanoPayment = async () => {
-    if (!hexId || !cardanoWallet) throw new Error('Connect Cardano wallet first')
-    setEvmTxStatus('claiming')
-    const buyerAddr = await cardanoWallet.getChangeAddress()
-    const prepared = await prepareCardanoMintTx({ hexId, buyerAddress: buyerAddr })
-
-    // Capture the IPFS URL the backend pinned into the datum — this is what the
-    // buyer's wallet will render, so we show the same image on the success card.
-    const mintImageUrl = prepared.nftImageUrl ?? null
-    if (mintImageUrl) setPendingNftImageUrl(mintImageUrl)
-
-    setEvmTxStatus('approving')
-    const sodium = (await import('libsodium-wrappers-sumo')).default
-    await sodium.ready
-    const fullySignedCbor = await cardanoWallet.signTx(prepared.txCbor, true)
-    const txHash = await cardanoWallet.submitTx(fullySignedCbor)
-
-    setEvmTxStatus('minting')
-    await confirmCardanoMintTx({ purchaseId: prepared.purchaseId, txHash }).catch(() => {})
-
-    syncNodeToMap(hexId)
-    const cardanoNet = prepared.network === 'mainnet' ? 'mainnet' : 'preprod'
-    const explorerUrl = cardanoNet === 'mainnet' ? `https://cardanoscan.io/tx/${txHash}` : `https://preprod.cardanoscan.io/tx/${txHash}`
-    const dagwelldevExplorerUrl = `${EXPLORER_BASE}/explorer/${cardanoNet}/tx/${txHash}`
-    const editionNum = getGenesisPoolSlot(hexId, regionsData) ?? 0
-    const claimId = `G200-${String(editionNum).padStart(3, '0')}`
-
-    return {
-      claimId,
-      editionNumber: editionNum,
-      txHash,
-      chain: 'cardano' as const,
-      explorerUrl,
-      cnftUrl: explorerUrl,
-      dagwelldevExplorerUrl,
-      // Prefer the IPFS URL from the prepare response — byte-identical to what the
-      // wallet renders.  Fall back to the API endpoint if Pinata was unreachable.
-      nftImageUrl: mintImageUrl ?? nftImageUrl({ hexId, chain: 'cardano', claimId }),
-    }
-  }
-
   // ── Magic Email Verify (step before Stripe checkout) ───────────────────
   const handleMagicVerify = async () => {
     if (!magic || !cardEmailOk) return
@@ -407,26 +284,17 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
 
     const origin = window.location.origin
 
-    // Resolve delivery address based on user's explicit chain choice.
-    // stripeDeliveryChain==='base' forces Base even when Cardano is connected.
-    // null/'cardano' = prefer Cardano if connected, otherwise fall back to EVM.
+    // Resolve the Base delivery address. In magic mode we use the address
+    // captured during the pre-payment verify step; in wallet mode we use the
+    // connected MetaMask address or a pasted Base address.
     const useMagicMode = stripeSubMode === 'magic'
-    const forceBase = stripeDeliveryChain === 'base'
-    const deliveryCardano = (!useMagicMode && !forceBase && cardanoConnected)
-      ? await cardanoWallet?.getChangeAddress().catch(() => undefined)
-      : undefined
-    let deliveryEvm: string | undefined =
-      (!useMagicMode && (forceBase || !deliveryCardano) && stripeEvmOk)
-        ? stripeEvmAddr
-        : undefined
-
-    // Use the address captured in the pre-payment Magic verify step.
-    // handleMagicVerify() must complete before this handler runs — the buy
-    // button is disabled until magicDeliveryAddress is set when in magic mode.
+    let deliveryEvm: string | undefined
     let usedMagic = false
     if (useMagicMode && magicDeliveryAddress) {
       deliveryEvm = magicDeliveryAddress
       usedMagic = true
+    } else if (!useMagicMode && stripeEvmOk) {
+      deliveryEvm = stripeEvmAddr
     }
 
     const intent = await createStripeCheckout(
@@ -437,7 +305,6 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         successUrl: `${origin}/presale/card-complete?session_id={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}${usedMagic ? '&magic=1' : ''}`,
         cancelUrl:  `${origin}/presale?stripe=cancel&hex=${encodeURIComponent(hexId)}`,
       },
-      deliveryCardano,
     )
     if (!intent.url) throw new Error('Stripe session creation failed')
     window.location.href = intent.url
@@ -452,7 +319,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         // handleStripePayment redirects to Stripe — execution stops here
         return
       }
-      const result = paymentMode === 'cardano' ? await handleCardanoPayment() : await handleBasePayment()
+      const result = await handleBasePayment()
       setSuccessData(result); setStep(5)
     } catch (err: any) { setError(err.message || 'Payment failed') } finally { setLoading(false); setEvmTxStatus('') }
   }
@@ -460,7 +327,6 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
   const submitLabel = () => {
     if (loading) return `${evmTxStatus || 'Processing'}...`
     if (paymentMode === 'stripe')  return 'Pay with Card →'
-    if (paymentMode === 'cardano') return 'Confirm & Mint on Cardano'
     return 'Confirm & Mint on Base'
   }
 
@@ -537,9 +403,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   Pay with crypto or card
                 </h2>
                 <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-400">
-                  Crypto: connect Cardano (Lace) and/or Base (MetaMask). Card: pay with Stripe, then open Launch App and
+                  Crypto: connect Base (MetaMask) and pay $2,000 USDC. Card: pay with Stripe, then open Launch App and
                   sign in with Magic using the same email — your NFT mints to your embedded wallet on Base Sepolia.
-                  Entry is $2,000 USDC or card checkout.
                 </p>
                 {hexId && (
                   <p className="mt-2 font-mono text-sm text-malama-accent/90">
@@ -552,7 +417,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               <div className="mx-auto mb-8 flex max-w-2xl flex-col justify-center gap-3 sm:flex-row">
                 <button
                   type="button"
-                  onClick={() => { setUiTab('crypto'); if (paymentMode === 'stripe') setPaymentMode(cardanoReady ? 'cardano' : 'base') }}
+                  onClick={() => { setUiTab('crypto'); setPaymentMode('base') }}
                   className={`flex-1 rounded-2xl border px-5 py-3 text-xs font-black uppercase tracking-wider transition-all ${
                     uiTab === 'crypto'
                       ? 'border-malama-accent bg-malama-accent/10 text-malama-accent shadow-[0_0_20px_rgba(196,240,97,0.15)]'
@@ -578,94 +443,18 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               {/* ── Content area ── */}
               {uiTab === 'crypto' ? (
 
-                /* ══ CRYPTO TAB: Tyler's exact two wallet tiles ══ */
-                <div className="grid gap-6 md:grid-cols-2">
-
-                  {/* Cardano wallet tile — always selectable; styling driven by paymentMode + connection */}
+                /* ══ CRYPTO TAB: Base wallet tile ══ */
+                <div className="mx-auto max-w-md">
                   <div
-                    className={`relative flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border-2 p-6 text-center transition-all ${
-                      paymentMode === 'cardano'
-                        ? 'border-malama-accent bg-malama-accent/10 ring-2 ring-malama-accent/60 shadow-[0_0_28px_rgba(196,240,97,0.3)]'
-                        : cardanoReady
-                          ? 'border-malama-accent/20 bg-malama-accent/5 hover:border-malama-accent/40'
-                          : 'border-gray-800 bg-malama-deep hover:border-gray-700'
-                    }`}
-                    onClick={() => setPaymentMode('cardano')}
-                  >
-                    {paymentMode === 'cardano' && (
-                      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-malama-accent px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">
-                        <CheckCircle2 className="h-3 w-3" /> Selected
-                      </span>
-                    )}
-                    <div className={`flex h-14 w-14 items-center justify-center rounded-full ${cardanoReady ? 'bg-malama-accent/20' : 'bg-gray-800'}`}>
-                      <Wallet className={`h-7 w-7 ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`} />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-white">Cardano NFT</h3>
-                      <p className={`mt-1 font-mono text-sm ${cardanoReady ? 'text-malama-accent' : 'text-gray-500'}`}>
-                        {cardanoReady ? (cardanoWalletName?.toUpperCase() ?? 'LACE CONNECTED') : 'DISCONNECTED'}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-600">CIP-68 Token · Lace signs</p>
-                    </div>
-                    {cardanoReady ? (
-                      <div className="w-full rounded-lg border border-malama-accent/50 bg-malama-accent/20 py-2 text-center text-xs font-bold text-malama-accent">
-                        ✓ READY TO MINT
-                      </div>
-                    ) : (
-                      <div className="relative w-full">
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            setPaymentMode('cardano')
-                            const win = window as any
-                            const detected = Object.entries(win.cardano ?? {}).map(([key, w]: any) => ({ name: key, icon: w.icon ?? '' }))
-                            if (detected.length === 0) { setCardanoWallets([]); setShowCardanoPicker(true) }
-                            else if (detected.length === 1) { await connectCardanoWallet(detected[0].name) }
-                            else { setCardanoWallets(detected); setShowCardanoPicker(true) }
-                          }}
-                          className="w-full rounded-lg border border-malama-accent/40 bg-malama-accent/10 py-2 text-xs font-bold text-malama-accent transition-colors hover:bg-malama-accent/20"
-                        >
-                          Connect Lace / Cardano
-                        </button>
-                        {showCardanoPicker && cardanoWallets.length > 0 && (
-                          <div className="w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl">
-                            <p className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Choose wallet</p>
-                            {cardanoWallets.map(w => (
-                              <button key={w.name} type="button"
-                                onClick={async () => { setShowCardanoPicker(false); await connectCardanoWallet(w.name) }}
-                                className="flex w-full items-center gap-3 px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-gray-800"
-                              >
-                                {w.icon && <img src={w.icon} alt={w.name} className="h-5 w-5 rounded" />}
-                                {w.name}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {showCardanoPicker && cardanoWallets.length === 0 && (
-                          <div className="w-full rounded-xl border border-gray-700 bg-gray-900 p-4 text-center shadow-xl">
-                            <p className="text-xs text-gray-400">No Cardano wallet detected.<br />Install Lace or Eternl.</p>
-                          </div>
-                        )}
-                        {cardanoError && <p className="mt-1 text-[10px] text-red-400">{cardanoError}</p>}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Base wallet tile — always selectable; independent of Cardano state */}
-                  <div
-                    className={`relative flex cursor-pointer flex-col items-center space-y-4 rounded-2xl border-2 p-6 text-center transition-all ${
-                      paymentMode === 'base'
+                    className={`relative flex flex-col items-center space-y-4 rounded-2xl border-2 p-6 text-center transition-all ${
+                      evmConnected
                         ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/60 shadow-[0_0_28px_rgba(59,130,246,0.3)]'
-                        : evmConnected
-                          ? 'border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40'
-                          : 'border-gray-800 bg-malama-deep hover:border-gray-700'
+                        : 'border-gray-800 bg-malama-deep hover:border-gray-700'
                     }`}
-                    onClick={() => setPaymentMode('base')}
                   >
-                    {paymentMode === 'base' && (
+                    {evmConnected && (
                       <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
-                        <CheckCircle2 className="h-3 w-3" /> Selected
+                        <CheckCircle2 className="h-3 w-3" /> Connected
                       </span>
                     )}
                     <div className={`flex h-14 w-14 items-center justify-center rounded-full ${evmConnected ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
@@ -676,12 +465,12 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                       <p className={`mt-1 font-mono text-sm ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`}>
                         {evmConnected ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}` : 'DISCONNECTED'}
                       </p>
-                      <p className="mt-1 text-xs text-gray-600">ERC-721 Token</p>
+                      <p className="mt-1 text-xs text-gray-600">ERC-721 Token · Cardano CIP-68 mirror</p>
                     </div>
                     {evmConnected ? (
                       <button
                         type="button"
-                        onClick={e => { e.stopPropagation(); disconnectEVM() }}
+                        onClick={() => disconnectEVM()}
                         className="w-full rounded-lg border border-blue-500/50 bg-blue-500/20 py-2 text-xs font-bold text-blue-400 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400"
                       >
                         {evmAddress?.slice(0, 6)}…{evmAddress?.slice(-4)}
@@ -689,7 +478,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     ) : (
                       <button
                         type="button"
-                        onClick={e => { e.stopPropagation(); setPaymentMode('base'); connectEVM({ connector: injected() }) }}
+                        onClick={() => connectEVM({ connector: injected() })}
                         className="w-full rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg transition-all hover:bg-blue-700"
                       >
                         Connect MetaMask / CB
@@ -773,7 +562,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                       )}
                     </div>
 
-                    {/* ── Card B: Connected wallet (Cardano CIP-68 or Base ERC-721) ── */}
+                    {/* ── Card B: Connected Base wallet (ERC-721) ── */}
                     <div
                       onClick={() => setStripeSubMode('wallet')}
                       className={`relative flex cursor-pointer flex-col items-center gap-4 rounded-2xl border-2 p-6 text-center transition-all ${
@@ -787,103 +576,45 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                           <CheckCircle2 className="h-3 w-3" /> Selected
                         </span>
                       )}
-                      <div className={`flex h-14 w-14 items-center justify-center rounded-full ${stripeSubMode === 'wallet' ? (cardanoReady ? 'bg-malama-accent/20' : 'bg-blue-500/20') : 'bg-gray-800'}`}>
-                        <Wallet className={`h-7 w-7 ${stripeSubMode === 'wallet' ? (cardanoReady ? 'text-malama-accent' : 'text-blue-400') : 'text-gray-500'}`} />
+                      <div className={`flex h-14 w-14 items-center justify-center rounded-full ${stripeSubMode === 'wallet' ? 'bg-blue-500/20' : 'bg-gray-800'}`}>
+                        <Wallet className={`h-7 w-7 ${stripeSubMode === 'wallet' ? 'text-blue-400' : 'text-gray-500'}`} />
                       </div>
                       <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-white">Connected wallet</h3>
-                        <p className={`mt-1 font-mono text-sm ${
-                          cardanoReady ? 'text-malama-accent' : evmConnected ? 'text-blue-400' : 'text-gray-500'
-                        }`}>
-                          {cardanoReady
-                            ? (cardanoWalletName?.toUpperCase() ?? 'CARDANO')
-                            : evmConnected
-                              ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}`
-                              : 'NOT CONNECTED'}
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-white">Your Base wallet</h3>
+                        <p className={`mt-1 font-mono text-sm ${evmConnected ? 'text-blue-400' : 'text-gray-500'}`}>
+                          {evmConnected ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}` : 'NOT CONNECTED'}
                         </p>
-                        <p className="mt-1 text-xs text-gray-600">
-                          {cardanoReady ? 'CIP-68 · Cardano' : evmConnected ? 'ERC-721 · Base' : 'Cardano or Base'}
-                        </p>
+                        <p className="mt-1 text-xs text-gray-600">ERC-721 · Base</p>
                       </div>
 
-                      {/* ── Explicit delivery-chain selector ── */}
-                      {/* baseChosen = user forced Base; otherwise Cardano is the
-                          default whenever a Cardano wallet is ready. */}
-                      {(() => {
-                        const baseChosen        = stripeDeliveryChain === 'base'
-                        const cardanoActive     = !baseChosen && cardanoReady
-                        const baseActive        = baseChosen || (!cardanoReady && evmConnected)
-                        return (
-                          <div className="w-full space-y-2" onClick={e => e.stopPropagation()}>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                              Deliver NFT to
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {/* Cardano option */}
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  setStripeSubMode('wallet')
-                                  setStripeDeliveryChain(null)
-                                  if (!cardanoReady) {
-                                    const win = window as any
-                                    const detected = Object.entries(win.cardano ?? {}).map(([key, w]: any) => ({ name: key, icon: w.icon ?? '' }))
-                                    if (detected.length === 1) { await connectCardanoWallet(detected[0].name) }
-                                    else { setCardanoWallets(detected); setShowCardanoPicker(true) }
-                                  }
-                                }}
-                                className={`flex flex-col items-center gap-1 rounded-xl border-2 px-3 py-2.5 text-xs font-black transition-all ${
-                                  cardanoActive
-                                    ? 'border-malama-accent bg-malama-accent/15 text-malama-accent ring-2 ring-malama-accent/50 shadow-[0_0_16px_rgba(196,240,97,0.2)]'
-                                    : 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-malama-accent/40'
-                                }`}
-                              >
-                                <span className="flex items-center gap-1">
-                                  {cardanoActive && <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  ₳ Cardano
-                                </span>
-                                <span className="text-[10px] font-bold opacity-80">
-                                  {cardanoReady ? (cardanoWalletName?.toUpperCase() ?? 'CONNECTED') : 'Tap to connect'}
-                                </span>
-                              </button>
-                              {/* Base option */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setStripeSubMode('wallet')
-                                  setStripeDeliveryChain('base')
-                                  if (!evmConnected) connectEVM({ connector: injected() })
-                                }}
-                                className={`flex flex-col items-center gap-1 rounded-xl border-2 px-3 py-2.5 text-xs font-black transition-all ${
-                                  baseActive
-                                    ? 'border-blue-500 bg-blue-500/15 text-blue-400 ring-2 ring-blue-500/50 shadow-[0_0_16px_rgba(59,130,246,0.2)]'
-                                    : 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-blue-500/40'
-                                }`}
-                              >
-                                <span className="flex items-center gap-1">
-                                  {baseActive && <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  ⬡ Base
-                                </span>
-                                <span className="text-[10px] font-bold opacity-80">
-                                  {evmConnected ? `${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)}` : 'Tap to connect'}
-                                </span>
-                              </button>
-                            </div>
-                            {/* Plain-language confirmation of the resolved destination */}
-                            <p className={`text-center text-[11px] font-bold ${
-                              cardanoActive ? 'text-malama-accent' : baseActive ? 'text-blue-400' : 'text-gray-500'
-                            }`}>
-                              {cardanoActive
-                                ? `✓ CIP-68 NFT mints to ${cardanoWalletName ?? 'your Cardano wallet'}`
-                                : baseActive
-                                  ? (evmConnected
-                                      ? `✓ ERC-721 NFT mints to ${evmAddress?.slice(0, 6)}…${evmAddress?.slice(-4)} on Base`
-                                      : 'Connect MetaMask to receive the Base NFT')
-                                  : 'Choose a chain to receive your NFT'}
-                            </p>
+                      {/* Deliver to a connected MetaMask wallet, or paste a Base address */}
+                      <div className="w-full space-y-2" onClick={e => e.stopPropagation()}>
+                        {evmConnected ? (
+                          <div className="rounded-lg border border-blue-500/50 bg-blue-500/15 px-3 py-2 text-center text-[11px] font-bold text-blue-400">
+                            ✓ ERC-721 NFT mints to {evmAddress?.slice(0, 6)}…{evmAddress?.slice(-4)}
                           </div>
-                        )
-                      })()}
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => { setStripeSubMode('wallet'); connectEVM({ connector: injected() }) }}
+                              className="w-full rounded-lg border border-blue-500/50 bg-blue-500/10 py-2 text-xs font-bold text-blue-400 transition hover:bg-blue-500/20"
+                            >
+                              Connect MetaMask
+                            </button>
+                            <input
+                              type="text"
+                              value={stripeDeliveryAddress}
+                              onChange={e => setStripeDeliveryAddress(e.target.value)}
+                              placeholder="…or paste a Base address (0x…)"
+                              className="w-full rounded-lg border border-gray-800 bg-black/40 px-3 py-2 font-mono text-[11px] text-white placeholder:text-gray-600 focus:border-blue-500/60 focus:outline-none"
+                            />
+                            {stripeDeliveryAddress.trim() && !stripeEvmOk && (
+                              <p className="text-[10px] text-red-400">Enter a valid 0x Base address.</p>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -910,12 +641,10 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 >
                   {uiTab !== 'crypto' || isSetupComplete
                     ? 'Review Order'
-                    : paymentMode === 'base'
-                      ? 'Connect MetaMask to continue'
-                      : 'Connect Lace / Cardano to continue'}
+                    : 'Connect MetaMask to continue'}
                 </button>
                 <p className="text-xs font-bold uppercase tracking-widest text-gray-600">
-                  Mālama Genesis · 400 Total · 200 Base / 200 Cardano · One mint per hex
+                  Mālama Genesis · 200 Nodes · One mint per hex
                 </p>
               </div>
             </motion.div>
@@ -930,7 +659,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 {hexId && (
                   <div className="shrink-0">
                     <img
-                      src={nftImageUrl({ hexId, chain: paymentMode === 'cardano' ? 'cardano' : 'base' })}
+                      src={nftImageUrl({ hexId, chain: 'base' })}
                       alt={`Hex ${hexId} NFT preview`}
                       className="w-24 h-36 rounded-xl object-cover border border-malama-accent/20 shadow-[0_0_18px_rgba(196,240,97,0.12)]"
                     />
@@ -943,7 +672,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   )}
                   <p className="text-malama-accent text-2xl font-black">$2,000 {paymentMode === 'stripe' ? 'USD' : 'USDC'}</p>
                   <p className="text-[11px] text-gray-500 mt-1">
-                    {paymentMode === 'cardano' ? 'Cardano CIP-68 · hex territory rights' : paymentMode === 'base' ? 'Base ERC-721 + Cardano mirror' : 'Card payment · Base ERC-721'}
+                    {paymentMode === 'stripe' ? 'Card payment · Base ERC-721' : 'Base ERC-721 + Cardano mirror'}
                   </p>
                 </div>
               </div>
@@ -988,7 +717,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
               {hexId && (
                 <div className="flex justify-center">
                   <img
-                    src={nftImageUrl({ hexId, chain: paymentMode === 'cardano' ? 'cardano' : 'base' })}
+                    src={nftImageUrl({ hexId, chain: 'base' })}
                     alt={`Hex ${hexId}`}
                     className="w-28 h-40 rounded-xl object-cover border border-malama-accent/20 shadow-[0_0_24px_rgba(196,240,97,0.15)] mx-auto"
                   />
@@ -1031,15 +760,16 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-[13px] font-bold text-gray-200 transition-all hover:border-zinc-500 hover:bg-zinc-800"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    {successData.chain === 'cardano' ? 'CardanoScan' : 'BaseScan'}
+                    BaseScan
                   </a>
                   {successData.dagwelldevExplorerUrl && (
                     <a
                       href={successData.dagwelldevExplorerUrl}
-                      target="_blank" rel="noopener noreferrer"                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-malama-teal/40 bg-malama-teal/5 px-4 py-3 text-[13px] font-bold text-malama-teal transition-all hover:border-malama-teal/70 hover:bg-malama-teal/10"
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-malama-teal/40 bg-malama-teal/5 px-4 py-3 text-[13px] font-bold text-malama-teal transition-all hover:border-malama-teal/70 hover:bg-malama-teal/10"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      Dagwell Explorer
+                      Verify CIP-68 mirror
                     </a>
                   )}
                 </div>
@@ -1054,8 +784,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   Join Operator Discord
                 </a>
 
-                {/* Add to MetaMask — Base lane only (evmTokenId is set) */}
-                {successData.chain === 'base' && successData.evmTokenId && (
+                {/* Add to MetaMask — Base lane (evmTokenId is set) */}
+                {successData.evmTokenId && (
                   <button
                     type="button"
                     onClick={() => addToMetaMask(successData.evmTokenId!)}
