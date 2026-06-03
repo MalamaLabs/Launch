@@ -40,17 +40,12 @@ module.exports = {
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'malama-live': 'malamaPulse 2s infinite',
-        'shimmer': 'shimmer 1.5s ease-in-out infinite',
       },
       keyframes: {
         malamaPulse: {
           '0%': { boxShadow: '0 0 0 0 rgba(196, 240, 97, 0.45)' },
           '70%': { boxShadow: '0 0 0 12px rgba(196, 240, 97, 0)' },
           '100%': { boxShadow: '0 0 0 0 rgba(196, 240, 97, 0)' },
-        },
-        shimmer: {
-          '0%':   { transform: 'translateX(-200%)' },
-          '100%': { transform: 'translateX(400%)' },
         },
       },
     },
