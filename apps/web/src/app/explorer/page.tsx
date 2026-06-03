@@ -238,6 +238,21 @@ function ExplorerPageInner() {
 async function loadGenesisFeatureCollection(): Promise<{
   features: Array<{ properties: Record<string, unknown> }>;
 }> {
+  const fc = await loadHexCatalog();
+  // The catalog endpoints (/hexes/geojson and the /api/hexes fallback) carry
+  // only geometry + the 5 reserved HQ cells — they intentionally omit live
+  // sold/reserved state to stay cacheable. Mongo (via dagwelldev-api /hexes)
+  // is the single source of truth for status, so overlay it here before the
+  // manifest is built. Without this, sold hexes render as "available" on the
+  // map/list until clicked.
+  await overlayMongoStatus(fc);
+  return fc;
+}
+
+/** Fetch the hex geometry catalog (backend geojson, local fallback). */
+async function loadHexCatalog(): Promise<{
+  features: Array<{ properties: Record<string, unknown> }>;
+}> {
   const api = await fetch(`${API_BASE}/hexes/geojson`, { cache: 'no-store' });
   if (api.ok) {
     const fc = (await api.json()) as { features: Array<{ properties: Record<string, unknown> }> };
@@ -250,6 +265,43 @@ async function loadGenesisFeatureCollection(): Promise<{
     throw new Error(`${API_BASE}/hexes/geojson returned ${api.status}; /api/hexes returned ${local.status}`);
   }
   return (await local.json()) as { features: Array<{ properties: Record<string, unknown> }> };
+}
+
+/**
+ * Overlay live status from the Mongo `hexes` collection onto the catalog
+ * features (mutates in place). Reads dagwelldev-api GET /hexes, which returns
+ * `{ hexes: [{ hexId, status }] }` straight from Mongo.
+ *
+ * Mongo status vocabulary: available | reserved | sold | bound. Anything
+ * other than `available` marks the cell as taken so it colours red on the map
+ * and is filtered out of the available list. Failure is non-fatal — the map
+ * still renders from the catalog, and the per-click drawer re-checks Mongo via
+ * /api/hexes/by-id.
+ */
+async function overlayMongoStatus(fc: {
+  features: Array<{ properties: Record<string, unknown> }>;
+}): Promise<void> {
+  try {
+    const res = await fetch(`${API_BASE}/hexes?limit=500`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const body = (await res.json()) as { hexes?: Array<{ hexId: string; status?: string }> };
+    if (!body.hexes?.length) return;
+
+    const statusByHex = new Map<string, string>();
+    for (const h of body.hexes) {
+      if (h.hexId && h.status) statusByHex.set(h.hexId, h.status);
+    }
+
+    for (const feat of fc.features) {
+      const id = String(feat.properties?.id ?? '');
+      const mongoStatus = statusByHex.get(id);
+      if (!mongoStatus) continue;
+      feat.properties.status = mongoStatus;
+      feat.properties.sold = mongoStatus !== 'available';
+    }
+  } catch {
+    // dagwelldev-api unreachable — leave catalog status untouched.
+  }
 }
 
 function MapLoading() {
