@@ -11,7 +11,7 @@ module.exports = {
       colors: {
         // Aligned with malamalabs.com/site.css — warm green-gray surfaces + chartreuse accent
         malama: {
-          bg: '#0a0e0a',
+          bg: '#0d130d',
           elev: '#0f1410',
           card: '#131a14',
           ink: '#e8efe5',
@@ -24,7 +24,7 @@ module.exports = {
           warn: '#f0a05a',
           amber: '#F18F01',
           // Legacy names used across the app (map to new palette)
-          deep: '#0a0e0a',
+          deep: '#0d130d',
           teal: '#c4f061',
         },
       },
