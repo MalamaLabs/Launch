@@ -17,11 +17,11 @@ const footerSections: { title: string; links: { href: string; label: string; ext
   {
     title: 'Documentation',
     links: [
-      { href: '/whitepaper', label: 'Whitepaper v1.0' },
-      { href: '/docs', label: 'Docs hub' },
-      { href: '/docs/tokenomics', label: 'MLMA Tokenomics' },
-      { href: '/docs/pricing-roi', label: 'Pricing & ROI' },
-      { href: '/docs/operators', label: 'Operator Guide' },
+      { href: '/whitepaper',          label: 'Whitepaper v1.0' },
+      { href: '/docs',                label: 'Docs hub' },
+      { href: '/docs/tokenomics',     label: 'MLMA Tokenomics' },
+      { href: '/docs/pricing-roi',    label: 'Pricing & Dynamics' },
+      { href: '/docs/operators',      label: 'Operator Guide' },
     ],
   },
   {
