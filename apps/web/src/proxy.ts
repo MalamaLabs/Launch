@@ -21,6 +21,14 @@ function isPublicPath(pathname: string) {
  * was adding ~10s to dev-mode compiles without affecting the buy path.
  */
 export async function proxy(request: Request) {
+  // Public-launch switch. Set LAUNCH_PASSWORD_GATE=off (service env / .env.local)
+  // to open the whole site — no per-deploy code edit. Unset or any other value
+  // keeps the gate exactly as before. Middleware runs server-side, so this is a
+  // runtime read when self-hosted; bake it into the build (.env.local) to be safe.
+  if (process.env.LAUNCH_PASSWORD_GATE === 'off') {
+    return NextResponse.next()
+  }
+
   const url = new URL(request.url)
   const { pathname } = url
 
