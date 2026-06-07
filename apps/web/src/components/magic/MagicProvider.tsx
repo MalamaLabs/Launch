@@ -21,6 +21,7 @@ import {
   useMemo,
   useState,
 } from 'react'
+import { BASE_CHAIN } from '@/lib/base-chain'
 
 type MagicContextType = { magic: InstanceType<typeof Magic> | null }
 
@@ -30,9 +31,10 @@ export function useMagic() {
   return useContext(MagicContext)
 }
 
-// Base Sepolia chainId — switch to 8453 for mainnet
-const CHAIN_ID =
-  process.env.NEXT_PUBLIC_BASE_NETWORK === 'mainnet' ? 8453 : 84532
+// Active Base chain (8453 mainnet / 84532 sepolia), driven by
+// NEXT_PUBLIC_BASE_NETWORK. Single source of truth shared with the mint flow so
+// the Magic custodial wallet can never end up on a different chain than the mint.
+const CHAIN_ID = BASE_CHAIN.idDecimal
 
 type Props = {
   children: ReactNode
@@ -49,8 +51,7 @@ export function MagicProvider({ children, publishableKey, rpcUrl }: Props) {
       process.env.NEXT_PUBLIC_MAGIC_API_KEY?.trim()
     const rpc =
       rpcUrl?.trim() ||
-      process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL?.trim() ||
-      'https://sepolia.base.org'
+      BASE_CHAIN.rpcUrls[0]
 
     // Magic is optional — if no API key is configured the Stripe lane
     // falls back to bank-wallet custody (same as before).

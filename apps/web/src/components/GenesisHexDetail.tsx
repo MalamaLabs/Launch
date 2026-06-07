@@ -7,6 +7,7 @@ import type { GenesisHexListItem } from '@/lib/genesis-hexes'
 import type { GenesisClaim } from '@/lib/genesis-claim-registry'
 import { formatGenesisListingUsd, GENESIS_ENTRY_USD } from '@/lib/h3'
 import { API_BASE, nftImageUrl } from '@/lib/api'
+import { BASE_CHAIN } from '@/lib/base-chain'
 import HexBoundaryPreview from './HexBoundaryPreview'
 
 /**
@@ -194,11 +195,7 @@ export default function GenesisHexDetail({
             <div className="space-y-2">
               {claim.chain === 'base' || claim.txHash?.startsWith('0x') ? (
                 <a
-                  href={`https://${
-                    (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '').toLowerCase() === '0x6056ce7fa7d4cdd0ae70e1798764d6e345f902be'
-                      ? 'sepolia.basescan.org'
-                      : 'basescan.org'
-                  }/tx/${claim.txHash}`}
+                  href={`${BASE_CHAIN.blockExplorerUrls[0]}/tx/${claim.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-900/70 p-3 text-xs font-bold text-blue-400 hover:border-blue-500/50 hover:text-blue-300"

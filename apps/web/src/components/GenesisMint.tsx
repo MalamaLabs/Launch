@@ -19,6 +19,7 @@ import {
 import Link from 'next/link'
 import regionsData from '@/data/regions.json'
 import { getGenesisPoolSlot } from '@/lib/genesis-hexes'
+import { BASE_CHAIN } from '@/lib/base-chain'
 import {
   EXPLORER_BASE,
   reserveHexOnChain,
@@ -125,7 +126,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     const eth = (window as any).ethereum
     if (!eth) return
     try {
-      await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x14a34' }] })
+      await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN.idHex }] })
       await eth.request({
         method: 'wallet_watchAsset',
         params: {
@@ -143,23 +144,23 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     const eth = (window as any).ethereum
     if (eth) {
       const currentChain: string = await eth.request({ method: 'eth_chainId' })
-      if (currentChain !== '0x14a34') {
+      if (currentChain !== BASE_CHAIN.idHex) {
         try {
-          await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x14a34' }] })
+          await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN.idHex }] })
         } catch (switchErr: any) {
           if (switchErr.code === 4902) {
             await eth.request({
               method: 'wallet_addEthereumChain',
               params: [{
-                chainId: '0x14a34',
-                chainName: 'Base Sepolia',
-                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-                rpcUrls: ['https://sepolia.base.org'],
-                blockExplorerUrls: ['https://sepolia.basescan.org'],
+                chainId: BASE_CHAIN.idHex,
+                chainName: BASE_CHAIN.name,
+                nativeCurrency: BASE_CHAIN.nativeCurrency,
+                rpcUrls: BASE_CHAIN.rpcUrls,
+                blockExplorerUrls: BASE_CHAIN.blockExplorerUrls,
               }],
             })
           } else {
-            throw new Error('Please switch to Base Sepolia in your wallet')
+            throw new Error(`Please switch to ${BASE_CHAIN.name} in your wallet`)
           }
         }
       }
