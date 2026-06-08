@@ -423,7 +423,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 </h2>
                 <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-400">
                   Crypto: connect Base (MetaMask) and pay $2,000 USDC. Card: pay with Stripe, then open Launch App and
-                  sign in with Magic using the same email — your NFT mints to your embedded wallet on Base Sepolia.
+                  sign in with Magic using the same email — your NFT mints to your embedded wallet on {BASE_CHAIN.name}.
                 </p>
                 {hexId && (
                   <p className="mt-2 font-mono text-sm text-malama-accent/90">
