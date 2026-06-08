@@ -3,7 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
-import { injected, coinbaseWallet } from "wagmi/connectors";
+import { injected } from "wagmi/connectors";
 import { MagicProvider } from "@/components/magic/MagicProvider";
 
 const baseSepoliaRpc = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL;
@@ -11,7 +11,10 @@ const baseRpc        = process.env.NEXT_PUBLIC_BASE_MAINNET_RPC_URL;
 
 const wagmiConfig = createConfig({
   chains: [base, baseSepolia],
-  connectors: [injected(), coinbaseWallet({ appName: "Mālama Labs" })],
+  // Only the injected connector (MetaMask / browser wallets). The standalone
+  // coinbaseWallet connector was removed — it eagerly probes a Coinbase chain
+  // proxy on load and spams 400s in the console even when unused.
+  connectors: [injected()],
   transports: {
     [base.id]:        http(baseRpc        || 'https://mainnet.base.org'),
     [baseSepolia.id]: http(baseSepoliaRpc || 'https://base-sepolia-rpc.publicnode.com'),
