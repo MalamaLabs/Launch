@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   // Create account on first sign-in; no-op (merge) on subsequent logins.
   // Delegated to the backend (single source of truth in Mongo).
   await fetch(`${API_BASE}/users/me?email=${encodeURIComponent(email.toLowerCase())}`, {
-    method: 'PATCH',
+    method: 'POST',  // POST not PATCH — the Apache proxy blocks PATCH/PUT
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.toLowerCase() }),
   }).catch((err) => console.error('[email-session] BE account upsert failed:', err))

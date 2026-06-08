@@ -331,7 +331,7 @@ export default function Dashboard() {
     const params = new URLSearchParams()
     if (activeEvmAddress) params.set('evmAddress', activeEvmAddress)
     const res = await fetch(`/api/user${params.toString() ? `?${params}` : ''}`, {
-      method: 'PATCH',
+      method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
@@ -646,7 +646,7 @@ export default function Dashboard() {
                       type="button"
                       onClick={async () => {
                         const res = await fetch('/api/user', {
-                          method: 'PATCH',
+                          method: 'POST',
                           credentials: 'include',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ evmAddress }),

@@ -6,7 +6,8 @@
  * which owns the user account record in Mongo. No database access in the FE.
  *
  *   GET   — resolve the current account (session email → ?evmAddress → ?cardanoAddress)
- *   PATCH — link an EVM/Cardano address or email to the account
+ *   POST  — link an EVM/Cardano address or email to the account
+ *           (POST, not PATCH — the Apache proxy in front of the API blocks PATCH/PUT)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   return NextResponse.json(data, { status: res.status })
 }
 
-export async function PATCH(req: NextRequest): Promise<NextResponse> {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   const email        = await getSessionEmail()
   const evmParam     = req.nextUrl.searchParams.get('evmAddress')?.toLowerCase() ?? null
   const cardanoParam = req.nextUrl.searchParams.get('cardanoAddress')?.toLowerCase() ?? null
@@ -60,8 +61,9 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   let body: Record<string, unknown> = {}
   try { body = await req.json() } catch { /* empty body is allowed */ }
 
+  // POST (not PATCH) — the Apache proxy in front of the backend blocks PATCH/PUT.
   const res = await fetch(`${API_BASE}/users/me?${buildQuery(email, evmParam, cardanoParam)}`, {
-    method: 'PATCH',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
