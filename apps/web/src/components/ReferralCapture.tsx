@@ -4,14 +4,15 @@
  * ReferralCapture — reads ?ref=<kolId> from the URL on any page load
  * and stores it in a 30-day cookie (`malama_ref`).
  *
- * Also fires a lightweight background hit to /api/ref/[kolId] (POST)
- * to count clicks server-side.
+ * Also fires a lightweight background hit to the backend (POST
+ * /partners/ref/:kolId) to count clicks server-side.
  *
  * Add <ReferralCapture /> once in the root layout.
  */
 
 import { useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { trackReferral } from '@/lib/api'
 
 export const REF_COOKIE = 'malama_ref'
 const COOKIE_DAYS = 30
@@ -43,11 +44,8 @@ function Tracker() {
 
     setRefCookie(ref)
 
-    // Background server-side click count — fire and forget
-    fetch(`/api/ref/${encodeURIComponent(ref)}`, {
-      method: 'POST',
-      credentials: 'same-origin',
-    }).catch(() => {})
+    // Background server-side click count on the backend — fire and forget
+    trackReferral(ref)
   }, [searchParams])
 
   return null

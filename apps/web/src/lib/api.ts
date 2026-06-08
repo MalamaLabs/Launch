@@ -564,3 +564,110 @@ export async function getSaleState(): Promise<SaleState> {
     next: { revalidate: 30 },
   } as any)
 }
+
+// ─── Partners / KOL (BE: /partners) ───────────────────────────────────────
+// All KOL state lives on the backend in Mongo (kolpartners / kolcommissions).
+// The FE only calls these endpoints — no client-side registry.
+
+export interface PartnerApplyInput {
+  displayName:    string
+  walletAddress:  string
+  promoMethod:    string
+  email?:         string
+  twitterHandle?: string
+  bio?:           string
+}
+export interface PartnerApplyResult {
+  id:          string
+  referralUrl: string
+  vanityUrl:   string
+  approved:    boolean
+  message:     string
+}
+
+/** Submit a KOL partner application. */
+export async function applyPartner(input: PartnerApplyInput): Promise<PartnerApplyResult> {
+  return apiFetch<PartnerApplyResult>('/partners/apply', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+/** Background click ping for a referral id (fire-and-forget). */
+export async function trackReferral(kolId: string): Promise<void> {
+  await fetch(`${API_BASE}/partners/ref/${encodeURIComponent(kolId)}`, {
+    method: 'POST',
+  }).catch(() => {})
+}
+
+/** Partner dashboard stats by connected wallet. Throws on 404/403 with message. */
+export async function getPartnerStats(address: string): Promise<Record<string, unknown>> {
+  return apiFetch<Record<string, unknown>>(
+    `/partners/me?address=${encodeURIComponent(address)}`,
+  )
+}
+
+// ─── User account + shipping (BE: /users) ─────────────────────────────────
+
+export interface ShippingAddress {
+  name?:       string
+  line1?:      string
+  line2?:      string
+  city?:       string
+  state?:      string
+  postalCode?: string
+  country?:    string
+}
+
+/** Fetch the shipping/notification profile by wallet or email. */
+export async function getShipping(opts: { wallet?: string; email?: string }): Promise<{
+  shipping?: ShippingAddress
+  notificationEmail?: string
+  walletAddresses?: string[]
+}> {
+  const qs = new URLSearchParams()
+  if (opts.wallet) qs.set('wallet', opts.wallet)
+  else if (opts.email) qs.set('email', opts.email)
+  return apiFetch(`/users/shipping?${qs.toString()}`)
+}
+
+/** Upsert shipping + notification email. */
+export async function saveShipping(body: {
+  wallet?: string
+  email?:  string
+  shipping?: ShippingAddress
+}): Promise<{ ok: boolean }> {
+  return apiFetch('/users/shipping', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+// ─── Leads (BE: /leads) ───────────────────────────────────────────────────
+
+/** Submit a sensor hardware quote request. */
+export async function submitSensorQuote(body: {
+  name:    string
+  email:   string
+  org?:    string
+  message?: string
+}): Promise<{ ok: boolean }> {
+  return apiFetch('/leads/sensors-quote', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Submit a Data Solutions buyer-access request. */
+export async function submitDataSolutionsRequest(body: {
+  email:    string
+  name?:    string
+  org?:     string
+  useCase?: string
+  message?: string
+}): Promise<{ ok: boolean }> {
+  return apiFetch('/leads/data-solutions', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}

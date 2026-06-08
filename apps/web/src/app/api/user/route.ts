@@ -1,101 +1,70 @@
 /**
- * /api/user
+ * /api/user — thin proxy to the backend `/users/me`.
  *
- * GET   — return the current user's account.
- *   Priority: email-session cookie → ?evmAddress=0x… → ?cardanoAddress=addr…
- *   Creates a bare account record on first call if none exists.
+ * Auth is phased: the email-session cookie is still validated here on the FE
+ * (httpOnly, same-origin) and the resolved identity is forwarded to the backend,
+ * which owns the user account record in Mongo. No database access in the FE.
  *
- * PATCH — link an EVM or Cardano wallet address to the account.
- *   Requires email-session cookie OR ?evmAddress / ?cardanoAddress to identify the record.
- *   Body: { evmAddress?: string; cardanoAddress?: string }
+ *   GET   — resolve the current account (session email → ?evmAddress → ?cardanoAddress)
+ *   PATCH — link an EVM/Cardano address or email to the account
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { parseEmailSessionToken } from '@/lib/email-session'
-import {
-  getUserByEmail,
-  getUserByEvmAddress,
-  getUserByCardanoAddress,
-  upsertUserAccount,
-  type UserAccount,
-} from '@/lib/user-account'
+
+const API_BASE = (
+  process.env.NEXT_PUBLIC_DAGWELLDEV_API_BASE?.trim() || 'https://api.dagwelldev.com'
+).replace(/\/$/, '')
 
 async function getSessionEmail(): Promise<string | null> {
   const jar = await cookies()
   const raw = jar.get('malama_email_session')?.value
   if (!raw) return null
-  const parsed = parseEmailSessionToken(raw)
-  return parsed?.email?.toLowerCase() ?? null
+  return parseEmailSessionToken(raw)?.email?.toLowerCase() ?? null
 }
 
-// ── GET ───────────────────────────────────────────────────────────────────────
+function buildQuery(email: string | null, evm?: string | null, cardano?: string | null): string {
+  const qs = new URLSearchParams()
+  if (email)   qs.set('email', email)
+  if (evm)     qs.set('evmAddress', evm)
+  if (cardano) qs.set('cardanoAddress', cardano)
+  return qs.toString()
+}
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  // 1. Email session (highest trust — httpOnly cookie)
-  const email = await getSessionEmail()
-  if (email) {
-    const account = await getUserByEmail(email)
-    const resolved: UserAccount = account ?? await upsertUserAccount({ email })
-    return NextResponse.json({ account: resolved })
+  const email   = await getSessionEmail()
+  const evm     = req.nextUrl.searchParams.get('evmAddress')?.toLowerCase() ?? null
+  const cardano = req.nextUrl.searchParams.get('cardanoAddress')?.toLowerCase() ?? null
+
+  if (!email && !evm && !cardano) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  // 2. Wallet address query params (no session — read-only identity hint)
-  const evmAddress     = req.nextUrl.searchParams.get('evmAddress')?.toLowerCase()
-  const cardanoAddress = req.nextUrl.searchParams.get('cardanoAddress')?.toLowerCase()
-
-  if (evmAddress) {
-    const account = await getUserByEvmAddress(evmAddress)
-    if (account) return NextResponse.json({ account })
-    // No record yet — create a bare wallet-anchored account
-    const created = await upsertUserAccount({ evmAddress })
-    return NextResponse.json({ account: created })
-  }
-
-  if (cardanoAddress) {
-    const account = await getUserByCardanoAddress(cardanoAddress)
-    if (account) return NextResponse.json({ account })
-    const created = await upsertUserAccount({ cardanoAddress })
-    return NextResponse.json({ account: created })
-  }
-
-  return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  const res = await fetch(`${API_BASE}/users/me?${buildQuery(email, evm, cardano)}`, {
+    cache: 'no-store',
+  })
+  const data = await res.json().catch(() => ({}))
+  return NextResponse.json(data, { status: res.status })
 }
 
-// ── PATCH ─────────────────────────────────────────────────────────────────────
-
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
-  const email          = await getSessionEmail()
-  const evmParam       = req.nextUrl.searchParams.get('evmAddress')?.toLowerCase()
-  const cardanoParam   = req.nextUrl.searchParams.get('cardanoAddress')?.toLowerCase()
+  const email        = await getSessionEmail()
+  const evmParam     = req.nextUrl.searchParams.get('evmAddress')?.toLowerCase() ?? null
+  const cardanoParam = req.nextUrl.searchParams.get('cardanoAddress')?.toLowerCase() ?? null
 
-  // Require at least one identity signal
   if (!email && !evmParam && !cardanoParam) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  let body: { evmAddress?: string; cardanoAddress?: string; email?: string }
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
+  let body: Record<string, unknown> = {}
+  try { body = await req.json() } catch { /* empty body is allowed */ }
 
-  const { evmAddress, cardanoAddress, email: emailUpdate } = body
-  if (!evmAddress && !cardanoAddress && !emailUpdate) {
-    return NextResponse.json({ error: 'evmAddress, cardanoAddress, or email required' }, { status: 400 })
-  }
-
-  // Resolve the anchor to find the existing account
-  let existing = null
-  if (email)        existing = await getUserByEmail(email)
-  if (!existing && evmParam)     existing = await getUserByEvmAddress(evmParam)
-  if (!existing && cardanoParam) existing = await getUserByCardanoAddress(cardanoParam)
-
-  const account = await upsertUserAccount({
-    email:          emailUpdate?.toLowerCase().trim() ?? existing?.email ?? email ?? undefined,
-    evmAddress:     evmAddress     ?? evmParam     ?? undefined,
-    cardanoAddress: cardanoAddress ?? cardanoParam ?? undefined,
+  const res = await fetch(`${API_BASE}/users/me?${buildQuery(email, evmParam, cardanoParam)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
-  return NextResponse.json({ account })
+  const data = await res.json().catch(() => ({}))
+  return NextResponse.json(data, { status: res.status })
 }

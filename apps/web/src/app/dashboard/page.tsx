@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { API_BASE, nftImageUrl } from '@/lib/api'
+import { API_BASE, nftImageUrl, getShipping, saveShipping as saveShippingProfile } from '@/lib/api'
 import { useMagic } from '@/components/magic/MagicProvider'
 
 // 'email' = email-session cookie only (no wallet, no Magic SDK required)
@@ -194,14 +194,8 @@ export default function Dashboard() {
     if (!authMethod) return
     const wallet = activeEvmAddress
     const emailParam = loggedInEmail ?? userAccount?.email ?? ''
-    const param = wallet
-      ? `wallet=${encodeURIComponent(wallet)}`
-      : emailParam
-        ? `email=${encodeURIComponent(emailParam)}`
-        : null
-    if (!param) return
-    fetch(`/api/shipping?${param}`)
-      .then(r => r.ok ? r.json() : null)
+    if (!wallet && !emailParam) return
+    getShipping(wallet ? { wallet } : { email: emailParam })
       .then((data: any) => {
         if (!data) return
         if (data.notificationEmail) setNotifEmail(data.notificationEmail)
@@ -360,17 +354,11 @@ export default function Dashboard() {
     setShipSaving(true); setShipError(''); setShipSaved(false)
     try {
       const wallet = activeEvmAddress
-      const body: Record<string, unknown> = {
+      await saveShippingProfile({
         email: notifEmail.trim() || undefined,
-        wallet,
+        wallet: wallet || undefined,
         shipping: { name: shipName, line1: shipLine1, line2: shipLine2, city: shipCity, state: shipState, postalCode: shipPostal, country: shipCountry },
-      }
-      const res = await fetch('/api/shipping', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
       })
-      if (!res.ok) { const d = await res.json(); throw new Error(typeof d.error === 'string' ? d.error : 'Save failed') }
 
       // Also persist email to UserAccount so it shows in the Profile card
       if (notifEmail.trim() && (!userAccount?.email || userAccount.email !== notifEmail.trim())) {

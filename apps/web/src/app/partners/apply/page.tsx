@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, CheckCircle2, AlertCircle, Twitter, Wallet, User, Mail, FileText } from 'lucide-react'
 import Link from 'next/link'
+import { applyPartner } from '@/lib/api'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -34,13 +35,7 @@ export default function ApplyPage() {
     setState('submitting')
     setErrorMsg('')
     try {
-      const res = await fetch('/api/partners/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Submission failed')
+      const data = await applyPartner(form)
       setResult(data)
       setState('success')
     } catch (err) {

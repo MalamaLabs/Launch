@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ArrowRight, Send } from 'lucide-react'
 import { useReveal } from './useReveal'
+import { submitSensorQuote } from '@/lib/api'
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '0.85rem 1rem', background: '#141414', border: '1px solid rgba(255,255,255,0.1)',
@@ -25,15 +26,7 @@ export default function CTASection() {
     setError('')
     setSending(true)
     try {
-      const res = await fetch('/api/sensors/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Something went wrong')
-      }
+      await submitSensorQuote(form)
       setSubmitted(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send — please try again')
