@@ -178,6 +178,8 @@ export async function createStripeCheckout(
   redirects: { successUrl: string; cancelUrl: string },
   /** Cardano address for CIP-68 delivery. If set and evmAddress is absent, mints on Cardano. */
   cardanoAddress?: string,
+  /** KOL referral id from the malama_ref cookie — attributed to a commission after payment. */
+  refKol?: string,
 ): Promise<StripePurchaseIntent> {
   return apiFetch<StripePurchaseIntent>(
     `/hexes/${encodeURIComponent(hexId)}/purchase-intent`,
@@ -190,6 +192,7 @@ export async function createStripeCheckout(
         email,
         successUrl:     redirects.successUrl,
         cancelUrl:      redirects.cancelUrl,
+        refKol:         refKol || undefined,
       }),
     },
   )
@@ -450,6 +453,8 @@ export async function reportMintObserved(args: {
   hexId:           string
   txHash?:         string
   cardanoAddress?: string
+  /** KOL referral id from the malama_ref cookie — issues a commission on the Base lane. */
+  refKol?:         string
 }): Promise<MintObservedResponse> {
   return apiFetch<MintObservedResponse>(`/hexes/events/mint-observed`, {
     method: 'POST',

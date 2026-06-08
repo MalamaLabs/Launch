@@ -38,6 +38,7 @@ import {
   allLegalAcknowledged,
 } from '@/components/legal/PurchaseLegalAcknowledgement'
 import { useMagic } from '@/components/magic/MagicProvider'
+import { getRefCookie } from '@/components/ReferralCapture'
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
 const GENESIS_CONTRACT_FALLBACK = (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '0x2222222222222222222222222222222222222222') as `0x${string}`
@@ -215,8 +216,13 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     } catch (e: any) {
       throw new Error('Mint transaction rejected or hex already taken on-chain')
     }
-    // Same pattern for the mint receipt — timeout after 60s and still show success
-    // since the txHash is on-chain and the user can verify on the block explorer.
+    // Wait for the mint receipt. CRITICAL: viem's waitForTransactionReceipt does
+    // NOT throw on a reverted tx — it returns a receipt with status 'reverted'.
+    // Without the status check below, a failed payment (e.g. insufficient USDC
+    // balance/allowance, or the hex already taken on-chain) would advance the UI
+    // to success and record the claim even though no NFT was minted.
+    const mintExplorerHost = intent.network === 'mainnet' ? 'basescan.org' : 'sepolia.basescan.org'
+    const mintExplorerUrl  = `https://${mintExplorerHost}/tx/${mintHash}`
     let receipt: Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>> | null = null
     try {
       receipt = await Promise.race([
@@ -224,7 +230,17 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 60_000)),
       ])
     } catch {
-      // RPC timed out — tx is submitted, proceed to success with txHash
+      // waitForTransactionReceipt timed out — do one direct receipt fetch before
+      // deciding. If the tx is mined we read its true status; if it genuinely
+      // isn't mined yet we surface a "still confirming" message (never a silent
+      // success that would hide a reverted payment).
+      receipt = await publicClient.getTransactionReceipt({ hash: mintHash }).catch(() => null)
+      if (!receipt) {
+        throw new Error(`Mint submitted but confirmation is taking longer than expected. It may still succeed — check ${mintExplorerUrl} and your dashboard before retrying.`)
+      }
+    }
+    if (receipt.status !== 'success') {
+      throw new Error(`Transaction reverted on-chain — no node was minted. Most common cause: insufficient USDC balance or allowance. Tx: ${mintExplorerUrl}`)
     }
 
     let evmTokenId = editionNumber
@@ -239,7 +255,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
     // and returns cardano.txHash + cardano.explorerUrl in the same response.
     let cardanoMirror: { txHash?: string; explorerUrl?: string } = {}
     try {
-      const mirrorRes = await reportMintObserved({ hexId, txHash: mintHash })
+      const mirrorRes = await reportMintObserved({ hexId, txHash: mintHash, refKol: getRefCookie() ?? undefined })
       cardanoMirror = mirrorRes.cardano ?? {}
     } catch {
       // Non-blocking — Base NFT is already minted on-chain; Cardano mirror will
@@ -306,6 +322,8 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         successUrl: `${origin}/presale/card-complete?session_id={CHECKOUT_SESSION_ID}&hex=${encodeURIComponent(hexId)}${usedMagic ? '&magic=1' : ''}`,
         cancelUrl:  `${origin}/presale?stripe=cancel&hex=${encodeURIComponent(hexId)}`,
       },
+      undefined,                  // cardanoAddress — not used on the Stripe card lane
+      getRefCookie() ?? undefined, // KOL referral attribution
     )
     if (!intent.url) throw new Error('Stripe session creation failed')
     window.location.href = intent.url
