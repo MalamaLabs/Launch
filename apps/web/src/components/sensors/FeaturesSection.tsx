@@ -27,7 +27,7 @@ export default function FeaturesSection() {
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5px', background: 'rgba(255,255,255,0.06)', borderRadius: '16px', overflow: 'hidden' }}>
+        <div className="sensors-feature-grid">
           {features.map((feature, i) => (
             <div key={feature.title} className={`reveal reveal-delay-${(i % 3) + 1}`}
               style={{ background: '#0a0a0a', padding: '2.5rem', transition: 'background 0.25s ease', cursor: 'default' }}

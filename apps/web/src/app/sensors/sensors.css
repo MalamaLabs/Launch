@@ -66,3 +66,21 @@
 #hero, #products, #use-cases, #features, #specs, #deployments, #system, #technology, #cta {
   scroll-margin-top: 80px;
 }
+
+/* Feature grid: 1 / 2 / 3 columns. 6 cards divide evenly into 3 and 2, so there
+   are never empty cells (which previously showed the container background as a
+   large gray block). */
+.sensors-feature-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .sensors-feature-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1024px) {
+  .sensors-feature-grid { grid-template-columns: repeat(3, 1fr); }
+}
