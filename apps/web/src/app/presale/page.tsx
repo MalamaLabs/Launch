@@ -54,7 +54,7 @@ export default async function PresalePage({
         <PresaleStats />
 
         {/* Step indicators — matches checkout wizard */}
-        <div className="mt-12 mb-8 grid max-w-4xl grid-cols-2 gap-3 text-sm text-gray-500 sm:grid-cols-3 lg:grid-cols-5 lg:gap-2">
+        <div className="mt-12 mb-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-gray-500">
           {[
             { n: '1', label: 'Locate HEX' },
             { n: '2', label: 'Crypto or card' },
