@@ -79,10 +79,7 @@
 .sensors-feature-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.5px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  overflow: hidden;
+  gap: 1.5rem;
 }
 @media (min-width: 640px) {
   .sensors-feature-grid { grid-template-columns: repeat(2, 1fr); }

@@ -29,10 +29,8 @@ export default function FeaturesSection() {
 
         <div className="sensors-feature-grid">
           {features.map((feature, i) => (
-            <div key={feature.title} className={`reveal reveal-delay-${(i % 3) + 1}`}
-              style={{ background: '#0a0a0a', padding: '2.5rem', transition: 'background 0.25s ease', cursor: 'default' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = '#141414')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = '#0a0a0a')}>
+            <div key={feature.title} className={`reveal reveal-delay-${(i % 3) + 1} spec-card`}
+              style={{ padding: '2.5rem', cursor: 'default' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(139,255,71,0.08)', border: '1px solid rgba(139,255,71,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8bff47', marginBottom: '1.5rem' }}>
                 {feature.icon}
               </div>
