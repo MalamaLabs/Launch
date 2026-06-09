@@ -4,18 +4,37 @@ import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAccount, useDisconnect } from 'wagmi'
+import { ChevronDown } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useMagic } from '@/components/magic/MagicProvider'
 
 type SessionData = { auth: 'email' | null; email?: string | null }
 
-const topNavLinks = [
-  { href: '/presale',   label: 'Reserve',   active: (p: string) => p.startsWith('/presale') },
-  { href: '/docs',      label: 'Docs',      active: (p: string) => p.startsWith('/docs') || p === '/whitepaper' },
-  { href: '/timeline',  label: 'Timeline',  active: (p: string) => p.startsWith('/timeline') },
-  { href: '/explorer',  label: 'Explorer',  active: (p: string) => p === '/explorer' || p.startsWith('/explorer/') },
-  { href: '/data-solutions', label: 'Data', active: (p: string) => p.startsWith('/data-solutions') },
-  { href: '/partners',  label: 'Partners',  active: (p: string) => p.startsWith('/partners') },
-  { href: '/dashboard', label: 'Dashboard', active: (p: string) => p.startsWith('/dashboard'), authOnly: true },
+type NavItem = {
+  href?: string
+  label: string
+  active: (p: string) => boolean
+  authOnly?: boolean
+  children?: { href: string; label: string }[]
+}
+
+// Sub-pages of the Sensor Systems landing (section anchors on /sensors).
+const SENSORS_LINKS = [
+  { href: '/sensors',             label: 'Sensor Systems' },
+  { href: '/sensors#use-cases',   label: 'Use Cases' },
+  { href: '/sensors#specs',       label: 'Specifications' },
+  { href: '/sensors#deployments', label: 'Deployments' },
+]
+
+const topNavLinks: NavItem[] = [
+  { href: '/presale',   label: 'Reserve',   active: (p) => p.startsWith('/presale') },
+  { href: '/docs',      label: 'Docs',      active: (p) => p.startsWith('/docs') || p === '/whitepaper' },
+  { href: '/timeline',  label: 'Timeline',  active: (p) => p.startsWith('/timeline') },
+  { href: '/explorer',  label: 'Explorer',  active: (p) => p === '/explorer' || p.startsWith('/explorer/') },
+  { label: 'Sensors',   active: (p) => p.startsWith('/sensors'), children: SENSORS_LINKS },
+  { href: '/data-solutions', label: 'Data', active: (p) => p.startsWith('/data-solutions') },
+  { href: '/partners',  label: 'Partners',  active: (p) => p.startsWith('/partners') },
+  { href: '/dashboard', label: 'Dashboard', active: (p) => p.startsWith('/dashboard'), authOnly: true },
 ]
 
 const CORPORATE_URL = process.env.NEXT_PUBLIC_CORPORATE_URL || 'https://malamalabs.com'
@@ -42,6 +61,10 @@ export default function Navbar() {
   const [session, setSession]       = useState<SessionData | undefined>(undefined)
   const [signingOut, setSigningOut] = useState(false)
   const [magicEmail, setMagicEmail] = useState<string | null>(null)
+  const [sensorsOpen, setSensorsOpen] = useState(false)
+
+  // Close the Sensors dropdown whenever the route changes.
+  useEffect(() => { setSensorsOpen(false) }, [pathname])
 
   const fetchSession = useCallback(() => {
     fetch('/api/auth/session', { cache: 'no-store' })
@@ -147,17 +170,69 @@ export default function Navbar() {
           {/* Nav links */}
           {topNavLinks
             .filter(({ authOnly }) => !authOnly || isAuthed)
-            .map(({ href, label, active }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`shrink-0 whitespace-nowrap rounded-sm px-3 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.1em] transition-colors sm:px-4 ${
-                  active(pathname) ? 'text-malama-accent' : 'text-malama-ink-dim hover:text-malama-accent'
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
+            .map((item) => {
+              const linkCls = `shrink-0 whitespace-nowrap rounded-sm px-3 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.1em] transition-colors sm:px-4 ${
+                item.active(pathname) ? 'text-malama-accent' : 'text-malama-ink-dim hover:text-malama-accent'
+              }`
+
+              // Dropdown item (e.g. Sensors)
+              if (item.children) {
+                return (
+                  <div key={item.label} className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setSensorsOpen((o) => !o)}
+                      aria-expanded={sensorsOpen}
+                      className={`${linkCls} inline-flex items-center gap-1`}
+                    >
+                      {item.label}
+                      <ChevronDown className={`h-3 w-3 transition-transform ${sensorsOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {/* click-away catcher (instant) */}
+                    {sensorsOpen && (
+                      <div className="fixed inset-0 z-40" onClick={() => setSensorsOpen(false)} />
+                    )}
+                    {/* animated panel */}
+                    <AnimatePresence>
+                      {sensorsOpen && (
+                        <motion.div
+                          key="sensors-menu"
+                          initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                          className="absolute left-0 top-full z-50 mt-2 min-w-[210px] origin-top overflow-hidden rounded-xl border border-malama-line bg-malama-card/95 py-1.5 shadow-2xl backdrop-blur-xl"
+                        >
+                          {item.children.map((c, i) => (
+                            <motion.div
+                              key={c.href}
+                              initial={{ opacity: 0, x: -6 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: 0.03 + i * 0.035, duration: 0.2 }}
+                            >
+                              <Link
+                                href={c.href}
+                                onClick={() => setSensorsOpen(false)}
+                                className="block whitespace-nowrap px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-malama-ink-dim transition-colors hover:bg-malama-accent/10 hover:text-malama-accent"
+                              >
+                                {c.label}
+                              </Link>
+                            </motion.div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )
+              }
+
+              // Standard link
+              return item.href ? (
+                <Link key={item.href} href={item.href} className={linkCls}>
+                  {item.label}
+                </Link>
+              ) : null
+            })}
 
           {/* Corporate link */}
           <a

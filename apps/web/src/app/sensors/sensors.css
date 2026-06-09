@@ -60,3 +60,9 @@
 @media (max-width: 900px) {
   .sensors-hero-grid { grid-template-columns: 1fr !important; }
 }
+
+/* Anchor offset: the global sticky Mālama nav (~60px) sits above these sections
+   now, so deep links (/sensors#use-cases etc.) land below it, not under it. */
+#hero, #products, #use-cases, #features, #specs, #deployments, #system, #technology, #cta {
+  scroll-margin-top: 80px;
+}

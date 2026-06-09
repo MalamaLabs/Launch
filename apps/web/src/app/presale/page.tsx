@@ -35,7 +35,7 @@ export default async function PresalePage({
         </h1>
         
         <p className="text-xl md:text-2xl text-gray-400 max-w-4xl mx-auto leading-relaxed mb-6">
-          Choose a hex from the 200 Genesis licenses for early supporters, connect an EVM or Cardano wallet (or custodial
+          Choose a hex from the 200 Genesis licenses for early supporters, connect an EVM wallet (or custodial
           with email), then reserve with crypto or fiat via credit/debit card. $2,000 entry. 125K MLMA vests at first boot.
           Mainnet live Q4 2026, ahead of TGE.
         </p>
