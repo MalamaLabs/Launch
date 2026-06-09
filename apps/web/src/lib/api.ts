@@ -565,6 +565,44 @@ export async function getSaleState(): Promise<SaleState> {
   } as any)
 }
 
+/** Marketing defaults — used pre-seed / pre-contract or when the backend is down. */
+export const SALE_DEFAULT_TOTAL = 200
+export const SALE_DEFAULT_RESERVED = 5
+
+/**
+ * Single source of truth for the public {total, reserved, remaining} counts so
+ * the homepage banner, homepage reserve stats, and /presale all show the SAME
+ * number. Prefers the on-chain remaining when the contract looks healthy, falls
+ * back to Mongo reservations, then to marketing defaults — and never renders the
+ * old "200/200 reserved" / "0 remaining" failure modes.
+ */
+export function deriveSaleCounts(state: SaleState): { total: number; reserved: number; remaining: number } {
+  let total = SALE_DEFAULT_TOTAL
+  let remaining = SALE_DEFAULT_TOTAL - SALE_DEFAULT_RESERVED
+  let reserved = SALE_DEFAULT_RESERVED
+
+  const onChainEnabled = state.onChain.enabled === true
+  const mongoSeeded = (state.mongo.total ?? 0) > 0
+  const onChainRemaining =
+    onChainEnabled && typeof state.onChain.remaining === 'number' ? state.onChain.remaining : null
+  const mongoTaken = mongoSeeded ? state.mongo.reserved + state.mongo.sold + state.mongo.bound : 0
+  // A contract claiming "0 remaining" with nothing taken in Mongo is almost
+  // certainly a mis-configured address, not a real sell-out.
+  const onChainLooksBroken = onChainRemaining === 0 && mongoTaken === 0
+
+  if (onChainRemaining != null && !onChainLooksBroken) {
+    total = SALE_DEFAULT_TOTAL
+    remaining = onChainRemaining
+    reserved = Math.max(0, total - remaining)
+  } else if (mongoSeeded) {
+    total = state.mongo.total
+    reserved = Math.max(SALE_DEFAULT_RESERVED, mongoTaken)
+    remaining = Math.max(0, total - reserved)
+  }
+
+  return { total, reserved, remaining }
+}
+
 // ─── Partners / KOL (BE: /partners) ───────────────────────────────────────
 // All KOL state lives on the backend in Mongo (kolpartners / kolcommissions).
 // The FE only calls these endpoints — no client-side registry.

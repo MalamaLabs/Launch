@@ -2,9 +2,9 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { IMAGES } from '@/lib/api'
+import { IMAGES, getSaleState, deriveSaleCounts } from '@/lib/api'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -18,6 +18,18 @@ const SOURCE_FAS_META = 'https://fas.org/publication/unmeasured-emissions/' // F
 const SOURCE_AIPOWER = 'https://ai-energy-impact-opal.vercel.app/'
 
 export default function Home() {
+  // Live "nodes available" from the backend; falls back to the marketing number
+  // until it loads (or if the backend is unreachable).
+  const [remaining, setRemaining] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    getSaleState()
+      .then((state) => { if (alive) setRemaining(deriveSaleCounts(state).remaining) })
+      .catch(() => { /* keep the fallback */ })
+    return () => { alive = false }
+  }, [])
+  const nodesAvailable = remaining ?? 195
+
   return (
     <div className="flex w-full flex-col items-center">
       {/* ── HERO ───────────────────────────────────────────────────── */}
@@ -46,7 +58,7 @@ export default function Home() {
             className="eyebrow mb-8 inline-flex items-center gap-3 font-mono text-[11px] font-medium uppercase tracking-[0.15em] text-malama-accent"
           >
             <span className="h-2 w-2 animate-malama-live rounded-full bg-malama-accent" />
-            Public Hex Launch · June 1, 2026 · 195 Nodes Available
+            Public Hex Launch · June 1, 2026 · {nodesAvailable} Nodes Available
           </motion.div>
 
           <motion.h1
@@ -799,7 +811,7 @@ export default function Home() {
             {/* Reserve stats */}
             <div className="mx-auto mb-10 grid max-w-2xl grid-cols-2 gap-4 sm:grid-cols-4">
               {[
-                { label: 'Available', value: '195' },
+                { label: 'Available', value: String(nodesAvailable) },
                 { label: 'Entry price', value: '$2,000' },
                 { label: 'MLMA allocation', value: '125,000' },
                 { label: 'Delivery', value: 'End of Dec 2026' },

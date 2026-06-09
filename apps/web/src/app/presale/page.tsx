@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import GenesisMint from '@/components/GenesisMintDynamic'
-import { getSaleState } from '@/lib/api'
+import { getSaleState, deriveSaleCounts, SALE_DEFAULT_TOTAL, SALE_DEFAULT_RESERVED } from '@/lib/api'
 
 export const metadata: Metadata = {
   title: 'Reserve with Crypto or Card | Genesis 200 | Mālama Labs',
@@ -87,49 +87,16 @@ async function PresaleStats() {
   // (remaining=0 with nothing sold in Mongo — e.g. contract address points
   // to a mis-deployed/zero-cap contract). We specifically want to avoid the
   // old "200/200 reserved" failure mode that tripped at launch.
-  const DEFAULT_TOTAL = 200
-  const DEFAULT_RESERVED = 5
-  let total = DEFAULT_TOTAL
-  let remaining = DEFAULT_TOTAL - DEFAULT_RESERVED
-  let reserved = DEFAULT_RESERVED
+  // Shared with the homepage banner/stats via deriveSaleCounts so every public
+  // surface shows the same live number. Falls back to marketing defaults on any
+  // backend error — never blocks the public page.
+  let total = SALE_DEFAULT_TOTAL
+  let remaining = SALE_DEFAULT_TOTAL - SALE_DEFAULT_RESERVED
+  let reserved = SALE_DEFAULT_RESERVED
   try {
-    const state = await getSaleState()
-    const onChainEnabled = state.onChain.enabled === true
-    const mongoSeeded = (state.mongo.total ?? 0) > 0
-    // Note: `state.onChain.remaining` is a *number*, so `?? fallback` only
-    // fires on null/undefined — a contract returning 0 is taken at face
-    // value. That's the trap; see `onChainLooksBroken` below.
-    const onChainRemaining =
-      onChainEnabled && typeof state.onChain.remaining === 'number'
-        ? state.onChain.remaining
-        : null
-    const mongoTaken = mongoSeeded
-      ? state.mongo.reserved + state.mongo.sold + state.mongo.bound
-      : 0
-
-    // A contract claiming "0 remaining" when Mongo has nothing sold is almost
-    // certainly a mis-configured contract address, not an actual sell-out —
-    // render marketing numbers instead of scaring buyers off with 200/200.
-    const onChainLooksBroken =
-      onChainRemaining === 0 && mongoTaken === 0
-
-    if (onChainRemaining != null && !onChainLooksBroken) {
-      // Contract is live + plausible → use the on-chain remaining as truth.
-      // Base contract caps at 200 by construction, so treat that as total.
-      total = DEFAULT_TOTAL
-      remaining = onChainRemaining
-      reserved = Math.max(0, total - remaining)
-    } else if (mongoSeeded) {
-      // No contract (or contract looks broken), but the pool has been seeded
-      // — Mongo is the source of truth for reservations made via Stripe,
-      // admin, or Cardano-primary lanes.
-      total = state.mongo.total
-      reserved = Math.max(DEFAULT_RESERVED, mongoTaken)
-      remaining = Math.max(0, total - reserved)
-    }
-    // else: pre-seed, pre-contract → keep marketing defaults.
+    ;({ total, reserved, remaining } = deriveSaleCounts(await getSaleState()))
   } catch {
-    // Backend unreachable — keep defaults. Never block the public page.
+    // Backend unreachable — keep defaults.
   }
 
   return (
