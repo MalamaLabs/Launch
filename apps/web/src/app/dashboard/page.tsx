@@ -6,7 +6,7 @@ import { parseAbiItem } from 'viem'
 import {
   Cpu, MapPin, CheckCircle2, Box, Radio,
   AlertCircle, TrendingUp, Lock, Loader2, KeyRound, Package,
-  User, Link2, AtSign,
+  User, Link2, AtSign, ChevronDown, ShieldAlert,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -467,7 +467,8 @@ export default function Dashboard() {
                   <Box className={`h-4 w-4 ${hexLicenses.length > 0 ? 'text-malama-accent' : 'text-gray-500'}`} />
                 </div>
                 <span className={`font-bold ${hexLicenses.length > 0 ? 'text-malama-accent' : 'text-gray-500'}`}>Hardware Shipped</span>
-                <span className="mt-1 text-xs text-malama-accent/80">{hexLicenses.length > 0 ? 'Expected Oct 2026' : 'Pending Verification'}</span>
+                <span className="mt-1 text-xs text-malama-accent/80">{hexLicenses.length > 0 ? 'Expected Dec 2026' : 'Pending Verification'}</span>
+
               </div>
               <div className="z-10 flex w-32 flex-col items-center bg-malama-card p-2 text-center opacity-40">
                 <Radio className="mb-2 h-10 w-10 bg-malama-card text-gray-600" />
@@ -480,7 +481,7 @@ export default function Dashboard() {
                 <AlertCircle className="mt-1 h-6 w-6 flex-shrink-0 text-blue-400" />
                 <div>
                   <h3 className="text-lg font-bold text-blue-400">Next Step: Plug &amp; Play Validation</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-gray-300">Once your sensor arrives, connect it to a standard power source within your Hex territory. It will immediately begin broadcasting cryptographically-signed spatial data to the network — no technical setup required. Revenue starts October 2026.</p>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-300">Once your sensor arrives, connect it to a standard power source within your Hex territory. It will immediately begin broadcasting cryptographically-signed spatial data to the network — no technical setup required. Revenue starts December 2026.</p>
                 </div>
               </div>
             </div>
@@ -567,7 +568,7 @@ export default function Dashboard() {
                   <p className={`font-mono text-3xl font-bold ${hexLicenses.length > 0 ? 'text-gray-300' : 'text-gray-600'}`}>125,000</p>
                   <p className="text-sm font-bold text-malama-accent">MLMA</p>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Vests at first sensor boot · Oct 2026</p>
+                <p className="mt-1 text-xs text-gray-500">Vests at first sensor boot · Dec 2026</p>
               </div>
             </div>
             <div className="mt-8 w-full">
@@ -684,17 +685,44 @@ export default function Dashboard() {
                   <p className="mt-0.5 font-mono text-xs text-gray-300 break-all">{magicAddress}</p>
                 </div>
               )}
-              <p className="mb-4 text-xs text-gray-500 leading-relaxed">
-                Export your private key to import into MetaMask or any other wallet.
+              <p className="mb-3 text-xs text-gray-500 leading-relaxed">
+                Your wallet is managed for you — you don&rsquo;t need to do anything to hold your node.
+                Advanced users can export the private key to move it into another wallet.
               </p>
-              <button
-                type="button"
-                onClick={() => void magic?.user.revealEVMPrivateKey()}
-                disabled={!magic}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 py-3 text-sm font-bold text-purple-400 transition hover:bg-purple-500/20 disabled:opacity-40"
-              >
-                <KeyRound className="h-4 w-4" /> Export Private Key
-              </button>
+
+              {/* Collapsed by default so a new user can't reveal the key by accident. */}
+              <details className="group rounded-xl border border-gray-800 bg-black/30">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-xs font-semibold text-gray-400 transition hover:text-gray-200 [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center gap-2">
+                    <KeyRound className="h-3.5 w-3.5" /> Advanced · Export wallet key
+                  </span>
+                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                </summary>
+
+                <div className="space-y-3 border-t border-gray-800 px-4 py-4">
+                  {/* Importance + how-to card */}
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                    <p className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                      <ShieldAlert className="h-4 w-4 shrink-0" /> Your private key controls this wallet
+                    </p>
+                    <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[11px] leading-relaxed text-amber-200/80">
+                      <li>Anyone who has it can move your node NFT and any funds. <strong>Never share it or paste it into any website.</strong></li>
+                      <li>To use it: open MetaMask → <em>Add account / import account</em> → paste the key. Your Hex node will appear on the Base network.</li>
+                      <li>Mālama cannot recover a lost key. Save it somewhere private and offline before you continue.</li>
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void magic?.user.revealEVMPrivateKey()}
+                    disabled={!magic}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 py-3 text-sm font-bold text-purple-400 transition hover:bg-purple-500/20 disabled:opacity-40"
+                  >
+                    <KeyRound className="h-4 w-4" /> Reveal private key
+                  </button>
+                  <p className="text-center text-[10px] text-gray-600">Opens a secure Magic window. Nothing is shown until you confirm there.</p>
+                </div>
+              </details>
             </section>
           )}
 

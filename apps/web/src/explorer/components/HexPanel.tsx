@@ -336,7 +336,7 @@ export function HexPanel({ hex, links, onReserveClick, onClose }: HexPanelProps)
             <>1.5× Genesis Year 1 Multiplier on validation compensation</>,
             <>Up to{' '}<strong style={{ color: '#c4f061' }}>{computedMlma.toLocaleString()} MLMA</strong>{' '}earned across operational milestones</>,
             <>Hardware must be installed and registered within 90 days of delivery or Licence is forfeited</>,
-            <>Validation compensation begins after the Genesis Hex Sale audit (Oct 2026) confirms operational compliance</>,
+            <>Validation compensation begins after the Genesis Hex Sale audit (Dec 2026) confirms operational compliance</>,
           ].map((item, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
               <span style={{ color: '#c4f061', fontSize: 14, lineHeight: '1.4', flexShrink: 0, userSelect: 'none' }}>•</span>
