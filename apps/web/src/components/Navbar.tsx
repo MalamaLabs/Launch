@@ -165,7 +165,7 @@ export default function Navbar() {
             height={32}
             className="shrink-0 drop-shadow-[0_0_10px_rgba(101,217,165,0.3)] transition-[filter] duration-300 hover:drop-shadow-[0_0_18px_rgba(101,217,165,0.5)]"
           />
-          <span className="hidden xs:inline font-black tracking-tight text-white text-[1.05rem] leading-none drop-shadow-[0_0_18px_rgba(101,217,165,0.18)] transition-[filter] duration-300 hover:drop-shadow-[0_0_26px_rgba(101,217,165,0.35)]">
+          <span className="font-black tracking-tight text-white text-[0.95rem] xs:text-[1.05rem] leading-none drop-shadow-[0_0_18px_rgba(101,217,165,0.18)] transition-[filter] duration-300 hover:drop-shadow-[0_0_26px_rgba(101,217,165,0.35)]">
             Mālama Labs
           </span>
         </Link>
@@ -278,9 +278,10 @@ export default function Navbar() {
             ) : (
               <Link
                 href="/auth"
-                className={`ml-1 sm:ml-2 ${NAV_BTN} bg-malama-accent text-malama-bg hover:shadow-[0_8px_24px_rgba(196,240,97,0.2)]`}
+                className="ml-1 sm:ml-2 shrink-0 whitespace-nowrap rounded-malama-sm bg-malama-accent text-malama-bg text-center font-mono font-semibold uppercase tracking-[0.1em] transition-all hover:-translate-y-px hover:shadow-[0_8px_24px_rgba(196,240,97,0.2)] px-2.5 py-2 text-[10px] sm:px-[18px] sm:py-[11px] sm:text-[11px]"
               >
-                Log In / Register
+                <span className="sm:hidden">Log In</span>
+                <span className="hidden sm:inline">Log In / Register</span>
               </Link>
             )
           )}
