@@ -8,6 +8,11 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
+      // Extra-small breakpoint below Tailwind's default `sm` (640px) so the nav
+      // wordmark can hide on the narrowest phones without affecting larger screens.
+      screens: {
+        xs: '480px',
+      },
       colors: {
         // Aligned with malamalabs.com/site.css — warm green-gray surfaces + chartreuse accent
         malama: {
