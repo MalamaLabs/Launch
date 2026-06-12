@@ -26,13 +26,17 @@ const SENSORS_LINKS = [
   { href: '/sensors#deployments', label: 'Deployments' },
 ]
 
-const topNavLinks: NavItem[] = [
-  { href: '/presale',   label: 'Reserve',   active: (p) => p.startsWith('/presale') },
-  { href: '/docs',      label: 'Docs',      active: (p) => p.startsWith('/docs') || p === '/whitepaper' },
+// Top nav: 5 primary items shown on desktop (parity with malamalabs.com).
+// Secondary items live in the mobile hamburger menu + the footer.
+const primaryNavLinks: NavItem[] = [
+  { label: 'Sensors',        active: (p) => p.startsWith('/sensors'), children: SENSORS_LINKS },
+  { href: '/presale',        label: 'Reserve',     active: (p) => p.startsWith('/presale') },
+  { href: '/explorer',       label: 'Explore',     active: (p) => p === '/explorer' || p.startsWith('/explorer/') },
+  { href: '/docs',           label: 'Docs',        active: (p) => p.startsWith('/docs') || p === '/whitepaper' },
+  { href: '/data-solutions', label: 'Data Buyers', active: (p) => p.startsWith('/data-solutions') },
+]
+const secondaryNavLinks: NavItem[] = [
   { href: '/timeline',  label: 'Timeline',  active: (p) => p.startsWith('/timeline') },
-  { href: '/explorer',  label: 'Explorer',  active: (p) => p === '/explorer' || p.startsWith('/explorer/') },
-  { label: 'Sensors',   active: (p) => p.startsWith('/sensors'), children: SENSORS_LINKS },
-  { href: '/data-solutions', label: 'Data', active: (p) => p.startsWith('/data-solutions') },
   { href: '/partners',  label: 'Partners',  active: (p) => p.startsWith('/partners') },
   { href: '/dashboard', label: 'Dashboard', active: (p) => p.startsWith('/dashboard'), authOnly: true },
 ]
@@ -62,9 +66,10 @@ export default function Navbar() {
   const [signingOut, setSigningOut] = useState(false)
   const [magicEmail, setMagicEmail] = useState<string | null>(null)
   const [sensorsOpen, setSensorsOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
-  // Close the Sensors dropdown whenever the route changes.
-  useEffect(() => { setSensorsOpen(false) }, [pathname])
+  // Close the Sensors dropdown + mobile menu whenever the route changes.
+  useEffect(() => { setSensorsOpen(false); setMenuOpen(false) }, [pathname])
 
   const fetchSession = useCallback(() => {
     fetch('/api/auth/session', { cache: 'no-store' })
@@ -167,8 +172,9 @@ export default function Navbar() {
 
         {/* ── Right side ── */}
         <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-2">
-          {/* Nav links */}
-          {topNavLinks
+          {/* Desktop nav links (5 primary) — hidden on mobile, replaced by the hamburger */}
+          <div className="hidden lg:flex items-center gap-0.5">
+          {primaryNavLinks
             .filter(({ authOnly }) => !authOnly || isAuthed)
             .map((item) => {
               const linkCls = `shrink-0 whitespace-nowrap rounded-sm px-3 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.1em] transition-colors sm:px-4 ${
@@ -233,6 +239,7 @@ export default function Navbar() {
                 </Link>
               ) : null
             })}
+          </div>
 
           {/* Corporate link */}
           <a
@@ -277,8 +284,82 @@ export default function Navbar() {
               </Link>
             )
           )}
+
+          {/* Hamburger — mobile only */}
+          <button
+            type="button"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+            className="lg:hidden ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-malama-sm border border-malama-line text-malama-ink-dim transition-colors hover:border-malama-accent/50 hover:text-malama-accent"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              {menuOpen ? <path d="M6 6l12 12M6 18L18 6" /> : <><path d="M3 6h18" /><path d="M3 12h18" /><path d="M3 18h18" /></>}
+            </svg>
+          </button>
         </div>
       </div>
+
+      {/* Mobile menu panel */}
+      {menuOpen && (
+        <div className="lg:hidden border-t border-malama-line bg-malama-bg/95 px-5 py-3 backdrop-blur-[14px] sm:px-10">
+          <div className="flex flex-col">
+            {[...primaryNavLinks, ...secondaryNavLinks]
+              .filter(({ authOnly }) => !authOnly || isAuthed)
+              .map((item) => {
+                const itemCls = (isActive: boolean) =>
+                  `rounded-sm px-2 py-3 font-mono text-[12px] font-medium uppercase tracking-[0.1em] transition-colors ${
+                    isActive ? 'text-malama-accent' : 'text-malama-ink-dim hover:text-malama-accent'
+                  }`
+
+                // Dropdown parent (Sensors): link to the landing + list its anchors.
+                if (item.children) {
+                  return (
+                    <div key={item.label} className="flex flex-col">
+                      <Link
+                        href="/sensors"
+                        onClick={() => setMenuOpen(false)}
+                        className={itemCls(item.active(pathname))}
+                      >
+                        {item.label}
+                      </Link>
+                      {item.children.slice(1).map((c) => (
+                        <Link
+                          key={c.href}
+                          href={c.href}
+                          onClick={() => setMenuOpen(false)}
+                          className="rounded-sm pl-5 pr-2 py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-malama-ink-faint transition-colors hover:text-malama-accent"
+                        >
+                          {c.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )
+                }
+
+                return item.href ? (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className={itemCls(item.active(pathname))}
+                  >
+                    {item.label}
+                  </Link>
+                ) : null
+              })}
+            <a
+              href={CORPORATE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className="rounded-sm px-2 py-3 font-mono text-[12px] font-medium uppercase tracking-[0.1em] text-malama-ink-faint transition-colors hover:text-malama-accent"
+            >
+              malamalabs.com ↗
+            </a>
+          </div>
+        </div>
+      )}
     </nav>
   )
 }
