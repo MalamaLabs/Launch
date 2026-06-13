@@ -182,9 +182,11 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   const [error, setError]           = useState('')
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
   const [legalAck, setLegalAck]     = useState(initialLegalAck)
-  const [paymentMode, setPaymentMode] = useState<PaymentLane>('base')
+  // Default to card (Stripe) so non-crypto buyers feel welcomed — leading with
+  // the no-wallet-needed option. Crypto stays one tap away.
+  const [paymentMode, setPaymentMode] = useState<PaymentLane>('stripe')
   // uiTab drives which toggle is visible; stripeSubMode picks the delivery card under Card tab
-  const [uiTab, setUiTab]           = useState<'crypto' | 'card'>('crypto')
+  const [uiTab, setUiTab]           = useState<'crypto' | 'card'>('card')
   const [stripeSubMode, setStripeSubMode] = useState<'magic' | 'wallet'>('magic')
   const [magicDeliveryAddress, setMagicDeliveryAddress] = useState<string | null>(null)
   const [magicVerifying, setMagicVerifying]             = useState(false)
@@ -527,11 +529,11 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
                 <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-malama-accent">Step 2</p>
                 <h2 className="flex flex-wrap items-center justify-center gap-2 text-4xl font-black text-white">
                   <CreditCard className="h-9 w-9 shrink-0 text-malama-accent" />
-                  Pay with crypto or card
+                  How would you like to pay?
                 </h2>
                 <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-400">
-                  Crypto: connect Base (MetaMask) and pay $2,000 USDC. Card: pay with Stripe, then open Launch App and
-                  sign in with Magic using the same email — your NFT mints to your embedded wallet on {BASE_CHAIN.name}.
+                  Most buyers pay by card — no crypto or wallet needed. We create a secure wallet for
+                  you and mint your node to it automatically. Prefer crypto? Connect Base and pay in USDC.
                 </p>
                 {hexId && (
                   <p className="mt-2 font-mono text-sm text-malama-accent/90">
@@ -540,8 +542,23 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
                 )}
               </div>
 
-              {/* ── Top toggle ── */}
+              {/* ── Top toggle — card first (welcomes non-crypto buyers) ── */}
               <div className="mx-auto mb-8 flex max-w-2xl flex-col justify-center gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => { setUiTab('card'); setPaymentMode('stripe') }}
+                  className={`relative inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-xs font-black uppercase tracking-wider transition-all ${
+                    uiTab === 'card'
+                      ? 'border-malama-accent bg-malama-accent/10 text-malama-accent shadow-[0_0_20px_rgba(196,240,97,0.15)]'
+                      : 'border-gray-800 bg-gray-900/80 text-gray-500 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="absolute -top-2 right-3 rounded-full bg-malama-accent px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-black">
+                    Easiest
+                  </span>
+                  <CreditCard className="h-4 w-4" />
+                  Pay by card
+                </button>
                 <button
                   type="button"
                   onClick={() => { setUiTab('crypto'); setPaymentMode('base') }}
@@ -551,19 +568,7 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
                       : 'border-gray-800 bg-gray-900/80 text-gray-500 hover:border-gray-600'
                   }`}
                 >
-                  Crypto wallet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setUiTab('card'); setPaymentMode('stripe') }}
-                  className={`inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-xs font-black uppercase tracking-wider transition-all ${
-                    uiTab === 'card'
-                      ? 'border-malama-accent bg-malama-accent/10 text-malama-accent shadow-[0_0_20px_rgba(196,240,97,0.15)]'
-                      : 'border-gray-800 bg-gray-900/80 text-gray-500 hover:border-gray-600'
-                  }`}
-                >
-                  <CreditCard className="h-4 w-4" />
-                  Card (Magic wallet)
+                  Pay with crypto
                 </button>
               </div>
 
