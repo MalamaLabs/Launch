@@ -50,7 +50,19 @@ function statusBadge(row: GenesisHexListItem): { label: string; className: strin
 
 type ScoreSort = 'none' | 'desc' | 'asc'
 
-export default function GenesisHexList({ className = '' }: { className?: string }) {
+export default function GenesisHexList({
+  className = '',
+  onSelect,
+  selectedHexId = null,
+}: {
+  className?: string
+  /** When provided, the "Reserve" action becomes an in-flow "Select" button
+   *  that calls this instead of navigating to /presale. Used by GenesisMint to
+   *  pick a hex inside the purchase flow (no page bounce). */
+  onSelect?: (hexId: string) => void
+  /** Highlights the currently selected row when driven by GenesisMint. */
+  selectedHexId?: string | null
+}) {
   const [data, setData] = useState<ApiResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -259,7 +271,9 @@ export default function GenesisHexList({ className = '' }: { className?: string 
                       key={row.hexId}
                       role="button"
                       tabIndex={0}
-                      className="cursor-pointer border-b border-gray-800/80 hover:bg-white/5"
+                      className={`cursor-pointer border-b border-gray-800/80 hover:bg-white/5 ${
+                        selectedHexId === row.hexId ? 'bg-malama-accent/10 ring-1 ring-inset ring-malama-accent/40' : ''
+                      }`}
                       onClick={() => openDetail(row)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -310,13 +324,23 @@ export default function GenesisHexList({ className = '' }: { className?: string 
                       </td>
                       <td className="p-3 text-right">
                         {row.status === 'available' ? (
-                          <Link
-                            href={`/presale?hex=${encodeURIComponent(row.hexId)}`}
-                            className="text-malama-accent hover:text-malama-accent-dim text-[11px] font-black uppercase"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Reserve
-                          </Link>
+                          onSelect ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); onSelect(row.hexId) }}
+                              className="text-malama-accent hover:text-malama-accent-dim text-[11px] font-black uppercase"
+                            >
+                              {selectedHexId === row.hexId ? 'Selected ✓' : 'Select'}
+                            </button>
+                          ) : (
+                            <Link
+                              href={`/presale?hex=${encodeURIComponent(row.hexId)}`}
+                              className="text-malama-accent hover:text-malama-accent-dim text-[11px] font-black uppercase"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Reserve
+                            </Link>
+                          )
                         ) : (
                           <span className="text-gray-600 text-[10px]">-</span>
                         )}
@@ -332,7 +356,7 @@ export default function GenesisHexList({ className = '' }: { className?: string 
               {sortedFiltered.map((row) => {
                 const badge = statusBadge(row)
                 return (
-                <li key={row.hexId} className="p-4 space-y-3">
+                <li key={row.hexId} className={`p-4 space-y-3 ${selectedHexId === row.hexId ? 'bg-malama-accent/10 ring-1 ring-inset ring-malama-accent/40' : ''}`}>
                   <button
                     type="button"
                     className="w-full space-y-2 text-left"
@@ -369,12 +393,22 @@ export default function GenesisHexList({ className = '' }: { className?: string 
                     </Link>
                   </div>
                   {row.status === 'available' && (
-                    <Link
-                      href={`/presale?hex=${encodeURIComponent(row.hexId)}`}
-                      className="block w-full py-2 text-center rounded-lg bg-malama-accent-dim text-white text-xs font-black uppercase"
-                    >
-                      Reserve
-                    </Link>
+                    onSelect ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelect(row.hexId)}
+                        className="block w-full py-2 text-center rounded-lg bg-malama-accent-dim text-white text-xs font-black uppercase"
+                      >
+                        {selectedHexId === row.hexId ? 'Selected ✓' : 'Select'}
+                      </button>
+                    ) : (
+                      <Link
+                        href={`/presale?hex=${encodeURIComponent(row.hexId)}`}
+                        className="block w-full py-2 text-center rounded-lg bg-malama-accent-dim text-white text-xs font-black uppercase"
+                      >
+                        Reserve
+                      </Link>
+                    )
                   )}
                 </li>
                 )

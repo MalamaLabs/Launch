@@ -39,6 +39,7 @@ import {
 } from '@/components/legal/PurchaseLegalAcknowledgement'
 import { useMagic } from '@/components/magic/MagicProvider'
 import { getRefCookie } from '@/components/ReferralCapture'
+import GenesisHexList from './GenesisHexList'
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
 const GENESIS_CONTRACT_FALLBACK = (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '0x2222222222222222222222222222222222222222') as `0x${string}`
@@ -74,8 +75,12 @@ function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
   )
 }
 
-export default function GenesisMint({ hexId }: { hexId: string | null }) {
-  const [step, setStep] = useState(1)
+export default function GenesisMint({ hexId: initialHexId }: { hexId: string | null }) {
+  // hexId is stateful so the buyer can pick / change it inside the flow (step 1
+  // inline picker) without bouncing to /explorer. Seeded from the ?hex= prop so
+  // deep links (e.g. the /list Reserve buttons) still jump straight to payment.
+  const [hexId, setHexId] = useState<string | null>(initialHexId)
+  const [step, setStep] = useState(initialHexId ? 2 : 1)
   const [loading, setLoading]       = useState(false)
   const [evmTxStatus, setEvmTxStatus] = useState<'' | 'claiming' | 'approving' | 'minting'>('')
   const [error, setError]           = useState('')
@@ -361,55 +366,40 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
-              <div className="mb-10 text-center">
+              <div className="mb-6 text-center">
                 <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-malama-accent">Step 1</p>
                 <h2 className="flex flex-wrap items-center justify-center gap-2 text-4xl font-black text-white">
                   <MapPin className="h-10 w-10 shrink-0 text-malama-accent" />
-                  Locate your HEX
+                  Pick your hex
                 </h2>
                 <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-400">
-                  Choose one of the 200 Genesis hex territories on the live map. You need a hex selected before you can pay with crypto or card.
+                  Choose one of the 200 Genesis territories. Filter by region, open a hex for detail, then select to continue — all without leaving this flow.
                 </p>
               </div>
 
-              <div className={`mx-auto grid max-w-xl gap-4 rounded-2xl border p-8 text-center transition-all ${hexId ? 'border-amber-500/40 bg-amber-500/10' : 'border-gray-800 bg-malama-deep'}`}>
-                <div className="flex justify-center">
-                  <div className={`flex h-16 w-16 items-center justify-center rounded-full ${hexId ? 'bg-amber-500/20' : 'bg-gray-800'}`}>
-                    <MapPin className={`h-8 w-8 ${hexId ? 'text-amber-400' : 'text-gray-500'}`} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Selected hex</h3>
-                  <p className={`mt-2 break-all font-mono text-sm ${hexId ? 'text-amber-400' : 'text-gray-500'}`}>
-                    {hexId ?? 'None yet — open the map to pick a territory'}
-                  </p>
-                </div>
-                <Link
-                  href="/explorer"
-                  className={`flex w-full items-center justify-center rounded-xl px-4 py-3 text-xs font-black transition-all ${
-                    hexId
-                      ? 'border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-                      : 'bg-amber-500 text-black shadow-lg hover:scale-[1.02]'
-                  }`}
-                >
-                  {hexId ? 'Change hex on explorer →' : 'Open explorer to choose hex →'}
-                </Link>
+              {/* Inline picker — reuses the live Genesis inventory list. Selecting a
+                  hex sets it and advances to payment; no bounce to /explorer. */}
+              <div className="h-[460px] overflow-hidden rounded-2xl border border-gray-800">
+                <GenesisHexList
+                  selectedHexId={hexId}
+                  onSelect={(id) => { setHexId(id); setError(''); setStep(2) }}
+                />
               </div>
 
-              <div className="flex flex-col items-center pt-4">
-                <button
-                  type="button"
-                  onClick={() => setStep(2)}
-                  disabled={!hexId}
-                  className={`w-full max-w-lg rounded-2xl py-5 text-xl font-black shadow-xl transition-all ${
-                    hexId
-                      ? 'bg-malama-accent text-black shadow-malama-accent/30 hover:scale-[1.02]'
-                      : 'cursor-not-allowed bg-gray-800 text-gray-600 opacity-50'
-                  }`}
-                >
-                  Continue
-                </button>
-              </div>
+              {hexId && (
+                <div className="flex flex-col items-center gap-3 pt-2">
+                  <p className="font-mono text-sm text-malama-accent/90">
+                    Selected: <span className="text-malama-accent">{hexId}</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="w-full max-w-lg rounded-2xl bg-malama-accent py-5 text-xl font-black text-black shadow-xl shadow-malama-accent/30 transition-all hover:scale-[1.02]"
+                  >
+                    Continue to payment →
+                  </button>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -646,7 +636,7 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   onClick={() => setStep(1)}
                   className="text-sm font-bold text-gray-500 hover:text-gray-300"
                 >
-                  ← Back to locate HEX
+                  ← Back to hex picker
                 </button>
                 <button
                   type="button"
@@ -708,9 +698,13 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                     ← Back to payment
                   </button>
                   <span className="text-gray-700">·</span>
-                  <Link href="/explorer" className="text-sm font-bold text-amber-400/80 hover:text-amber-400">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="text-sm font-bold text-amber-400/80 hover:text-amber-400"
+                  >
                     Choose a different hex →
-                  </Link>
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -722,12 +716,13 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                 <div className="space-y-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
                   <p className="text-red-400">{error}</p>
                   {/^.*(taken|sold|already|unavailable|reserved).*/i.test(error) && (
-                    <Link
-                      href="/explorer"
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-sm font-black text-amber-300 transition hover:bg-amber-500/25"
                     >
-                      <MapPin className="h-4 w-4" /> This hex is unavailable — pick another on the map →
-                    </Link>
+                      <MapPin className="h-4 w-4" /> This hex is unavailable — pick another →
+                    </button>
                   )}
                 </div>
               )}
@@ -755,9 +750,14 @@ export default function GenesisMint({ hexId }: { hexId: string | null }) {
                   ← Back to review
                 </button>
                 <span className="text-gray-700">·</span>
-                <Link href="/explorer" className="text-sm font-bold text-amber-400/80 hover:text-amber-400">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={loading}
+                  className="text-sm font-bold text-amber-400/80 hover:text-amber-400 disabled:opacity-40"
+                >
                   Choose a different hex →
-                </Link>
+                </button>
               </div>
             </motion.div>
           )}
