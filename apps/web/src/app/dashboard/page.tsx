@@ -521,7 +521,7 @@ export default function Dashboard() {
                     <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
                       <div className="flex items-start gap-4">
                         <img src={nftImageUrl({ hexId: lic.id, chain: lic.chain })} alt={lic.id}
-                          className="h-20 w-14 shrink-0 rounded-lg border border-malama-accent/20 object-cover" />
+                          className="w-14 aspect-[2/3] shrink-0 rounded-lg border border-malama-accent/20 object-cover" />
                         <div>
                           <span className={`rounded px-2 py-1 text-[10px] font-bold ${lic.chain === 'cardano' ? 'bg-malama-accent/20 text-malama-accent' : 'bg-blue-500/20 text-blue-400'}`}>
                             {lic.chain === 'cardano' ? 'CARDANO · CIP-68' : 'BASE · ERC-721'} · GENESIS

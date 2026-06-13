@@ -193,7 +193,7 @@ export function HexPanel({ hex, links, onReserveClick, onClose }: HexPanelProps)
           border: '1px solid #1e1e1e',
           marginBottom: 12,
           background: '#060e1a',
-          aspectRatio: '1 / 1',
+          aspectRatio: '2 / 3',
           lineHeight: 0,
         }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}

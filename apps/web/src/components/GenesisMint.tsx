@@ -65,7 +65,7 @@ interface SuccessData {
 
 function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
   return (
-    <div className="relative w-56 h-80 mx-auto rounded-2xl overflow-hidden border border-malama-accent/30 shadow-[0_0_40px_rgba(196,240,97,0.2)]">
+    <div className="relative w-56 aspect-[2/3] mx-auto rounded-2xl overflow-hidden border border-malama-accent/30 shadow-[0_0_40px_rgba(196,240,97,0.2)]">
       <img src={data.nftImageUrl} alt={`NFT ${data.claimId}`} className="w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
       <div className="absolute bottom-3 left-3 right-3">
@@ -858,7 +858,7 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
                   <img
                     src={nftImageUrl({ hexId, chain: 'base' })}
                     alt={`Hex ${hexId}`}
-                    className="w-28 h-40 rounded-xl object-cover border border-malama-accent/20 shadow-[0_0_24px_rgba(196,240,97,0.15)] mx-auto"
+                    className="w-28 aspect-[2/3] rounded-xl object-cover border border-malama-accent/20 shadow-[0_0_24px_rgba(196,240,97,0.15)] mx-auto"
                   />
                 </div>
               )}

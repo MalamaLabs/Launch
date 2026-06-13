@@ -37,7 +37,7 @@ function NftCard({ detail }: { detail: HexDetail }) {
   const imgSrc  = nftImageUrl({ hexId: detail.hexId, tokenId: tokenId ?? undefined, chain, claimId: claimId ?? undefined })
 
   return (
-    <div className="relative w-44 h-64 mx-auto rounded-2xl overflow-hidden border border-malama-accent/30 shadow-[0_0_40px_rgba(196,240,97,0.18)]">
+    <div className="relative w-44 aspect-[2/3] mx-auto rounded-2xl overflow-hidden border border-malama-accent/30 shadow-[0_0_40px_rgba(196,240,97,0.18)]">
       <img src={imgSrc} alt={`NFT ${detail.hexId}`} className="w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
       <div className="absolute bottom-3 left-3 right-3">
