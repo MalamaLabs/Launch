@@ -52,6 +52,12 @@ interface HexMapProps {
    * hexes are non-interactive and never fire this callback.
    */
   onHexClick?: (event: HexClickEvent) => void;
+  /**
+   * H3 index of the currently selected hex. When set, that cell gets a bold
+   * accent outline so an external selection (e.g. the reserve picker's list)
+   * is reflected on the map. Optional — omit for no highlight.
+   */
+  selectedHexId?: string | null;
 }
 
 /**
@@ -84,7 +90,7 @@ const ALL_PHASE1_STATUSES: HexStatus[] = [
 ];
 
 export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
-  { accessToken, manifest, landCells, onHexClick }: HexMapProps,
+  { accessToken, manifest, landCells, onHexClick, selectedHexId }: HexMapProps,
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -101,6 +107,18 @@ export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
   const [currentResolution, setCurrentResolution] = useState<number>(
     resolutionForZoom(MAP_DEFAULTS.initialZoom),
   );
+
+  // Reflect the externally-selected hex as a bold outline on the map.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      if (!map.getLayer('phase1-hexes-selected')) return;
+      map.setFilter('phase1-hexes-selected', ['==', ['get', 'h3Index'], selectedHexId ?? '']);
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once('load', apply);
+  }, [selectedHexId]);
 
   // -------- Initialize map ------------------------------------------------
   useEffect(() => {
@@ -357,6 +375,20 @@ export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
               HEX_STATE_STYLES.activated.borderWidth,
               0,
             ],
+          },
+        });
+
+        // Selected-hex highlight — a bold accent outline driven by the
+        // optional selectedHexId prop. Starts matching nothing; the effect
+        // below swaps the filter when the selection changes.
+        m.addLayer({
+          id: 'phase1-hexes-selected',
+          type: 'line',
+          source: PHASE1_SOURCE,
+          filter: ['==', ['get', 'h3Index'], selectedHexId ?? ''],
+          paint: {
+            'line-color': '#c4f061',
+            'line-width': 3,
           },
         });
 
