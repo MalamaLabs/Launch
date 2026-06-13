@@ -127,8 +127,10 @@ function OrderSummary({ hexId, paymentMode }: { hexId: string | null; paymentMod
       {hexId ? (
         <>
           <div className="mb-3 overflow-hidden rounded-2xl border border-malama-accent/20 bg-malama-deep">
+            {/* Natural ratio — no object-cover crop, so the image's own top
+                margin (MĀLAMA LABS header + BASE L2 badge) isn't clipped. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={nftImageUrl({ hexId, chain: 'base' })} alt={`Hex ${hexId}`} className="aspect-[3/4] w-full object-cover" />
+            <img src={nftImageUrl({ hexId, chain: 'base' })} alt={`Hex ${hexId}`} className="block h-auto w-full" />
           </div>
           <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">Hex Node License</p>
           <p className="text-lg font-black text-white">{claimId}</p>
