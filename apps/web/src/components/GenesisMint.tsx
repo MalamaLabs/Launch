@@ -76,6 +76,99 @@ function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
   )
 }
 
+// ── Reserve-flow shell pieces ──────────────────────────────────────────────
+// A single fixed shell: a labeled progress stepper on top, the swapping step
+// card on the left, and a persistent order summary that stays put (sticky on
+// desktop, a collapsible bar on mobile). Only the step card changes between
+// steps, so the flow reads as one linear screen with no page jumps.
+
+const STEP_LABELS = ['Pick hex', 'Pay how', 'Review', 'Confirm', 'Done']
+
+function Stepper({ step }: { step: number }) {
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto border-b border-gray-800 bg-gray-900/50 px-4 py-3 sm:px-8">
+      {STEP_LABELS.map((label, i) => {
+        const n = i + 1
+        const done = n < step
+        const active = n === step
+        return (
+          <React.Fragment key={label}>
+            <div className={`flex shrink-0 items-center gap-2 ${active ? 'text-white' : done ? 'text-malama-accent' : 'text-gray-600'}`}>
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full border font-mono text-[11px] ${
+                active ? 'border-malama-accent bg-malama-accent/15 text-malama-accent'
+                : done ? 'border-malama-accent bg-malama-accent text-black'
+                : 'border-gray-700 text-gray-500'
+              }`}>
+                {done ? '✓' : n}
+              </span>
+              <span className="hidden font-mono text-[11px] uppercase tracking-wider sm:inline">{label}</span>
+            </div>
+            {n < STEP_LABELS.length && (
+              <div className={`h-px min-w-[10px] flex-1 ${n < step ? 'bg-malama-accent' : 'bg-gray-700'}`} />
+            )}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
+function claimIdFor(hexId: string | null): string | null {
+  if (!hexId) return null
+  const editionNumber = getGenesisPoolSlot(hexId, regionsData) ?? 0
+  return `G200-${String(editionNumber).padStart(3, '0')}`
+}
+
+function OrderSummary({ hexId, paymentMode }: { hexId: string | null; paymentMode: PaymentLane }) {
+  const claimId = claimIdFor(hexId)
+  return (
+    <div>
+      <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Your order</p>
+      {hexId ? (
+        <>
+          <div className="mb-3 overflow-hidden rounded-2xl border border-malama-accent/20 bg-malama-deep">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={nftImageUrl({ hexId, chain: 'base' })} alt={`Hex ${hexId}`} className="aspect-[3/4] w-full object-cover" />
+          </div>
+          <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">Hex Node License</p>
+          <p className="text-lg font-black text-white">{claimId}</p>
+          <p className="mt-0.5 break-all font-mono text-[11px] text-gray-500">{hexId}</p>
+        </>
+      ) : (
+        <div className="mb-3 rounded-2xl border border-dashed border-gray-700 bg-malama-deep/50 px-4 py-10 text-center font-mono text-[12px] leading-relaxed text-gray-600">
+          No hex selected yet.<br />Pick one to begin.
+        </div>
+      )}
+      <div className="mt-4 space-y-2 border-t border-gray-800 pt-4 text-sm">
+        <div className="flex justify-between"><span className="text-gray-500">Entry</span><span className="font-bold text-white">$2,000 {paymentMode === 'stripe' ? 'USD' : 'USDC'}</span></div>
+        <div className="flex justify-between"><span className="text-gray-500">MLMA / node</span><span className="font-mono text-gray-300">125,000</span></div>
+        <div className="flex justify-between"><span className="text-gray-500">Payment</span><span className="text-gray-300">{paymentMode === 'stripe' ? 'Card' : 'Crypto'}</span></div>
+      </div>
+      <p className="mt-3 text-[10px] text-gray-600">Genesis · 200 nodes · one mint per hex.</p>
+    </div>
+  )
+}
+
+function OrderSummaryBar({
+  hexId, paymentMode, open, onToggle,
+}: { hexId: string | null; paymentMode: PaymentLane; open: boolean; onToggle: () => void }) {
+  const claimId = claimIdFor(hexId)
+  return (
+    <div className="border-b border-gray-800 bg-malama-deep/60 md:hidden">
+      <button type="button" onClick={onToggle} className="flex w-full items-center justify-between px-4 py-3 text-left">
+        <span className="font-mono text-[11px] uppercase tracking-wider text-gray-400">
+          {hexId ? <>Hex <span className="text-malama-accent">{claimId}</span></> : 'No hex selected'}
+        </span>
+        <span className="flex items-center gap-2 text-sm font-bold text-white">
+          $2,000
+          <span className={`text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
+        </span>
+      </button>
+      {open && <div className="px-4 pb-4"><OrderSummary hexId={hexId} paymentMode={paymentMode} /></div>}
+    </div>
+  )
+}
+
 export default function GenesisMint({ hexId: initialHexId }: { hexId: string | null }) {
   // hexId is stateful so the buyer can pick / change it inside the flow (step 1
   // inline picker) without bouncing to /explorer. Seeded from the ?hex= prop so
@@ -83,6 +176,7 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   const [hexId, setHexId] = useState<string | null>(initialHexId)
   const [step, setStep] = useState(initialHexId ? 2 : 1)
   const [pickerView, setPickerView] = useState<'map' | 'list'>('map')
+  const [summaryOpen, setSummaryOpen] = useState(false)
   const [loading, setLoading]       = useState(false)
   const [evmTxStatus, setEvmTxStatus] = useState<'' | 'claiming' | 'approving' | 'minting'>('')
   const [error, setError]           = useState('')
@@ -357,14 +451,13 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto bg-malama-card border border-gray-800 rounded-3xl shadow-2xl overflow-hidden my-12">
-      <div className="flex border-b border-gray-800 bg-gray-900/50">
-        {[1, 2, 3, 4, 5].map((s) => (
-          <div key={s} className={`flex-1 h-2 transition-colors duration-300 ${s <= step ? 'bg-malama-accent' : 'bg-transparent'}`} />
-        ))}
-      </div>
+    <div className="w-full max-w-5xl mx-auto bg-malama-card border border-gray-800 rounded-3xl shadow-2xl overflow-hidden my-12">
+      <Stepper step={step} />
+      <OrderSummaryBar hexId={hexId} paymentMode={paymentMode} open={summaryOpen} onToggle={() => setSummaryOpen((o) => !o)} />
 
-      <div className="p-8 md:p-12 min-h-[500px] relative flex flex-col justify-center text-left">
+      <div className="grid md:grid-cols-[1fr_320px]">
+        {/* Left: the swapping step card */}
+        <div className="relative flex min-h-[520px] flex-col justify-center p-6 text-left md:p-10">
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
@@ -853,6 +946,14 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
+
+        {/* Right: persistent order summary (sticky on desktop) */}
+        <aside className="hidden border-l border-gray-800 bg-malama-deep/60 p-6 md:block">
+          <div className="sticky top-24">
+            <OrderSummary hexId={hexId} paymentMode={paymentMode} />
+          </div>
+        </aside>
       </div>
     </div>
   )

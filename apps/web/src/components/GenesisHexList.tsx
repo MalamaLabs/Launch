@@ -159,6 +159,17 @@ export default function GenesisHexList({
     }
   }, [])
 
+  // In-flow (onSelect provided): a row activation selects the hex inline and
+  // never opens the detail drawer, so the reserve flow stays on one screen.
+  // Standalone (/list): activation opens the slide-in detail drawer as before.
+  const rowAction = useCallback((r: GenesisHexListItem) => {
+    if (onSelect) {
+      if (r.status === 'available') onSelect(r.hexId)
+      return
+    }
+    void openDetail(r)
+  }, [onSelect, openDetail])
+
   useEffect(() => {
     if (!detailOpen) return
     const prev = document.body.style.overflow
@@ -274,11 +285,11 @@ export default function GenesisHexList({
                       className={`cursor-pointer border-b border-gray-800/80 hover:bg-white/5 ${
                         selectedHexId === row.hexId ? 'bg-malama-accent/10 ring-1 ring-inset ring-malama-accent/40' : ''
                       }`}
-                      onClick={() => openDetail(row)}
+                      onClick={() => rowAction(row)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          openDetail(row)
+                          rowAction(row)
                         }
                       }}
                     >
@@ -307,7 +318,7 @@ export default function GenesisHexList({
                             className="inline-flex items-center gap-1 text-[11px] font-black uppercase text-malama-teal hover:underline"
                             onClick={(e) => {
                               e.stopPropagation()
-                              openDetail(row)
+                              rowAction(row)
                             }}
                           >
                             <PanelRight className="h-3.5 w-3.5" />
@@ -360,7 +371,7 @@ export default function GenesisHexList({
                   <button
                     type="button"
                     className="w-full space-y-2 text-left"
-                    onClick={() => openDetail(row)}
+                    onClick={() => rowAction(row)}
                   >
                     <div className="flex justify-between gap-2">
                       <span className="font-mono text-[10px] text-gray-400 break-all">{row.hexId}</span>
@@ -381,7 +392,7 @@ export default function GenesisHexList({
                     <button
                       type="button"
                       className="flex-1 rounded-lg border border-gray-700 py-2 text-xs font-black uppercase text-malama-teal"
-                      onClick={() => openDetail(row)}
+                      onClick={() => rowAction(row)}
                     >
                       Details
                     </button>
@@ -426,16 +437,18 @@ export default function GenesisHexList({
         Illustrative listing prices; Genesis entry is $2,000 USDC per operator terms.
       </div>
 
-      <GenesisHexDetail
-        item={detailItem}
-        claim={detailClaim}
-        open={detailOpen}
-        onClose={() => {
-          setDetailOpen(false)
-          setDetailItem(null)
-          setDetailClaim(null)
-        }}
-      />
+      {!onSelect && (
+        <GenesisHexDetail
+          item={detailItem}
+          claim={detailClaim}
+          open={detailOpen}
+          onClose={() => {
+            setDetailOpen(false)
+            setDetailItem(null)
+            setDetailClaim(null)
+          }}
+        />
+      )}
     </section>
   )
 }
