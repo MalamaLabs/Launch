@@ -40,6 +40,7 @@ import {
 import { useMagic } from '@/components/magic/MagicProvider'
 import { getRefCookie } from '@/components/ReferralCapture'
 import GenesisHexList from './GenesisHexList'
+import HexPickerMap from './HexPickerMap'
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
 const GENESIS_CONTRACT_FALLBACK = (process.env.NEXT_PUBLIC_GENESIS_CONTRACT_ADDRESS ?? '0x2222222222222222222222222222222222222222') as `0x${string}`
@@ -81,6 +82,7 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   // deep links (e.g. the /list Reserve buttons) still jump straight to payment.
   const [hexId, setHexId] = useState<string | null>(initialHexId)
   const [step, setStep] = useState(initialHexId ? 2 : 1)
+  const [pickerView, setPickerView] = useState<'map' | 'list'>('map')
   const [loading, setLoading]       = useState(false)
   const [evmTxStatus, setEvmTxStatus] = useState<'' | 'claiming' | 'approving' | 'minting'>('')
   const [error, setError]           = useState('')
@@ -377,13 +379,36 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
                 </p>
               </div>
 
-              {/* Inline picker — reuses the live Genesis inventory list. Selecting a
-                  hex sets it and advances to payment; no bounce to /explorer. */}
+              {/* Inline picker — map or list, both in-flow (no /explorer bounce).
+                  Selecting sets the hex; the Continue button below advances. */}
+              <div className="mb-3 flex justify-center">
+                <div className="inline-flex overflow-hidden rounded-lg border border-gray-800">
+                  {(['map', 'list'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setPickerView(v)}
+                      className={`px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                        pickerView === v ? 'bg-malama-accent text-black' : 'bg-gray-900/60 text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      {v === 'map' ? '⬡ Map' : '≡ List'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="h-[460px] overflow-hidden rounded-2xl border border-gray-800">
-                <GenesisHexList
-                  selectedHexId={hexId}
-                  onSelect={(id) => { setHexId(id); setError(''); setStep(2) }}
-                />
+                {pickerView === 'map' ? (
+                  <HexPickerMap
+                    selectedHexId={hexId}
+                    onSelect={(id) => { setHexId(id); setError('') }}
+                  />
+                ) : (
+                  <GenesisHexList
+                    selectedHexId={hexId}
+                    onSelect={(id) => { setHexId(id); setError('') }}
+                  />
+                )}
               </div>
 
               {hexId && (
