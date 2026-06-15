@@ -30,7 +30,7 @@ const SENSORS_LINKS = [
 // Secondary items live in the mobile hamburger menu + the footer.
 const primaryNavLinks: NavItem[] = [
   { label: 'Sensors',        active: (p) => p.startsWith('/sensors'), children: SENSORS_LINKS },
-  { href: '/presale',        label: 'Reserve',     active: (p) => p.startsWith('/presale') },
+  { href: '/presale#reserve', label: 'Reserve',    active: (p) => p.startsWith('/presale') },
   { href: '/explorer',       label: 'Explore',     active: (p) => p === '/explorer' || p.startsWith('/explorer/') },
   { href: '/docs',           label: 'Docs',        active: (p) => p.startsWith('/docs') || p === '/whitepaper' },
   { href: '/data-solutions', label: 'Data Buyers', active: (p) => p.startsWith('/data-solutions') },

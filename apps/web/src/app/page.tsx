@@ -121,7 +121,7 @@ export default function Home() {
             className="mb-6 flex w-full flex-col justify-center gap-4 sm:flex-row"
           >
             <Link
-              href="/presale"
+              href="/presale#reserve"
               className="btn-primary inline-flex items-center justify-center gap-2 px-7 py-4 font-mono text-xs font-semibold uppercase tracking-[0.1em] text-malama-bg shadow-[0_8px_24px_rgba(196,240,97,0.2)] transition hover:-translate-y-0.5"
             >
               Reserve a Hex Node →
@@ -828,7 +828,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
               <Link
-                href="/presale"
+                href="/presale#reserve"
                 className="btn-primary inline-flex items-center justify-center gap-2 px-7 py-4 font-mono text-xs font-semibold uppercase tracking-[0.1em] text-malama-bg shadow-[0_8px_24px_rgba(196,240,97,0.2)] transition hover:-translate-y-0.5"
               >
                 Reserve a Hex Node →

@@ -71,7 +71,7 @@ export default async function PresalePage({
           ))}
         </div>
 
-        <div className="w-full mt-4">
+        <div id="reserve" className="w-full mt-4 scroll-mt-24">
           <GenesisMint hexId={resolvedHexId} />
         </div>
       </div>
