@@ -18,6 +18,7 @@ import { useSearchParams } from 'next/navigation';
 import { latLngToCell } from 'h3-js';
 
 import { HexPanel } from '@/explorer/components/HexPanel';
+import { EarlyInvestorPanel } from '@/explorer/components/EarlyInvestorPanel';
 import { REGION_DESTINATIONS, type HexStatus } from '@/explorer/components/hex-map.constants';
 import { API_BASE, listEarlyInvestorPlots } from '@/lib/api';
 import { loadGenesisManifest } from '@/lib/genesis-manifest';
@@ -51,6 +52,7 @@ function ExplorerPageInner() {
   const hexParam = searchParams.get('hex');
 
   const [selected, setSelected] = useState<Phase1Hex | null>(null);
+  const [selectedPlot, setSelectedPlot] = useState<EarlyInvestorPlotPin | null>(null);
   const [activeRegion, setActiveRegion] = useState<string>(REGION_DESTINATIONS[0].name);
   const [manifest, setManifest] = useState<Phase1Manifest | null>(null);
   const [plots, setPlots] = useState<EarlyInvestorPlotPin[]>([]);
@@ -207,9 +209,9 @@ function ExplorerPageInner() {
                 accessToken={token}
                 manifest={enrichedManifest}
                 landCells={{} as { r1?: LandCellSet; r3?: LandCellSet; r5?: LandCellSet }}
-                onHexClick={({ hex }) => setSelected(hex)}
+                onHexClick={({ hex }) => { setSelectedPlot(null); setSelected(hex); }}
                 earlyInvestorPlots={plots}
-                onPlotClick={({ plot }) => { window.location.href = `/presale?hex=${plot.plotId}`; }}
+                onPlotClick={({ plot }) => { setSelected(null); setSelectedPlot(plot); }}
               />
               <RegionJumpBar activeRegion={activeRegion} onSelect={handleRegionClick} />
             </div>
@@ -220,6 +222,15 @@ function ExplorerPageInner() {
                   links={hexLinks}
                   onReserveClick={(hex) => { window.location.href = `/presale?hex=${hex.h3Index}`; }}
                   onClose={() => setSelected(null)}
+                />
+              </div>
+            )}
+            {selectedPlot && (
+              <div style={{ flexShrink: 0, padding: 16, overflowY: 'auto' }}>
+                <EarlyInvestorPanel
+                  plot={selectedPlot}
+                  onReserveClick={(plot) => { window.location.href = `/presale?hex=${plot.plotId}`; }}
+                  onClose={() => setSelectedPlot(null)}
                 />
               </div>
             )}

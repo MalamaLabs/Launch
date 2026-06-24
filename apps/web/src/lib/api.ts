@@ -734,6 +734,11 @@ export async function listEarlyInvestorPlots(): Promise<{ ok: true; count: numbe
   return apiFetch('/early-investor/plots')
 }
 
+/** SVG artwork for an Early Investor plot (purple "Early Investor Plot" card). */
+export function earlyInvestorImageUrl(plotId: string): string {
+  return `${API_BASE}/early-investor/nft-image?plotId=${encodeURIComponent(plotId)}`
+}
+
 /** On-chain + Mongo counts for the Early Investor sale. */
 export async function getEarlyInvestorSaleState(): Promise<{
   ok: true

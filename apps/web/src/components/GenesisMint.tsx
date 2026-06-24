@@ -207,11 +207,11 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   // inline picker) without bouncing to /explorer. Seeded from the ?hex= prop so
   // deep links (e.g. the /list Reserve buttons) still jump straight to payment.
   const [hexId, setHexId] = useState<string | null>(initialHexId)
-  // Genesis deep-links (e.g. /list Reserve) jump straight to payment. Early
-  // Investor plots instead land on step 1 so the buyer sees the plot preview
-  // card + Continue before paying (clicking a plot on the map shouldn't teleport
-  // them past the review).
-  const [step, setStep] = useState(initialHexId && !isPlotId(initialHexId) ? 2 : 1)
+  // One consistent flow for every entry point (map click, /list Reserve, deep
+  // link, plot or Genesis hex): always land on step 1 so the buyer sees their
+  // selected hex + the preview/order card before Continue → payment. The
+  // selection is preserved from ?hex=, so a deep link just pre-fills step 1.
+  const [step, setStep] = useState(1)
   const [pickerView, setPickerView] = useState<'map' | 'list'>('map')
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [loading, setLoading]       = useState(false)
