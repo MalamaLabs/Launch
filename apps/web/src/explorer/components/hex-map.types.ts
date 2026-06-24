@@ -74,7 +74,7 @@ export interface HexClickEvent {
 export interface EarlyInvestorPlotPin {
   plotId: string;
   name: string;
-  plotNumber?: number; // stable sale number shown as #NNN
+  hexNumber?: number; // on-chain token id once minted, else sale-order rank
   lat: number;
   lng: number;
   h3Index?: string | null;

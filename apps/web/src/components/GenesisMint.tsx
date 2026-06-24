@@ -260,7 +260,7 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
         if (cancelled) return
         const map: Record<string, string> = {}
         for (const p of res.plots ?? []) {
-          const num = p.plotNumber != null ? ` #${String(p.plotNumber).padStart(3, '0')}` : ''
+          const num = p.hexNumber != null ? ` #${String(p.hexNumber).padStart(3, '0')}` : ''
           map[p.plotId] = `${cityState(p.name)}${num}`
         }
         setPlotNames(map)

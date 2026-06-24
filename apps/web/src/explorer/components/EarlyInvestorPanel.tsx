@@ -66,9 +66,9 @@ export function EarlyInvestorPanel({ plot, onReserveClick, onClose }: Props) {
           <h2 style={{ fontFamily: 'var(--font-serif, "Fraunces", serif)', fontSize: 24, fontWeight: 400, margin: 0 }}>
             {cityState(plot.name)}
           </h2>
-          {plot.plotNumber != null && (
+          {plot.hexNumber != null && (
             <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: VIOLET_LIGHT }}>
-              #{String(plot.plotNumber).padStart(3, '0')}
+              #{String(plot.hexNumber).padStart(3, '0')}
             </span>
           )}
         </div>

@@ -125,7 +125,7 @@ export default async function GenesisHexDetailPage({ params }: Props) {
 // ── Early Investor plot detail ─────────────────────────────────────────────
 type PlotDetail = HexDetail & {
   name?: string
-  plotNumber?: number
+  hexNumber?: number
   region?: string
   lat?: number
   lng?: number
@@ -135,7 +135,9 @@ type PlotDetail = HexDetail & {
 function EarlyInvestorPlotPage({ hexId, detail }: { hexId: string; detail: HexDetail }) {
   const p = detail as PlotDetail
   const name = cityState(p.name || hexId) || hexId
-  const numLabel = p.plotNumber != null ? `#${String(p.plotNumber).padStart(3, '0')}` : null
+  // Hex number = the actual on-chain token id.
+  const hexNum = p.baseTokenId ?? p.hexNumber ?? null
+  const numLabel = hexNum != null ? `#${String(hexNum).padStart(3, '0')}` : null
   const sold = p.status === 'sold' || p.status === 'bound' || Boolean(p.baseTokenId)
   const coords =
     typeof p.lat === 'number' && typeof p.lng === 'number'
