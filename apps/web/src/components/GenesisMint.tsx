@@ -27,6 +27,7 @@ import {
   createStripeCheckout,
   nftImageUrl,
   listEarlyInvestorPlots,
+  earlyInvestorImageUrl,
 } from '@/lib/api'
 
 // An Early Investor plot id is a slug (e.g. "hawaii-pahoa-ole-ole"), not an H3
@@ -73,24 +74,13 @@ interface SuccessData {
   dagwelldevExplorerUrl?: string;
 }
 
-function PlotArtwork({ label }: { label: string | null }) {
-  // Self-contained purple placeholder — no call to the Genesis hex image
-  // renderer (which can't draw a plot slug). Matches the map's EI violet.
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-[#a855f7]/30 to-[#6b21a8]/40 text-center">
-      <MapPin className="h-10 w-10 text-[#c084fc]" aria-hidden />
-      <span className="px-3 font-mono text-[11px] uppercase tracking-wider text-[#e9d5ff]">Early Investor Plot</span>
-      {label && <span className="px-3 text-xs text-white/80">{label}</span>}
-    </div>
-  )
-}
-
 function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
+  // Plots render the purple Early Investor card from the backend; hexes use the
+  // minted token's image URL captured at success.
+  const imgSrc = isPlotId(hexId) ? earlyInvestorImageUrl(hexId!) : data.nftImageUrl
   return (
     <div className="relative w-56 aspect-[2/3] mx-auto rounded-2xl overflow-hidden border border-malama-accent/30 shadow-[0_0_40px_rgba(196,240,97,0.2)]">
-      {isPlotId(hexId)
-        ? <PlotArtwork label={data.claimId} />
-        : <img src={data.nftImageUrl} alt={`NFT ${data.claimId}`} className="w-full h-full object-cover" />}
+      <img src={imgSrc} alt={`NFT ${data.claimId}`} className="w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
       <div className="absolute bottom-3 left-3 right-3">
         <p className="text-malama-accent font-black text-2xl">{data.claimId}</p>
@@ -153,14 +143,15 @@ function OrderSummary({ hexId, paymentMode, plotName }: { hexId: string | null; 
       {hexId ? (
         <>
           <div className="mb-3 overflow-hidden rounded-2xl border border-malama-accent/20 bg-malama-deep">
-            {isPlot ? (
-              <div className="aspect-[3/4] w-full"><PlotArtwork label={plotName ?? null} /></div>
-            ) : (
-              /* Natural ratio — no object-cover crop, so the image's own top
-                 margin (MĀLAMA LABS header + BASE L2 badge) isn't clipped. */
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={nftImageUrl({ hexId, chain: 'base' })} alt={`Hex ${hexId}`} className="block h-auto w-full" />
-            )}
+            {/* Natural ratio — no object-cover crop, so the card's own top
+                margin (MĀLAMA LABS header + chain badge) isn't clipped. Plots
+                render the purple Early Investor card; hexes the Genesis card. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={isPlot ? earlyInvestorImageUrl(hexId!) : nftImageUrl({ hexId, chain: 'base' })}
+              alt={isPlot ? `Early Investor Plot ${hexId}` : `Hex ${hexId}`}
+              className="block h-auto w-full"
+            />
           </div>
           <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">{isPlot ? 'Early Investor Plot' : 'Hex Node License'}</p>
           <p className="text-lg font-black text-white">{claimId}</p>
