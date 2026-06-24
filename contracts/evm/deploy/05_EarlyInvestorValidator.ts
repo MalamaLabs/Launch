@@ -1,6 +1,10 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
 import { DeployFunction } from 'hardhat-deploy/types'
-import { ethers } from 'ethers'
+
+// Role ids as constants so this works under both ethers v5 and v6 (v5 has no
+// top-level ethers.id). MINTER_ROLE = keccak256("MINTER_ROLE").
+const MINTER_ROLE = '0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6'
+const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
 /**
  * Deploy the EarlyInvestorValidator ERC-721 (bespoke investor plots).
@@ -88,18 +92,14 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     waitConfirmations: network.name === 'baseSepolia' ? 2 : 5,
   })
 
-  if (!result.newlyDeployed) {
-    console.log(`\nℹ️  EarlyInvestorValidator already deployed at ${result.address} — skipped`)
-    return
-  }
+  console.log(
+    result.newlyDeployed
+      ? `\n✅ EarlyInvestorValidator deployed: ${result.address}`
+      : `\nℹ️  EarlyInvestorValidator already at ${result.address} — re-checking role wiring`,
+  )
 
-  console.log(`\n✅ EarlyInvestorValidator deployed: ${result.address}`)
-
-  // ── Role wiring ────────────────────────────────────────────────────────────
-  const MINTER_ROLE = ethers.id('MINTER_ROLE')
-  const DEFAULT_ADMIN_ROLE =
-    '0x0000000000000000000000000000000000000000000000000000000000000000'
-
+  // ── Role wiring (idempotent — runs whether or not we just deployed, so a
+  //    re-run can finish/repair the grants on an existing contract) ───────────
   const operator = (process.env.EARLY_INVESTOR_OPERATOR_ADDRESS || '').trim() || deployer
   const adminSafe = (process.env.EARLY_INVESTOR_ADMIN_ADDRESS || treasury).trim()
 
