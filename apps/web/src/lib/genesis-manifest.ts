@@ -198,6 +198,7 @@ function buildManifestFromApi(fc: {
       'reserved-founding': 'Held by the Mālama Labs founding team',
       'reserved-user': 'Your Genesis Hex',
       activated: 'Hardware booted and signing on-chain',
+      'early-investor': 'Bespoke Early Investor plot',
       'future-phase': 'Land cell not yet in any Phase',
       restricted: 'Sales prohibited in this jurisdiction',
     },

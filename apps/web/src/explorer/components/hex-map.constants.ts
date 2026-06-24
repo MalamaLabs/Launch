@@ -15,6 +15,7 @@ export type HexStatus =
   | 'reserved-founding'
   | 'reserved-user'    // logged-in user's own hexes (yellow)
   | 'activated'
+  | 'early-investor'   // bespoke Early Investor plots (separate EI contract)
   | 'future-phase'
   | 'restricted';
 
@@ -77,6 +78,14 @@ export const HEX_STATE_STYLES: Record<HexStatus, HexStateStyle> = {
     borderWidth: 1,
     interactive: true,
     label: 'Activated',
+  },
+  'early-investor': {
+    fillColor: '#a855f7', // violet-500 — bespoke Early Investor plots
+    fillOpacity: 0.45,
+    borderColor: '#c084fc', // violet-400
+    borderWidth: 2,
+    interactive: true,
+    label: 'Early Investor plot',
   },
   'future-phase': {
     fillColor: '#3a3a3a', // muted grey

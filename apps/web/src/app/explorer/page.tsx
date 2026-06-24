@@ -15,16 +15,21 @@ import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 
+import { latLngToCell } from 'h3-js';
+
 import { HexPanel } from '@/explorer/components/HexPanel';
 import { REGION_DESTINATIONS, type HexStatus } from '@/explorer/components/hex-map.constants';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, listEarlyInvestorPlots } from '@/lib/api';
 import { loadGenesisManifest } from '@/lib/genesis-manifest';
 import type { HexMapHandle } from '@/explorer/components/HexMap';
 import type {
+  EarlyInvestorPlotPin,
   LandCellSet,
   Phase1Hex,
   Phase1Manifest,
 } from '@/explorer/components/hex-map.types';
+
+const PLOT_H3_RESOLUTION = 4; // canonical license size for plot grid context
 
 // HexMap pulls in mapbox-gl which is browser-only; load it client-side only.
 const HexMap = dynamic(
@@ -48,6 +53,7 @@ function ExplorerPageInner() {
   const [selected, setSelected] = useState<Phase1Hex | null>(null);
   const [activeRegion, setActiveRegion] = useState<string>(REGION_DESTINATIONS[0].name);
   const [manifest, setManifest] = useState<Phase1Manifest | null>(null);
+  const [plots, setPlots] = useState<EarlyInvestorPlotPin[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [listFilter, setListFilter] = useState<string>('all');
@@ -72,6 +78,28 @@ function ExplorerPageInner() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Load Early Investor plots as an optional violet overlay (best-effort).
+  useEffect(() => {
+    let cancelled = false;
+    listEarlyInvestorPlots()
+      .then((res) => {
+        if (cancelled) return;
+        const pins = (res.plots ?? [])
+          .filter((p) => typeof p.lat === 'number' && typeof p.lng === 'number')
+          .map<EarlyInvestorPlotPin>((p) => ({
+            plotId: p.plotId,
+            name: p.name,
+            lat: p.lat as number,
+            lng: p.lng as number,
+            h3Index: p.h3Index ?? latLngToCell(p.lat as number, p.lng as number, PLOT_H3_RESOLUTION),
+            status: p.status,
+          }));
+        setPlots(pins);
+      })
+      .catch(() => { /* overlay is best-effort */ });
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch the logged-in user's owned hex IDs so we can colour them yellow
@@ -180,6 +208,8 @@ function ExplorerPageInner() {
                 manifest={enrichedManifest}
                 landCells={{} as { r1?: LandCellSet; r3?: LandCellSet; r5?: LandCellSet }}
                 onHexClick={({ hex }) => setSelected(hex)}
+                earlyInvestorPlots={plots}
+                onPlotClick={({ plot }) => { window.location.href = `/presale?hex=${plot.plotId}`; }}
               />
               <RegionJumpBar activeRegion={activeRegion} onSelect={handleRegionClick} />
             </div>

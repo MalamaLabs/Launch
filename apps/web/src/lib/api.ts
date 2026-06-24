@@ -719,6 +719,7 @@ export interface EarlyInvestorPlot {
   name:             string
   lat?:             number
   lng?:             number
+  h3Index?:         string  // containing res-4 cell (grid/size context only)
   region?:          string
   status:           'available' | 'sold' | 'bound' | 'reserved'
   priceUsd?:        number

@@ -9,7 +9,7 @@ import {
   useCallback,
 } from 'react';
 import mapboxgl from 'mapbox-gl';
-import { polygonToCells } from 'h3-js';
+import { polygonToCells, cellToBoundary } from 'h3-js';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 import {
@@ -20,10 +20,12 @@ import {
 } from './hex-map.constants';
 import { cellsToFeatureCollection } from '../lib/h3-utils';
 import type {
+  EarlyInvestorPlotPin,
   HexClickEvent,
   LandCellSet,
   Phase1Hex,
   Phase1Manifest,
+  PlotClickEvent,
 } from './hex-map.types';
 
 interface HexMapProps {
@@ -56,8 +58,25 @@ interface HexMapProps {
    * H3 index of the currently selected hex. When set, that cell gets a bold
    * accent outline so an external selection (e.g. the reserve picker's list)
    * is reflected on the map. Optional — omit for no highlight.
+   *
+   * Doubles as the selected Early Investor plot id: when an EI plot is chosen
+   * the selection key is its `plotId` (not an h3Index), and the plot overlay
+   * highlights the matching pin.
    */
   selectedHexId?: string | null;
+  /**
+   * Bespoke Early Investor plots to graft onto the map as a violet overlay.
+   * Each is drawn as its containing res-4 hex outline (so it "fits" the license
+   * grid) plus a point marker at the exact lat/lng (so plots sharing a cell stay
+   * individually selectable). Optional — omit to render Genesis hexes only.
+   */
+  earlyInvestorPlots?: EarlyInvestorPlotPin[];
+  /**
+   * Click handler for an Early Investor plot marker. Fires with the plot whose
+   * `plotId` should drive the reserve flow (the backend routes that id to the
+   * EarlyInvestorValidator contract).
+   */
+  onPlotClick?: (event: PlotClickEvent) => void;
 }
 
 /**
@@ -71,6 +90,8 @@ export interface HexMapHandle {
 const PHASE1_SOURCE = 'phase1-hexes';
 const LAND_SOURCE = 'land-hexes';
 const CONTEXT_SOURCE = 'context-hexes';
+const EI_HEX_SOURCE = 'ei-plots-hex';     // res-4 outlines for grid context
+const EI_POINT_SOURCE = 'ei-plots-point'; // exact-location selectable markers
 
 /**
  * Zoom level at which the viewport-driven context hex grid becomes
@@ -90,11 +111,25 @@ const ALL_PHASE1_STATUSES: HexStatus[] = [
 ];
 
 export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
-  { accessToken, manifest, landCells, onHexClick, selectedHexId }: HexMapProps,
+  {
+    accessToken,
+    manifest,
+    landCells,
+    onHexClick,
+    selectedHexId,
+    earlyInvestorPlots,
+    onPlotClick,
+  }: HexMapProps,
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  // Latest plots + click callback, read by the once-bound Mapbox click handler
+  // so we never re-bind (and stack duplicate handlers) when they change.
+  const plotsRef = useRef<EarlyInvestorPlotPin[]>(earlyInvestorPlots ?? []);
+  const onPlotClickRef = useRef<typeof onPlotClick>(onPlotClick);
+  plotsRef.current = earlyInvestorPlots ?? [];
+  onPlotClickRef.current = onPlotClick;
 
   useImperativeHandle(ref, () => ({
     flyTo: (center, zoom) => {
@@ -113,8 +148,17 @@ export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
     const map = mapRef.current;
     if (!map) return;
     const apply = () => {
-      if (!map.getLayer('phase1-hexes-selected')) return;
-      map.setFilter('phase1-hexes-selected', ['==', ['get', 'h3Index'], selectedHexId ?? '']);
+      if (map.getLayer('phase1-hexes-selected')) {
+        map.setFilter('phase1-hexes-selected', ['==', ['get', 'h3Index'], selectedHexId ?? '']);
+      }
+      // EI plots are keyed by plotId, so the same selection prop highlights the
+      // matching plot outline + marker.
+      if (map.getLayer('ei-plots-selected')) {
+        map.setFilter('ei-plots-selected', ['==', ['get', 'plotId'], selectedHexId ?? '']);
+      }
+      if (map.getLayer('ei-plots-point-selected')) {
+        map.setFilter('ei-plots-point-selected', ['==', ['get', 'plotId'], selectedHexId ?? '']);
+      }
     };
     if (map.isStyleLoaded()) apply();
     else map.once('load', apply);
@@ -423,6 +467,98 @@ export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
       }
     }
   }, [currentResolution, landCells, manifest, onHexClick]);
+
+  // -------- Early Investor plot overlay ----------------------------------
+  // One res-4 cell = one plot/territory. Plots are rendered as filled license-
+  // sized hexes (same grid as Genesis, violet) — never overlapping markers.
+  // Defensive: if the data ever carries two plots in the same cell, only the
+  // first is drawn so territories can't overlap on the map.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const eiStyle = HEX_STATE_STYLES['early-investor'];
+
+    const buildData = () => {
+      const byCell = new Map<string, EarlyInvestorPlotPin>();
+      for (const p of plotsRef.current) {
+        if (p.h3Index && !byCell.has(p.h3Index)) byCell.set(p.h3Index, p);
+      }
+      const features: GeoJSON.Feature<GeoJSON.Polygon>[] = Array.from(byCell.entries()).map(
+        ([cell, p]) => {
+          const boundary = cellToBoundary(cell, /* geoJson */ true) as [number, number][];
+          return {
+            type: 'Feature' as const,
+            geometry: { type: 'Polygon' as const, coordinates: [boundary] },
+            properties: { plotId: p.plotId, name: p.name, status: p.status ?? 'available' },
+          };
+        },
+      );
+      return { type: 'FeatureCollection' as const, features };
+    };
+
+    const addOverlay = () => {
+      const data = buildData();
+
+      // Idempotent: update existing source, create layers + handlers once.
+      if (map.getSource(EI_HEX_SOURCE)) {
+        (map.getSource(EI_HEX_SOURCE) as mapboxgl.GeoJSONSource).setData(data);
+        if (map.getLayer('ei-plots-selected')) {
+          map.setFilter('ei-plots-selected', ['==', ['get', 'plotId'], selectedHexId ?? '']);
+        }
+        return;
+      }
+
+      map.addSource(EI_HEX_SOURCE, { type: 'geojson', data });
+
+      // Filled license-sized hex — available bright, sold/bound dimmed.
+      map.addLayer({
+        id: 'ei-plots-hex-fill',
+        type: 'fill',
+        source: EI_HEX_SOURCE,
+        paint: {
+          'fill-color': [
+            'match',
+            ['get', 'status'],
+            'available', eiStyle.fillColor,
+            /* sold/bound/reserved */ '#6b7280',
+          ],
+          'fill-opacity': eiStyle.fillOpacity,
+        },
+      });
+      map.addLayer({
+        id: 'ei-plots-hex-outline',
+        type: 'line',
+        source: EI_HEX_SOURCE,
+        paint: { 'line-color': eiStyle.borderColor!, 'line-width': eiStyle.borderWidth },
+      });
+      // Selected plot's hex outline — bold accent.
+      map.addLayer({
+        id: 'ei-plots-selected',
+        type: 'line',
+        source: EI_HEX_SOURCE,
+        filter: ['==', ['get', 'plotId'], selectedHexId ?? ''],
+        paint: { 'line-color': '#f0abfc', 'line-width': 3 },
+      });
+
+      // Click the hex → drive the reserve flow by plotId. Reads refs so the
+      // handler stays correct across prop changes without re-binding.
+      const fireClick = (e: mapboxgl.MapLayerMouseEvent) => {
+        const feat = e.features?.[0];
+        const plotId = feat?.properties?.plotId as string | undefined;
+        if (!plotId) return;
+        const plot = plotsRef.current.find((p) => p.plotId === plotId);
+        if (!plot) return;
+        onPlotClickRef.current?.({ plot, screenX: e.point.x, screenY: e.point.y });
+      };
+      map.on('click', 'ei-plots-hex-fill', fireClick);
+      map.on('mouseenter', 'ei-plots-hex-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'ei-plots-hex-fill', () => { map.getCanvas().style.cursor = ''; });
+    };
+
+    if (map.isStyleLoaded()) addOverlay();
+    else map.once('load', addOverlay);
+  }, [earlyInvestorPlots, selectedHexId]);
 
   return (
     <div

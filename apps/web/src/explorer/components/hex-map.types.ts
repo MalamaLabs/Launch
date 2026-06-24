@@ -62,3 +62,26 @@ export interface HexClickEvent {
   screenX: number;
   screenY: number;
 }
+
+/**
+ * A bespoke Early Investor plot rendered as an overlay on the Genesis map.
+ * Unlike a Phase1Hex these are arbitrary geographic points (a separate
+ * ERC-721 sale), so the unique sale key is `plotId`, not `h3Index`. The
+ * `h3Index` is the containing res-4 cell, used only to draw a license-sized
+ * hex outline so the plot "fits" the grid visually. Distinct plots can share
+ * an h3Index — render markers at the exact lat/lng to keep them selectable.
+ */
+export interface EarlyInvestorPlotPin {
+  plotId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  h3Index?: string | null;
+  status?: string; // 'available' | 'sold' | 'bound' | 'reserved'
+}
+
+export interface PlotClickEvent {
+  plot: EarlyInvestorPlotPin;
+  screenX: number;
+  screenY: number;
+}
