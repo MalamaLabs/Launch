@@ -1,6 +1,27 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "hardhat-deploy";
+import { readFileSync, existsSync } from "fs";
+import { resolve } from "path";
+
+// ── Lightweight .env loader (no dotenv dependency) ──────────────────────────
+// Reads contracts/evm/.env and populates process.env for any key not already
+// set in the shell. Lets deploys read config from a file like the backend does,
+// instead of requiring every var to be exported in the shell each time.
+// Format: KEY=value per line. No inline comments; lines starting with # ignored.
+const envPath = resolve(__dirname, ".env");
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+    const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)\s*$/);
+    if (!m) continue; // skips blank lines and # comments
+    const key = m[1];
+    let val = m[2].trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (process.env[key] === undefined) process.env[key] = val; // shell wins
+  }
+}
 
 const config: HardhatUserConfig = {
   solidity: {
