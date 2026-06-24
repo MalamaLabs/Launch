@@ -507,18 +507,14 @@ export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
 
       map.addSource(EI_HEX_SOURCE, { type: 'geojson', data });
 
-      // Filled license-sized hex — available bright, sold/bound dimmed.
+      // Filled license-sized hex — uniform Early Investor purple for every plot
+      // regardless of status (status is conveyed in the panel, not by colour).
       map.addLayer({
         id: 'ei-plots-hex-fill',
         type: 'fill',
         source: EI_HEX_SOURCE,
         paint: {
-          'fill-color': [
-            'match',
-            ['get', 'status'],
-            'available', eiStyle.fillColor,
-            /* sold/bound/reserved */ '#6b7280',
-          ],
+          'fill-color': eiStyle.fillColor,
           'fill-opacity': eiStyle.fillOpacity,
         },
       });

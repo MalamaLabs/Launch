@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   useAccount as useEVMWallet,
@@ -26,7 +26,17 @@ import {
   reportMintObserved,
   createStripeCheckout,
   nftImageUrl,
+  listEarlyInvestorPlots,
 } from '@/lib/api'
+
+// An Early Investor plot id is a slug (e.g. "hawaii-pahoa-ole-ole"), not an H3
+// cell. H3 res-4 indices are 15–16 lowercase hex chars — anything else is a plot.
+// Plots use a different image + label so the card doesn't ask the Genesis hex
+// image renderer for a slug it can't draw (that was the "glitch").
+const H3_CELL_RE = /^[0-9a-f]{15,16}$/i
+function isPlotId(id: string | null): boolean {
+  return !!id && !H3_CELL_RE.test(id)
+}
 
 // Minting on Launch is Base-only. The buyer always receives a Base ERC-721;
 // the Cardano CIP-68 ref token is minted server-side (in reportMintObserved)
@@ -63,10 +73,24 @@ interface SuccessData {
   dagwelldevExplorerUrl?: string;
 }
 
+function PlotArtwork({ label }: { label: string | null }) {
+  // Self-contained purple placeholder — no call to the Genesis hex image
+  // renderer (which can't draw a plot slug). Matches the map's EI violet.
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-[#a855f7]/30 to-[#6b21a8]/40 text-center">
+      <MapPin className="h-10 w-10 text-[#c084fc]" aria-hidden />
+      <span className="px-3 font-mono text-[11px] uppercase tracking-wider text-[#e9d5ff]">Early Investor Plot</span>
+      {label && <span className="px-3 text-xs text-white/80">{label}</span>}
+    </div>
+  )
+}
+
 function NftCard({ data, hexId }: { data: SuccessData; hexId: string | null }) {
   return (
     <div className="relative w-56 aspect-[2/3] mx-auto rounded-2xl overflow-hidden border border-malama-accent/30 shadow-[0_0_40px_rgba(196,240,97,0.2)]">
-      <img src={data.nftImageUrl} alt={`NFT ${data.claimId}`} className="w-full h-full object-cover" />
+      {isPlotId(hexId)
+        ? <PlotArtwork label={data.claimId} />
+        : <img src={data.nftImageUrl} alt={`NFT ${data.claimId}`} className="w-full h-full object-cover" />}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
       <div className="absolute bottom-3 left-3 right-3">
         <p className="text-malama-accent font-black text-2xl">{data.claimId}</p>
@@ -113,26 +137,32 @@ function Stepper({ step }: { step: number }) {
   )
 }
 
-function claimIdFor(hexId: string | null): string | null {
+function claimIdFor(hexId: string | null, plotName?: string | null): string | null {
   if (!hexId) return null
+  if (isPlotId(hexId)) return plotName || 'Early Investor Plot'
   const editionNumber = getGenesisPoolSlot(hexId, regionsData) ?? 0
   return `G200-${String(editionNumber).padStart(3, '0')}`
 }
 
-function OrderSummary({ hexId, paymentMode }: { hexId: string | null; paymentMode: PaymentLane }) {
-  const claimId = claimIdFor(hexId)
+function OrderSummary({ hexId, paymentMode, plotName }: { hexId: string | null; paymentMode: PaymentLane; plotName?: string | null }) {
+  const isPlot = isPlotId(hexId)
+  const claimId = claimIdFor(hexId, plotName)
   return (
     <div>
       <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Your order</p>
       {hexId ? (
         <>
           <div className="mb-3 overflow-hidden rounded-2xl border border-malama-accent/20 bg-malama-deep">
-            {/* Natural ratio — no object-cover crop, so the image's own top
-                margin (MĀLAMA LABS header + BASE L2 badge) isn't clipped. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={nftImageUrl({ hexId, chain: 'base' })} alt={`Hex ${hexId}`} className="block h-auto w-full" />
+            {isPlot ? (
+              <div className="aspect-[3/4] w-full"><PlotArtwork label={plotName ?? null} /></div>
+            ) : (
+              /* Natural ratio — no object-cover crop, so the image's own top
+                 margin (MĀLAMA LABS header + BASE L2 badge) isn't clipped. */
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={nftImageUrl({ hexId, chain: 'base' })} alt={`Hex ${hexId}`} className="block h-auto w-full" />
+            )}
           </div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">Hex Node License</p>
+          <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">{isPlot ? 'Early Investor Plot' : 'Hex Node License'}</p>
           <p className="text-lg font-black text-white">{claimId}</p>
           <p className="mt-0.5 break-all font-mono text-[11px] text-gray-500">{hexId}</p>
         </>
@@ -152,21 +182,22 @@ function OrderSummary({ hexId, paymentMode }: { hexId: string | null; paymentMod
 }
 
 function OrderSummaryBar({
-  hexId, paymentMode, open, onToggle,
-}: { hexId: string | null; paymentMode: PaymentLane; open: boolean; onToggle: () => void }) {
-  const claimId = claimIdFor(hexId)
+  hexId, paymentMode, open, onToggle, plotName,
+}: { hexId: string | null; paymentMode: PaymentLane; open: boolean; onToggle: () => void; plotName?: string | null }) {
+  const claimId = claimIdFor(hexId, plotName)
+  const isPlot = isPlotId(hexId)
   return (
     <div className="border-b border-gray-800 bg-malama-deep/60 md:hidden">
       <button type="button" onClick={onToggle} className="flex w-full items-center justify-between px-4 py-3 text-left">
         <span className="font-mono text-[11px] uppercase tracking-wider text-gray-400">
-          {hexId ? <>Hex <span className="text-malama-accent">{claimId}</span></> : 'No hex selected'}
+          {hexId ? <>{isPlot ? 'Plot' : 'Hex'} <span className="text-malama-accent">{claimId}</span></> : 'No hex selected'}
         </span>
         <span className="flex items-center gap-2 text-sm font-bold text-white">
           $2,000
           <span className={`text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
         </span>
       </button>
-      {open && <div className="px-4 pb-4"><OrderSummary hexId={hexId} paymentMode={paymentMode} /></div>}
+      {open && <div className="px-4 pb-4"><OrderSummary hexId={hexId} paymentMode={paymentMode} plotName={plotName} /></div>}
     </div>
   )
 }
@@ -195,6 +226,10 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   const [magicVerifyError, setMagicVerifyError]         = useState('')
   const [cardEmail, setCardEmail]   = useState('')
   const [stripeDeliveryAddress, setStripeDeliveryAddress] = useState('')
+  // plotId → display name, so an Early Investor plot shows a real label/artwork
+  // on the card instead of asking the hex image renderer for a slug.
+  const [plotNames, setPlotNames] = useState<Record<string, string>>({})
+  const plotName = hexId ? (plotNames[hexId] ?? null) : null
 
   const legalComplete = allLegalAcknowledged(legalAck)
   const cardEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cardEmail.trim())
@@ -210,6 +245,21 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   const { disconnect: disconnectEVM } = useEVMDisconnect()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
+
+  // Best-effort: load Early Investor plot names so the order card can label a
+  // selected plot. Never blocks the flow — Genesis hexes don't need it.
+  useEffect(() => {
+    let cancelled = false
+    listEarlyInvestorPlots()
+      .then((res) => {
+        if (cancelled) return
+        const map: Record<string, string> = {}
+        for (const p of res.plots ?? []) map[p.plotId] = p.name
+        setPlotNames(map)
+      })
+      .catch(() => { /* plots are optional */ })
+    return () => { cancelled = true }
+  }, [])
 
   const isSetupComplete = !!hexId && (
     paymentMode === 'base'
@@ -457,7 +507,7 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   return (
     <div className="w-full max-w-5xl mx-auto bg-malama-card border border-gray-800 rounded-3xl shadow-2xl overflow-hidden my-12">
       <Stepper step={step} />
-      <OrderSummaryBar hexId={hexId} paymentMode={paymentMode} open={summaryOpen} onToggle={() => setSummaryOpen((o) => !o)} />
+      <OrderSummaryBar hexId={hexId} paymentMode={paymentMode} open={summaryOpen} onToggle={() => setSummaryOpen((o) => !o)} plotName={plotName} />
 
       <div className="grid md:grid-cols-[1fr_320px]">
         {/* Left: the swapping step card */}
@@ -958,7 +1008,7 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
         {/* Right: persistent order summary (sticky on desktop) */}
         <aside className="hidden border-l border-gray-800 bg-malama-deep/60 p-6 md:block">
           <div className="sticky top-24">
-            <OrderSummary hexId={hexId} paymentMode={paymentMode} />
+            <OrderSummary hexId={hexId} paymentMode={paymentMode} plotName={plotName} />
           </div>
         </aside>
       </div>
