@@ -709,3 +709,40 @@ export async function submitDataSolutionsRequest(body: {
     body: JSON.stringify(body),
   })
 }
+
+// ─── Early Investor plots (BE: /early-investor) ───────────────────────────
+// A separate ERC-721 sale (EarlyInvestorValidator) for bespoke investor plots
+// at arbitrary locations — independent of the Genesis 200 hex pool.
+
+export interface EarlyInvestorPlot {
+  plotId:           string
+  name:             string
+  lat?:             number
+  lng?:             number
+  region?:          string
+  status:           'available' | 'sold' | 'bound' | 'reserved'
+  priceUsd?:        number
+  mlmaAllocation?:  number
+  baseTokenId?:     number
+  ownerEvmAddress?: string
+  mintedAt?:        string
+}
+
+/** All Early Investor plots for the map/explorer overlay. */
+export async function listEarlyInvestorPlots(): Promise<{ ok: true; count: number; plots: EarlyInvestorPlot[] }> {
+  return apiFetch('/early-investor/plots')
+}
+
+/** On-chain + Mongo counts for the Early Investor sale. */
+export async function getEarlyInvestorSaleState(): Promise<{
+  ok: true
+  onChain: { enabled: boolean; network: string; remaining?: number; maxSupply?: number; totalSupply?: number; priceUsdc?: number; address?: string }
+  mongo: { available: number; sold: number; bound: number; total: number }
+}> {
+  return apiFetch('/early-investor/sale-state', { next: { revalidate: 30 } } as RequestInit)
+}
+
+// NOTE: Early Investor plots purchase through the SAME mechanics as Genesis —
+// reuse reserveHexOnChain(plotId, …), createStripeCheckout(plotId, …), and
+// reportMintObserved({ hexId: plotId, … }). The backend detects a plot id and
+// routes to the EarlyInvestorValidator contract; the FE payment flow is identical.
