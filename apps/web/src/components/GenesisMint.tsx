@@ -207,7 +207,11 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   // inline picker) without bouncing to /explorer. Seeded from the ?hex= prop so
   // deep links (e.g. the /list Reserve buttons) still jump straight to payment.
   const [hexId, setHexId] = useState<string | null>(initialHexId)
-  const [step, setStep] = useState(initialHexId ? 2 : 1)
+  // Genesis deep-links (e.g. /list Reserve) jump straight to payment. Early
+  // Investor plots instead land on step 1 so the buyer sees the plot preview
+  // card + Continue before paying (clicking a plot on the map shouldn't teleport
+  // them past the review).
+  const [step, setStep] = useState(initialHexId && !isPlotId(initialHexId) ? 2 : 1)
   const [pickerView, setPickerView] = useState<'map' | 'list'>('map')
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [loading, setLoading]       = useState(false)
@@ -245,6 +249,15 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
   const { disconnect: disconnectEVM } = useEVMDisconnect()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
+
+  // Deep links (?hex=…) land the browser at the page top. Scroll the reserve
+  // section into view so the buyer sees their selection, not the hero. The
+  // #reserve wrapper carries scroll-mt-24, which scrollIntoView honours.
+  useEffect(() => {
+    if (initialHexId && typeof document !== 'undefined') {
+      document.getElementById('reserve')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [initialHexId])
 
   // Best-effort: load Early Investor plot names so the order card can label a
   // selected plot. Never blocks the flow — Genesis hexes don't need it.

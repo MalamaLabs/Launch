@@ -81,7 +81,7 @@ export const HEX_STATE_STYLES: Record<HexStatus, HexStateStyle> = {
   },
   'early-investor': {
     fillColor: '#a855f7', // violet-500 — bespoke Early Investor plots
-    fillOpacity: 0.45,
+    fillOpacity: 0.8,     // solid purple — low opacity reads as muddy grey over the dark map
     borderColor: '#c084fc', // violet-400
     borderWidth: 2,
     interactive: true,
