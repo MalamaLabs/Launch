@@ -90,8 +90,7 @@ export interface HexMapHandle {
 const PHASE1_SOURCE = 'phase1-hexes';
 const LAND_SOURCE = 'land-hexes';
 const CONTEXT_SOURCE = 'context-hexes';
-const EI_HEX_SOURCE = 'ei-plots-hex';     // res-4 outlines for grid context
-const EI_POINT_SOURCE = 'ei-plots-point'; // exact-location selectable markers
+const EI_HEX_SOURCE = 'ei-plots-hex'; // res-4 filled hexes (one plot per cell)
 
 /**
  * Zoom level at which the viewport-driven context hex grid becomes
@@ -152,12 +151,9 @@ export const HexMap = forwardRef<HexMapHandle, HexMapProps>(function HexMap(
         map.setFilter('phase1-hexes-selected', ['==', ['get', 'h3Index'], selectedHexId ?? '']);
       }
       // EI plots are keyed by plotId, so the same selection prop highlights the
-      // matching plot outline + marker.
+      // matching plot hex.
       if (map.getLayer('ei-plots-selected')) {
         map.setFilter('ei-plots-selected', ['==', ['get', 'plotId'], selectedHexId ?? '']);
-      }
-      if (map.getLayer('ei-plots-point-selected')) {
-        map.setFilter('ei-plots-point-selected', ['==', ['get', 'plotId'], selectedHexId ?? '']);
       }
     };
     if (map.isStyleLoaded()) apply();
