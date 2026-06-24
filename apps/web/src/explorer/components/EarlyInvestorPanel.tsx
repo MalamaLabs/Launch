@@ -1,6 +1,6 @@
 'use client';
 
-import { earlyInvestorImageUrl } from '@/lib/api';
+import { earlyInvestorImageUrl, cityState } from '@/lib/api';
 import type { EarlyInvestorPlotPin } from './hex-map.types';
 
 /**
@@ -64,8 +64,13 @@ export function EarlyInvestorPanel({ plot, onReserveClick, onClose }: Props) {
       <header style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
           <h2 style={{ fontFamily: 'var(--font-serif, "Fraunces", serif)', fontSize: 24, fontWeight: 400, margin: 0 }}>
-            {plot.name}
+            {cityState(plot.name)}
           </h2>
+          {plot.plotNumber != null && (
+            <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: VIOLET_LIGHT }}>
+              #{String(plot.plotNumber).padStart(3, '0')}
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Badge color={VIOLET_LIGHT}>Early Investor</Badge>

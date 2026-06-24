@@ -93,6 +93,7 @@ function ExplorerPageInner() {
           .map<EarlyInvestorPlotPin>((p) => ({
             plotId: p.plotId,
             name: p.name,
+            plotNumber: p.plotNumber,
             lat: p.lat as number,
             lng: p.lng as number,
             h3Index: p.h3Index ?? latLngToCell(p.lat as number, p.lng as number, PLOT_H3_RESOLUTION),

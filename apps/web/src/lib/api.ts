@@ -717,6 +717,7 @@ export async function submitDataSolutionsRequest(body: {
 export interface EarlyInvestorPlot {
   plotId:           string
   name:             string
+  plotNumber?:      number  // stable sale number shown as #NNN
   lat?:             number
   lng?:             number
   h3Index?:         string  // containing res-4 cell (grid/size context only)
@@ -737,6 +738,19 @@ export async function listEarlyInvestorPlots(): Promise<{ ok: true; count: numbe
 /** SVG artwork for an Early Investor plot (purple "Early Investor Plot" card). */
 export function earlyInvestorImageUrl(plotId: string): string {
   return `${API_BASE}/early-investor/nft-image?plotId=${encodeURIComponent(plotId)}`
+}
+
+/**
+ * Reduce a plot name to "City, ST" — drops a leading "Street —" prefix and any
+ * trailing "(Island)" note so UI never shows the street, mirroring the card
+ * renderer. Safe for names that are already clean.
+ */
+export function cityState(name: string | null | undefined): string {
+  if (!name) return ''
+  const s = name.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  const parts = s.split(/\s+[—–-]\s+/)
+  const stated = parts.find((p) => /,\s*[A-Za-z]{2}\b/.test(p))
+  return (stated || parts[parts.length - 1] || s).trim()
 }
 
 /** On-chain + Mongo counts for the Early Investor sale. */

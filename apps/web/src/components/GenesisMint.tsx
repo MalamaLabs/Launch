@@ -28,6 +28,7 @@ import {
   nftImageUrl,
   listEarlyInvestorPlots,
   earlyInvestorImageUrl,
+  cityState,
 } from '@/lib/api'
 
 // An Early Investor plot id is a slug (e.g. "hawaii-pahoa-ole-ole"), not an H3
@@ -258,7 +259,10 @@ export default function GenesisMint({ hexId: initialHexId }: { hexId: string | n
       .then((res) => {
         if (cancelled) return
         const map: Record<string, string> = {}
-        for (const p of res.plots ?? []) map[p.plotId] = p.name
+        for (const p of res.plots ?? []) {
+          const num = p.plotNumber != null ? ` #${String(p.plotNumber).padStart(3, '0')}` : ''
+          map[p.plotId] = `${cityState(p.name)}${num}`
+        }
         setPlotNames(map)
       })
       .catch(() => { /* plots are optional */ })
